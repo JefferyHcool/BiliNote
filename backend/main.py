@@ -34,7 +34,7 @@ async def startup_event():
 async def startup_event():
     register_handler()
     ensure_ffmpeg_or_raise()
-    get_transcriber()
+    get_transcriber(transcriber_type=os.getenv("TRANSCRIBER_TYPE","fast-whisper"))
     init_video_task_table()
 
 if __name__ == "__main__":

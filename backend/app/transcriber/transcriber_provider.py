@@ -1,3 +1,5 @@
+import os
+
 from app.transcriber.whisper import WhisperTranscriber
 from app.transcriber.bcut import BcutTranscriber
 from app.transcriber.kuaishou import KuaishouTranscriber
@@ -49,12 +51,12 @@ def get_kuaishou_transcriber():
             raise
     return _transcribers['kuaishou']
 
-def get_transcriber(transcriber_type="whisper", model_size="base", device="cuda"):
+def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="cuda"):
     """
     获取指定类型的转录器实例
     
     参数:
-        transcriber_type: 转录器类型，支持 "whisper", "bcut", "kuaishou"
+        transcriber_type: 转录器类型，支持 "fast-whisper", "bcut", "kuaishou"
         model_size: 模型大小，whisper 特有参数
         device: 设备类型，whisper 特有参数
     
@@ -62,13 +64,14 @@ def get_transcriber(transcriber_type="whisper", model_size="base", device="cuda"
         对应类型的转录器实例
     """
     logger.info(f'获取转录器，类型: {transcriber_type}')
-    
-    if transcriber_type == "whisper":
-        return get_whisper_transcriber(model_size, device)
+    if transcriber_type == "fast-whisper":
+        whisper_model_size = os.environ.get("WHISPER_MODEL_SIZE",model_size)
+        return get_whisper_transcriber(whisper_model_size, device=device)
     elif transcriber_type == "bcut":
         return get_bcut_transcriber()
     elif transcriber_type == "kuaishou":
         return get_kuaishou_transcriber()
     else:
         logger.warning(f'未知转录器类型 "{transcriber_type}"，使用默认 whisper')
-        return get_whisper_transcriber(model_size, device)
+        whisper_model_size = os.environ.get("WHISPER_MODEL_SIZE",model_size)
+        return get_whisper_transcriber(whisper_model_size, device)

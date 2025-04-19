@@ -43,7 +43,7 @@ class NoteGenerator:
     def __init__(self):
         self.model_size: str = 'base'
         self.device: Union[str, None] = None
-        self.transcriber_type = 'fast-whisper'
+        self.transcriber_type = os.getenv('TRANSCRIBER_TYPE','fast-whisper')
         self.transcriber = self.get_transcriber()
         # TODO 需要更换为可调节
 
@@ -91,7 +91,7 @@ class NoteGenerator:
         '''
         if self.transcriber_type == 'fast-whisper':
             logger.info("使用Whisper")
-            return get_transcriber()
+            return get_transcriber(transcriber_type='fast-whisper')
         else:
             logger.warning("不支持的转义器")
             raise ValueError(f"不支持的转义器：{self.transcriber}")
