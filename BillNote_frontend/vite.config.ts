@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd() + '/../')
 
   const apiBaseUrl = env.VITE_API_BASE_URL || 'http://localhost:8000'
-  const port = env.VITE_FRONTEND_PORT || 3015
+  const port = parseInt(env.VITE_FRONTEND_PORT || '3015', 10)
 
   return {
     base: './',
@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: port,
+      allowedHosts: true, // 允许任意域名访问
       proxy: {
         '/api': {
           target: apiBaseUrl,
