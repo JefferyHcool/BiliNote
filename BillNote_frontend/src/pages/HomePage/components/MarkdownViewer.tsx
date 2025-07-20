@@ -208,6 +208,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
               value={selectedContent}
               onChange={() => {}}
               height="100%" // 根据需求可以设定百分比或固定高度
+              title={currentTask?.audioMeta?.title || '思维导图'}
             />
           </div>
         </div>
