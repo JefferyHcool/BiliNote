@@ -14,7 +14,17 @@ def check_ffmpeg_exists() -> bool:
     logger.info(f"FFMPEG_BIN_PATH: {ffmpeg_bin_path}")
     if ffmpeg_bin_path and os.path.isdir(ffmpeg_bin_path):
         os.environ["PATH"] = ffmpeg_bin_path + os.pathsep + os.environ.get("PATH", "")
-        logger.info(f"ffmpeg 未配置路径，尝试使用系统路径PATH: {os.environ.get('PATH')}")
+        logger.info(f"使用FFMPEG_BIN_PATH: {ffmpeg_bin_path}")
+    else:
+        # 遍历系统PATH寻找ffmpeg.exe
+        system_path = os.environ.get("PATH", "")
+        path_dirs = system_path.split(os.pathsep)
+        for path_dir in path_dirs:
+            ffmpeg_exe_path = os.path.join(path_dir, "ffmpeg.exe")
+            if os.path.isfile(ffmpeg_exe_path):
+                os.environ["PATH"] = path_dir + os.pathsep + system_path
+                logger.info(f"在系统PATH中找到ffmpeg: {path_dir}")
+                break
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         logger.info("ffmpeg 已安装")
