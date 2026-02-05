@@ -323,3 +323,4 @@ cython_debug/
 /BiliNote_frontend/.idea/*
 /BiliNote_frontend/src-tauri/bin/
 
+.vscode
