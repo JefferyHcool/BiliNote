@@ -147,11 +147,15 @@ class NoteGenerator:
                 grid_size=grid_size,
             )
 
-            # 2. 转写文字
-            transcript = self._transcribe_audio(
+            # 2. 获取字幕/转写文字
+            # 优先尝试获取平台字幕，没有再 fallback 到音频转写
+            transcript = self._get_transcript(
+                downloader=downloader,
+                video_url=video_url,
                 audio_file=audio_meta.file_path,
                 transcript_cache_file=transcript_cache_file,
                 status_phase=TaskStatus.TRANSCRIBING,
+                task_id=task_id,
             )
 
             # 3. GPT 总结
@@ -399,6 +403,62 @@ class NoteGenerator:
             self._handle_exception(task_id, exc)
             raise
 
+
+    def _get_transcript(
+        self,
+        downloader: Downloader,
+        video_url: str,
+        audio_file: str,
+        transcript_cache_file: Path,
+        status_phase: TaskStatus,
+        task_id: Optional[str] = None,
+    ) -> TranscriptResult | None:
+        """
+        优先获取平台字幕，没有则 fallback 到音频转写
+
+        :param downloader: 下载器实例
+        :param video_url: 视频链接
+        :param audio_file: 音频文件路径（用于 fallback 转写）
+        :param transcript_cache_file: 缓存文件路径
+        :param status_phase: 状态枚举
+        :param task_id: 任务 ID
+        :return: TranscriptResult 对象
+        """
+        self._update_status(task_id, status_phase)
+
+        # 已有缓存，直接返回
+        if transcript_cache_file.exists():
+            logger.info(f"检测到转写缓存 ({transcript_cache_file})，尝试读取")
+            try:
+                data = json.loads(transcript_cache_file.read_text(encoding="utf-8"))
+                segments = [TranscriptSegment(**seg) for seg in data.get("segments", [])]
+                return TranscriptResult(language=data.get("language"), full_text=data["full_text"], segments=segments)
+            except Exception as e:
+                logger.warning(f"加载转写缓存失败，将重新获取：{e}")
+
+        # 1. 先尝试获取平台字幕
+        logger.info("尝试获取平台字幕...")
+        try:
+            transcript = downloader.download_subtitles(video_url)
+            if transcript and transcript.segments:
+                logger.info(f"成功获取平台字幕，共 {len(transcript.segments)} 段")
+                # 缓存结果
+                transcript_cache_file.write_text(
+                    json.dumps(asdict(transcript), ensure_ascii=False, indent=2),
+                    encoding="utf-8"
+                )
+                return transcript
+            else:
+                logger.info("平台无可用字幕，将使用音频转写")
+        except Exception as e:
+            logger.warning(f"获取平台字幕失败: {e}，将使用音频转写")
+
+        # 2. Fallback 到音频转写
+        return self._transcribe_audio(
+            audio_file=audio_file,
+            transcript_cache_file=transcript_cache_file,
+            status_phase=status_phase,
+        )
 
     def _transcribe_audio(
         self,
