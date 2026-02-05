@@ -118,10 +118,7 @@ sudo apt install ffmpeg
 - [x] 加入更多音频转文本模型支持
 
 ### Contact and Join-联系和加入社区
-- BiliNote 交流QQ群：785367111
-- BiliNote 交流微信群:
-  
-  <img src="doc/wechat.png" alt="wechat" style="zoom:33%;" />
+年会恢复更新以后放出最新社区地址
 
 
 
