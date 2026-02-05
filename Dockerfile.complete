@@ -1,0 +1,92 @@
+# === 阶段1：构建 Backend ===
+FROM python:3.11-slim AS backend-builder
+
+RUN rm -f /etc/apt/sources.list && \
+    rm -rf /etc/apt/sources.list.d/* && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/usr/bin:${PATH}"
+ENV HF_ENDPOINT=https://hf-mirror.com
+
+WORKDIR /tmp/backend
+COPY ./backend /tmp/backend
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+# === 阶段2：构建 Frontend ===
+FROM node:18-alpine AS frontend-builder
+
+RUN npm install -g pnpm
+WORKDIR /tmp/frontend
+COPY ./BillNote_frontend /tmp/frontend
+RUN pnpm install && pnpm run build
+
+# === 阶段3：完整应用镜像 ===
+FROM python:3.11-slim
+
+# 安装必要的运行时依赖
+RUN rm -f /etc/apt/sources.list && \
+    rm -rf /etc/apt/sources.list.d/* && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y ffmpeg nginx supervisor procps && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/usr/bin:${PATH}"
+ENV HF_ENDPOINT=https://hf-mirror.com
+ENV PYTHONUNBUFFERED=1
+
+# 复制 Python 依赖
+COPY --from=backend-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=backend-builder /usr/local/bin /usr/local/bin
+
+# 复制 backend 代码
+COPY ./backend /app/backend
+WORKDIR /app/backend
+
+# 复制前端静态文件到 nginx
+COPY --from=frontend-builder /tmp/frontend/dist /usr/share/nginx/html
+
+# 配置 nginx
+RUN rm -rf /etc/nginx/conf.d/default.conf
+COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# 创建 supervisor 配置
+RUN mkdir -p /var/log/supervisor
+COPY <<EOF /etc/supervisor/conf.d/supervisord.conf
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:nginx]
+command=nginx -g "daemon off;"
+stdout_logfile=/var/log/supervisor/nginx.log
+stderr_logfile=/var/log/supervisor/nginx.log
+autorestart=true
+priority=10
+
+[program:backend]
+command=python main.py
+directory=/app/backend
+stdout_logfile=/var/log/supervisor/backend.log
+stderr_logfile=/var/log/supervisor/backend.log
+autorestart=true
+priority=20
+environment=BACKEND_PORT="8483",BACKEND_HOST="0.0.0.0"
+EOF
+
+# 修改 nginx 配置以使用本地 backend
+RUN sed -i 's/proxy_pass http:\/\/backend:8483/proxy_pass http:\/\/127.0.0.1:8483/g' /etc/nginx/conf.d/default.conf && \
+    sed -i 's/proxy_pass http:\/\/frontend:80/proxy_pass http:\/\/127.0.0.1:8080/g' /etc/nginx/conf.d/default.conf
+
+# 启动 supervisor
+EXPOSE 80
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

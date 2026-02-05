@@ -1,0 +1,76 @@
+name: Build Complete Docker Image
+
+on:
+  push:
+    tags:
+      - 'v*'  # 在推送 tag 时触发 (如 v1.0.0)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Extract Version from Tag
+        id: get_version
+        run: |
+          # 获取 tag 名称 (如 refs/tags/v1.0.0 -> v1.0.0)
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          IMAGE_NAME="bilinote:${VERSION}"
+          
+          echo "Building image: ${IMAGE_NAME}"
+          
+          # 构建镜像
+          docker build -f Dockerfile.complete -t ${IMAGE_NAME} .
+          
+          # 保存镜像为 tar 文件
+          docker save ${IMAGE_NAME} -o bilinote-${VERSION}.tar
+          
+          # 显示镜像信息
+          echo "Image built successfully!"
+          docker images bilinote:${VERSION}
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bilinote-${{ steps.get_version.outputs.version }}
+          path: bilinote-${{ steps.get_version.outputs.version }}.tar
+          retention-days: 90
+
+      - name: Generate Usage Instructions
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          echo "=========================================="
+          echo "Docker Image Build Complete!"
+          echo "=========================================="
+          echo ""
+          echo "Image Name: bilinote:${VERSION}"
+          echo "Artifact: bilinote-${VERSION}.tar"
+          echo ""
+          echo "To use this Docker image:"
+          echo "1. Download the artifact from this workflow run"
+          echo "2. Load the image:"
+          echo "   docker load < bilinote-${VERSION}.tar"
+          echo "3. Run the container:"
+          echo "   docker run -d -p 80:80 --name bilinote bilinote:${VERSION}"
+          echo ""
+          echo "Or with environment variables:"
+          echo "   docker run -d -p 80:80 \\"
+          echo "     -e BACKEND_PORT=8483 \\"
+          echo "     -e BACKEND_HOST=0.0.0.0 \\"
+          echo "     -v /path/to/data:/app/backend/data \\"
+          echo "     --name bilinote bilinote:${VERSION}"
+          echo ""
+          echo "Access the application at: http://localhost:80"
+          echo "=========================================="
