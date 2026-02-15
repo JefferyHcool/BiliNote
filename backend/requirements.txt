@@ -23,7 +23,7 @@ click-repl==0.3.0
 colorama==0.4.6
 coloredlogs==15.0.1
 cssselect2==0.8.0
-ctranslate2==4.5.0
+ctranslate2==4.6.0
 distro==1.9.0
 dnspython==2.7.0
 email_validator==2.2.0
