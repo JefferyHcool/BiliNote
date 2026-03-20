@@ -1,10 +1,8 @@
 import {
   BotMessageSquare,
-  SquareChevronRight,
-  Captions,
   HardDriveDownload,
-  Wrench,
   Info,
+  Activity,
 } from 'lucide-react'
 import MenuBar, { IMenuProps } from '@/pages/SettingPage/components/menuBar.tsx'
 
@@ -37,6 +35,12 @@ const Menu = () => {
     //   icon: <SquareChevronRight />,
     //   path: '/settings/prompt',
     // },
+    {
+      id: 'monitor',
+      name: '部署监控',
+      icon: <Activity />,
+      path: '/settings/monitor',
+    },
     {
       id: 'about',
       name: '关于',
