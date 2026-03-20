@@ -18,12 +18,12 @@ BASE_PROMPT = '''
 - **不要**将输出包裹在代码块中（例如：```` ```markdown ````，```` ``` ````）。
 请注意，在生成 Markdown 时，避免将编号标题（如“1. **内容**”）写成有序列表的格式，以免解析错误。
 
-- 如果要加粗并保留编号，应使用 `1\. **内容**`（加反斜杠），防止被误解析为有序列表。
+- 如果要加粗并保留编号，应使用 `1\\. **内容**`（加反斜杠），防止被误解析为有序列表。
 - 或者使用 `## 1. 内容` 的形式作为标题。
 
 请确保以下格式 **不会出现误渲染**：
  `1. **xxx**`
- `1\. **xxx**` 或 `## 1. xxx`
+ `1\\. **xxx**` 或 `## 1. xxx`
 
 视频分段（格式：开始时间 - 内容）：
 
@@ -66,4 +66,13 @@ SCREENSHOT='''
 8. **Screenshot placeholders**: If a section involves **visual demonstrations, code walkthroughs, UI interactions**, or any content where visuals aid understanding, insert a screenshot cue at the end of that section:
    - Format: `*Screenshot-[mm:ss]`
    - Only use it when truly helpful.
+'''
+
+MERGE_PROMPT = '''
+你将收到多个来自同一视频的 Markdown 笔记片段，请合并成一份完整笔记：
+- 只做合并与去重，不要发明新内容
+- 保持原有标题层级与 Markdown 结构
+- 保留所有 *Content-[mm:ss] 与 *Screenshot-[mm:ss] 标记
+- 保持中文输出，专有名词保留英文
+- 不要使用代码块包裹输出
 '''

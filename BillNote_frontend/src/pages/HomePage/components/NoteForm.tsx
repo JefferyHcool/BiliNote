@@ -53,10 +53,10 @@ const formSchema = z
     style: z.string().nonempty('请选择笔记生成风格'),
     extras: z.string().optional(),
     video_understanding: z.boolean().optional(),
-    video_interval: z.coerce.number().min(1).max(30).default(4).optional(),
+    video_interval: z.coerce.number().min(1).max(30).default(6).optional(),
     grid_size: z
       .tuple([z.coerce.number().min(1).max(10), z.coerce.number().min(1).max(10)])
-      .default([3, 3])
+      .default([2, 2])
       .optional(),
   })
   .superRefine(({ video_url, platform }, ctx) => {
@@ -144,8 +144,8 @@ const NoteForm = () => {
       quality: 'medium',
       model_name: modelList[0]?.model_name || '',
       style: 'minimal',
-      video_interval: 4,
-      grid_size: [3, 3],
+      video_interval: 6,
+      grid_size: [2, 2],
       format: [],
     },
   })
@@ -181,8 +181,8 @@ const NoteForm = () => {
       screenshot: formData.screenshot ?? false,
       link: formData.link ?? false,
       video_understanding: formData.video_understanding ?? false,
-      video_interval: formData.video_interval ?? 4,
-      grid_size: formData.grid_size ?? [3, 3],
+      video_interval: formData.video_interval ?? 6,
+      grid_size: formData.grid_size ?? [2, 2],
       format: formData.format ?? [],
     })
   }, [

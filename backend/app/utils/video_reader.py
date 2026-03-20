@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 import re
 import subprocess
@@ -14,6 +15,7 @@ class VideoReader:
                  video_path: str,
                  grid_size=(3, 3),
                  frame_interval=2,
+                 dedupe_enabled=True,
                  unit_width=960,
                  unit_height=540,
                  save_quality=90,
@@ -23,6 +25,7 @@ class VideoReader:
         self.video_path = video_path
         self.grid_size = grid_size
         self.frame_interval = frame_interval
+        self.dedupe_enabled = dedupe_enabled
         self.unit_width = unit_width
         self.unit_height = unit_height
         self.save_quality = save_quality
@@ -30,6 +33,14 @@ class VideoReader:
         self.grid_dir = grid_dir or get_app_dir("grid_output")
         print(f"视频路径：{video_path}",self.frame_dir,self.grid_dir)
         self.font_path = font_path
+
+    @staticmethod
+    def _calculate_file_md5(file_path: str) -> str:
+        hasher = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
     def format_time(self, seconds: float) -> str:
         mm = int(seconds // 60)
@@ -51,12 +62,21 @@ class VideoReader:
             timestamps = [i for i in range(0, int(duration), self.frame_interval)][:max_frames]
 
             image_paths = []
+            last_hash = None
             for ts in timestamps:
                 time_label = self.format_time(ts)
                 output_path = os.path.join(self.frame_dir, f"frame_{time_label}.jpg")
                 cmd = ["ffmpeg", "-ss", str(ts), "-i", self.video_path, "-frames:v", "1", "-q:v", "2", "-y", output_path,
                        "-hide_banner", "-loglevel", "error"]
                 subprocess.run(cmd, check=True)
+
+                if self.dedupe_enabled:
+                    frame_hash = self._calculate_file_md5(output_path)
+                    if frame_hash == last_hash:
+                        os.remove(output_path)
+                        continue
+                    last_hash = frame_hash
+
                 image_paths.append(output_path)
             return image_paths
         except Exception as e:
