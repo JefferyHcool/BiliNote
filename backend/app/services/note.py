@@ -31,7 +31,7 @@ from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
-from app.utils.note_helper import replace_content_markers, prepend_source_link
+from app.utils.note_helper import replace_content_markers
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.status_code import StatusCode
 from app.utils.video_helper import generate_screenshot
@@ -182,7 +182,7 @@ class NoteGenerator:
                     platform=platform,
                 )
 
-            markdown = prepend_source_link(markdown, str(video_url))
+            # markdown = prepend_source_link(markdown, str(video_url))
 
             # 5. 保存记录到数据库
             self._update_status(task_id, TaskStatus.SAVING)
