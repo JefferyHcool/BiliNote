@@ -36,8 +36,22 @@ class YoutubeDownloader(Downloader, ABC):
         output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
 
         ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+            'format': 'worstaudio/worst',
             'outtmpl': output_path,
+            'postprocessors': [
+                {
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '16',
+                }
+            ],
+            # 在转码阶段进一步压缩：单声道 + 16k 采样率
+            'postprocessor_args': [
+                '-ac', '1',
+                '-ar', '16000',
+                '-filter:a', 'atempo=2.0',
+                '-map_metadata', '-1'
+            ],
             'noplaylist': True,
             'quiet': False,
         }
@@ -48,9 +62,13 @@ class YoutubeDownloader(Downloader, ABC):
             title = info.get("title")
             duration = info.get("duration", 0)
             cover_url = info.get("thumbnail")
-            ext = info.get("ext", "m4a")  # 兜底用 m4a
-            audio_path = os.path.join(output_dir, f"{video_id}.{ext}")
-        print('os.path.join(output_dir, f"{video_id}.{ext}")',os.path.join(output_dir, f"{video_id}.{ext}"))
+            audio_path = os.path.join(output_dir, f"{video_id}.mp3")
+            if not os.path.exists(audio_path):
+                # 兜底：按前缀匹配实际落盘文件
+                for filename in sorted(os.listdir(output_dir)):
+                    if filename.startswith(f"{video_id}."):
+                        audio_path = os.path.join(output_dir, filename)
+                        break
 
         return AudioDownloadResult(
             file_path=audio_path,
@@ -81,7 +99,9 @@ class YoutubeDownloader(Downloader, ABC):
         output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
 
         ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+            'format': 'worstvideo+worstaudio/worst',
+            # 严格最小体积优先：先按体积，再按清晰度/码率兜底
+            # 'format_sort': ['+size', '+res', '+fps', '+br'],
             'outtmpl': output_path,
             'noplaylist': True,
             'quiet': False,

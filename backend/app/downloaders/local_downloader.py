@@ -72,6 +72,10 @@ class LocalDownloader(Downloader, ABC):
                 'ffmpeg',
                 '-i', input_path,
                 '-vn',  # 不要视频流
+                '-ac', '1',  # 单声道进一步压缩
+                '-ar', '16000',  # 低采样率适配语音场景
+                '-b:a', '16k',  # 极低码率
+                '-map_metadata', '-1',  # 去除元数据
                 '-acodec', 'libmp3lame',  # 使用mp3编码
                 '-y',  # 覆盖输出文件
                 output_path

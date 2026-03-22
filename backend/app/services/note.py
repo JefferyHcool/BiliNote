@@ -372,8 +372,8 @@ class NoteGenerator:
                         video_path=str(self.video_path),
                         grid_size=tuple(grid_size),
                         frame_interval=frame_interval,
-                        unit_width=960,
-                        unit_height=540,
+                        unit_width=360,
+                        unit_height=240,
                         save_quality=80,
                     ).run()
                 else:

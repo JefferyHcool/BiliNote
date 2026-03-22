@@ -317,10 +317,10 @@ const NoteForm = () => {
                 <FormItem className="flex-1">
                   {platform === 'local' ? (
                     <>
-                      <Input disabled={!!editing} placeholder="请输入本地视频路径" {...field} />
+                      <Input clearable disabled={!!editing} placeholder="请输入本地视频路径" {...field} />
                     </>
                   ) : (
-                    <Input disabled={!!editing} placeholder="请输入视频网站链接" {...field} />
+                    <Input clearable disabled={!!editing} placeholder="请输入视频网站链接" {...field} />
                   )}
                   <FormMessage style={{ display: 'none' }} />
                 </FormItem>

@@ -65,7 +65,14 @@ class KuaiShouDownloader(Downloader, ABC):
         # 使用 ffmpeg 转换为 mp3
         try:
             subprocess.run([
-                "ffmpeg", "-y", "-i", mp4_path, "-vn", "-acodec", "libmp3lame", mp3_path
+                "ffmpeg", "-y", "-i", mp4_path,
+                "-vn",
+                "-ac", "1",
+                "-ar", "16000",
+                "-b:a", "16k",
+                "-map_metadata", "-1",
+                "-acodec", "libmp3lame",
+                mp3_path
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             raise Exception("ffmpeg 转换 MP3 失败")

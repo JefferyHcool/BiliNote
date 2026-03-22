@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 from typing import Union, Optional
 from urllib.parse import quote, urlencode
 
@@ -227,15 +228,35 @@ class DouyinDownloader(Downloader):
             output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
 
             video_data = self.fetch_video_info(video_url)
-            output_path = output_path % {
+            video_id = video_data['aweme_detail']['aweme_id']
+            raw_output_path = output_path % {
                 "id": video_data['aweme_detail']['aweme_id'],
-                "ext": "mp3",
+                "ext": "raw",
             }
+            output_path = os.path.join(output_dir, f"{video_id}.mp3")
             url = video_data['aweme_detail']['music']['play_url']['uri']
             # 下载音频
             audio_data = requests.get(url)
-            with open(output_path, 'wb') as f:
+            with open(raw_output_path, 'wb') as f:
                 f.write(audio_data.content)
+
+            # 统一转码为极限压缩 mp3，保证后缀与真实编码一致
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", raw_output_path,
+                    "-vn",
+                    "-ac", "1",
+                    "-ar", "16000",
+                    "-b:a", "16k",
+                    "-map_metadata", "-1",
+                    "-acodec", "libmp3lame",
+                    output_path
+                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError as exc:
+                raise RuntimeError("抖音音频极限压缩失败") from exc
+            finally:
+                if os.path.exists(raw_output_path):
+                    os.remove(raw_output_path)
             print(url)
             tags = []
             for tag in video_data['aweme_detail']['video_tag']:
