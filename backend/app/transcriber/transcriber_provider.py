@@ -6,6 +6,7 @@ from app.transcriber.groq import GroqTranscriber
 from app.transcriber.whisper import WhisperTranscriber
 from app.transcriber.bcut import BcutTranscriber
 from app.transcriber.kuaishou import KuaishouTranscriber
+from app.transcriber.tencent_asr import TencentAsrTranscriber
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,6 +17,7 @@ class TranscriberType(str, Enum):
     BCUT = "bcut"
     KUAISHOU = "kuaishou"
     GROQ = "groq"
+    TENCENT_ASR = "tencent-asr"
 
 # 仅在 Apple 平台启用 MLX Whisper
 MLX_WHISPER_AVAILABLE = False
@@ -36,6 +38,7 @@ _transcribers = {
     TranscriberType.BCUT: None,
     TranscriberType.KUAISHOU: None,
     TranscriberType.GROQ: None,
+    TranscriberType.TENCENT_ASR: None,
 }
 
 # 公共实例初始化函数
@@ -69,13 +72,17 @@ def get_mlx_whisper_transcriber(model_size="base"):
         raise ImportError("MLX Whisper 不可用")
     return _init_transcriber(TranscriberType.MLX_WHISPER, MLXWhisperTranscriber, model_size=model_size)
 
+
+def get_tencent_asr_transcriber():
+    return _init_transcriber(TranscriberType.TENCENT_ASR, TencentAsrTranscriber)
+
 # 通用入口
 def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="cuda"):
     """
     获取指定类型的转录器实例
 
     参数:
-        transcriber_type: 支持 "fast-whisper", "mlx-whisper", "bcut", "kuaishou", "groq"
+        transcriber_type: 支持 "fast-whisper", "mlx-whisper", "bcut", "kuaishou", "groq", "tencent-asr"
         model_size: 模型大小，适用于 whisper 类
         device: 设备类型（如 cuda / cpu），仅 whisper 使用
 
@@ -109,6 +116,9 @@ def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="
 
     elif transcriber_enum == TranscriberType.GROQ:
         return get_groq_transcriber()
+
+    elif transcriber_enum == TranscriberType.TENCENT_ASR:
+        return get_tencent_asr_transcriber()
 
     # fallback
     logger.warning(f'未识别转录器类型 "{transcriber_type}"，使用 fast-whisper 作为默认')

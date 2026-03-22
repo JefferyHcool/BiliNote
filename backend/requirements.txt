@@ -107,6 +107,7 @@ SQLAlchemy==2.0.41
 tenacity==9.1.2
 tinycss2==1.4.0
 tinyhtml5==2.0.0
+tencentcloud-sdk-python-asr==3.1.51
 tokenizers==0.21.1
 tornado==6.4.2
 tqdm==4.67.1
