@@ -49,7 +49,7 @@ class TencentAsrTranscriber(Transcriber):
             "Data": base64.b64encode(audio_bytes).decode("utf-8"),
             "DataLen": len(audio_bytes),
             "ChannelNum": 1,
-            "ResTextFormat": 0,
+            "ResTextFormat": 1,
         }
 
         request = models.CreateRecTaskRequest()
