@@ -164,19 +164,21 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
     () => ({
       user: {
         placement: 'end' as const,
-        avatar: {
-          icon: <UserRound className="h-4 w-4" />,
-          style: { background: '#3b82f6' },
-        },
+        avatar: (
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white">
+            <UserRound className="h-4 w-4" />
+          </div>
+        ),
         variant: 'filled' as const,
         styles: { content: { background: '#3b82f6', color: '#fff' } },
       },
       ai: {
         placement: 'start' as const,
-        avatar: {
-          icon: <Bot className="h-4 w-4" />,
-          style: { background: '#6b7280' },
-        },
+        avatar: (
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-500 text-white">
+            <Bot className="h-4 w-4" />
+          </div>
+        ),
         variant: 'outlined' as const,
       },
     }),
