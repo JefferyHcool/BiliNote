@@ -323,3 +323,7 @@ cython_debug/
 /backend/vector_db/
 /BiliNote_frontend/.idea/*
 /BiliNote_frontend/src-tauri/bin/
+
+# FFmpeg 构建文件（不应该提交到仓库）
+ffmpeg*/
+ffmpg*/
