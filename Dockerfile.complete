@@ -36,10 +36,10 @@ WORKDIR /tmp/frontend
 COPY ./BillNote_frontend/package.json ./
 RUN pnpm install
 
-# 复制 .env.example 到父目录，供 vite.config.ts 使用
-COPY ./.env.example /tmp/.env
-
 COPY ./BillNote_frontend /tmp/frontend
+
+# 设置环境变量，告诉 vite.config.ts 这是 Docker 构建
+ENV DOCKER_BUILD=1
 RUN pnpm run build
 
 # === 阶段3：完整应用镜像 ===
