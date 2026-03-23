@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Bubble, Sender } from '@ant-design/x'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot, Maximize2, Minimize2 } from 'lucide-react'
@@ -180,6 +182,13 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
           </div>
         ),
         variant: 'outlined' as const,
+        contentRender: (content: any) => (
+          <div className="markdown-body prose prose-sm max-w-none prose-p:my-1 prose-li:my-0.5 prose-headings:my-2">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {typeof content === 'string' ? content : String(content)}
+            </ReactMarkdown>
+          </div>
+        ),
       },
     }),
     [],
