@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
+        PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
     env_file:
       - .env
     environment:
