@@ -67,7 +67,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: BillNote_frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       # 设置 Rust 环境
       - name: Set up Rust
