@@ -18,8 +18,11 @@ export interface AskResponse {
   sources: ChatSource[]
 }
 
+export type IndexStatus = 'idle' | 'indexing' | 'indexed' | 'failed'
+
 export interface ChatStatusResponse {
   indexed: boolean
+  status: IndexStatus
 }
 
 export const indexTask = async (taskId: string): Promise<void> => {

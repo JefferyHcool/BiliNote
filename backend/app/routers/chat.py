@@ -1,6 +1,4 @@
-from typing import Optional
-
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
 from app.services.chat_service import chat as chat_service
@@ -11,6 +9,9 @@ from app.utils.response import ResponseWrapper as R
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# 索引状态追踪: task_id -> "indexing" | "indexed" | "failed"
+_index_status: dict[str, str] = {}
 
 
 class IndexRequest(BaseModel):
@@ -30,28 +31,54 @@ class AskRequest(BaseModel):
     model_name: str
 
 
-@router.post("/chat/index")
-def index_task(data: IndexRequest):
-    """为笔记建立向量索引。"""
+def _do_index(task_id: str):
+    """后台执行索引任务。"""
     try:
+        _index_status[task_id] = "indexing"
         store = VectorStoreManager()
-        store.index_task(data.task_id)
-        return R.success(msg="索引完成")
+        store.index_task(task_id)
+        _index_status[task_id] = "indexed"
+        logger.info(f"索引完成: {task_id}")
     except Exception as e:
-        logger.error(f"索引失败: {e}")
-        return R.error(msg=f"索引失败: {str(e)}")
+        _index_status[task_id] = "failed"
+        logger.error(f"索引失败: {task_id}, {e}")
+
+
+@router.post("/chat/index")
+def index_task(data: IndexRequest, background_tasks: BackgroundTasks):
+    """触发后台索引，立即返回。"""
+    if _index_status.get(data.task_id) == "indexing":
+        return R.success(msg="正在索引中")
+
+    # 如果已经索引过，直接返回
+    store = VectorStoreManager()
+    if store.is_indexed(data.task_id):
+        _index_status[data.task_id] = "indexed"
+        return R.success(msg="已完成索引")
+
+    _index_status[data.task_id] = "indexing"
+    background_tasks.add_task(_do_index, data.task_id)
+    return R.success(msg="开始索引")
 
 
 @router.get("/chat/status")
 def chat_status(task_id: str):
-    """检查笔记是否已建立向量索引。"""
+    """返回索引状态：idle / indexing / indexed / failed。"""
     try:
+        # 优先检查内存状态
+        status = _index_status.get(task_id)
+        if status:
+            return R.success(data={"status": status, "indexed": status == "indexed"})
+
+        # 内存没有记录，检查持久化
         store = VectorStoreManager()
         indexed = store.is_indexed(task_id)
-        return R.success(data={"indexed": indexed})
+        if indexed:
+            _index_status[task_id] = "indexed"
+        return R.success(data={"status": "indexed" if indexed else "idle", "indexed": indexed})
     except Exception as e:
         logger.error(f"查询索引状态失败: {e}")
-        return R.success(data={"indexed": False})
+        return R.success(data={"status": "idle", "indexed": False})
 
 
 @router.post("/chat/ask")

@@ -7,7 +7,7 @@ import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot } fro
 import { toast } from 'react-hot-toast'
 import { useChatStore } from '@/store/chatStore'
 import { useTaskStore } from '@/store/taskStore'
-import { askQuestion, getChatStatus, indexTask, type ChatSource } from '@/services/chat'
+import { askQuestion, getChatStatus, indexTask, type ChatSource, type IndexStatus } from '@/services/chat'
 
 interface ChatPanelProps {
   taskId: string
@@ -46,8 +46,7 @@ function SourceBadges({ sources }: { sources: ChatSource[] }) {
 export default function ChatPanel({ taskId }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [indexing, setIndexing] = useState(false)
-  const [indexed, setIndexed] = useState<boolean | null>(null)
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
 
   const messages = useChatStore(state => state.chatHistory[taskId]) ?? []
   const addMessage = useChatStore(state => state.addMessage)
@@ -60,36 +59,37 @@ export default function ChatPanel({ taskId }: ChatPanelProps) {
     [tasks, currentTaskId],
   )
 
-  // 检查索引状态
+  // 检查索引状态，未索引时自动触发，indexing 时轮询
   useEffect(() => {
     if (!taskId) return
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
 
-    const check = async () => {
+    const poll = async () => {
       try {
         const res = await getChatStatus(taskId)
         if (cancelled) return
-        if (res.indexed) {
-          setIndexed(true)
-        } else {
-          setIndexing(true)
+        setIndexStatus(res.status)
+
+        if (res.status === 'idle') {
+          // 未索引，触发后台索引
           await indexTask(taskId)
-          if (!cancelled) {
-            setIndexed(true)
-            setIndexing(false)
-          }
+          if (!cancelled) setIndexStatus('indexing')
+        }
+
+        // indexing 状态持续轮询
+        if (res.status === 'indexing' || res.status === 'idle') {
+          timer = setTimeout(poll, 2000)
         }
       } catch {
-        if (!cancelled) {
-          setIndexed(false)
-          setIndexing(false)
-        }
+        if (!cancelled) setIndexStatus('failed')
       }
     }
 
-    check()
+    poll()
     return () => {
       cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [taskId])
 
@@ -178,16 +178,19 @@ export default function ChatPanel({ taskId }: ChatPanelProps) {
     [],
   )
 
-  if (indexing) {
+  if (indexStatus === null || indexStatus === 'indexing' || indexStatus === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-400">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span className="text-sm">正在索引笔记内容...</span>
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-400">
+        <Loader2 className="h-6 w-6 animate-spin" />
+        <div className="text-center">
+          <p className="text-sm font-medium">正在索引笔记内容...</p>
+          <p className="mt-1 text-xs">首次使用需下载 Embedding 模型（约 80MB），请耐心等待</p>
+        </div>
       </div>
     )
   }
 
-  if (indexed === false) {
+  if (indexStatus === 'failed') {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-400">
         <span className="text-sm">索引失败，请重试</span>
@@ -195,14 +198,12 @@ export default function ChatPanel({ taskId }: ChatPanelProps) {
           size="sm"
           variant="outline"
           onClick={async () => {
-            setIndexing(true)
+            setIndexStatus('indexing')
             try {
               await indexTask(taskId)
-              setIndexed(true)
             } catch {
-              toast.error('索引失败')
-            } finally {
-              setIndexing(false)
+              toast.error('索引请求失败')
+              setIndexStatus('failed')
             }
           }}
         >
