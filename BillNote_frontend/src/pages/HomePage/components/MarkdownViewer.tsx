@@ -24,6 +24,7 @@ import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
+import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
 
 interface VersionNote {
   ver_id: string
@@ -228,6 +229,12 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
               ) : (
               <>
               <ScrollArea className="min-w-0 flex-1">
+                <div className="px-2">
+                  <VideoBanner
+                    audioMeta={currentTask?.audioMeta}
+                    videoUrl={currentTask?.formData?.video_url}
+                  />
+                </div>
                 <div className={'markdown-body w-full px-2'}>
                   <ReactMarkdown
                     remarkPlugins={[gfm, remarkMath]}
