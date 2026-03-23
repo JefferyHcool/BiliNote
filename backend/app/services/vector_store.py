@@ -66,13 +66,8 @@ class VectorStoreManager:
         )
 
     def _collection_name(self, task_id: str) -> str:
-        """ChromaDB collection 名称需满足限制：3-63字符，字母数字开头结尾。"""
-        safe = re.sub(r'[^a-zA-Z0-9_-]', '_', task_id)[:60]
-        if not safe or not safe[0].isalnum():
-            safe = "t" + safe
-        if not safe[-1].isalnum():
-            safe = safe + "0"
-        return safe
+        """ChromaDB collection 名称：直接使用 task_id（UUID 格式合法）。"""
+        return task_id
 
     def index_task(self, task_id: str) -> None:
         """读取笔记结果并建立向量索引。"""
@@ -101,7 +96,7 @@ class VectorStoreManager:
         # 删除旧 collection（幂等）
         try:
             self._client.delete_collection(col_name)
-        except ValueError:
+        except Exception:
             pass
 
         collection = self._client.create_collection(
@@ -121,7 +116,7 @@ class VectorStoreManager:
         col_name = self._collection_name(task_id)
         try:
             collection = self._client.get_collection(col_name)
-        except ValueError:
+        except Exception:
             logger.warning(f"Collection 不存在: {col_name}")
             return []
 
@@ -142,7 +137,7 @@ class VectorStoreManager:
         try:
             self._client.delete_collection(col_name)
             logger.info(f"已删除向量索引: {task_id}")
-        except ValueError:
+        except Exception:
             pass
 
     def is_indexed(self, task_id: str) -> bool:
@@ -151,5 +146,5 @@ class VectorStoreManager:
         try:
             col = self._client.get_collection(col_name)
             return col.count() > 0
-        except ValueError:
+        except Exception:
             return False
