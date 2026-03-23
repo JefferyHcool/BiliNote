@@ -1,10 +1,9 @@
-# .github/workflows/release.yml
-name: Build Desktop App (Python Backend + Tauri Frontend)
+name: Build & Release Desktop App
 
 on:
   push:
     tags:
-      - 'v*' # 发布 tag 时触发
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -13,8 +12,11 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
+            target: universal-apple-darwin
           - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
           - platform: windows-latest
+            target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
 
@@ -91,17 +93,70 @@ jobs:
         working-directory: BillNote_frontend
         run: pnpm tauri build
 
-      # 生成 SHA256 校验和
-      - name: Generate Checksums
+      # 收集产物到统一目录
+      - name: Collect release artifacts
         shell: bash
         run: |
-          cd BillNote_frontend/src-tauri/target/release/bundle/
-          find . -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" \) -exec sha256sum {} \; > checksums.sha256 || true
+          mkdir -p release-artifacts
+          BUNDLE_DIR="BillNote_frontend/src-tauri/target/release/bundle"
 
-      # 上传构建产物
-      - name: Upload Desktop Bundle
+          # macOS: .dmg
+          find "$BUNDLE_DIR" -name "*.dmg" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          # Windows: .msi, .exe (NSIS)
+          find "$BUNDLE_DIR" -name "*.msi" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find "$BUNDLE_DIR/nsis" -name "*.exe" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          # Linux: .deb, .AppImage
+          find "$BUNDLE_DIR" -name "*.deb" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          find "$BUNDLE_DIR" -name "*.AppImage" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+
+          echo "=== Collected artifacts ==="
+          ls -lh release-artifacts/
+
+      # 生成 SHA256 校验和
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          sha256sum * > SHA256SUMS.txt 2>/dev/null || shasum -a 256 * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # 上传产物（供 release job 使用）
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ matrix.platform }}
-          path: |
-            BillNote_frontend/src-tauri/target/release/bundle/
+          name: artifacts-${{ matrix.platform }}
+          path: release-artifacts/
+
+  # 创建 GitHub Release 并上传所有产物
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 下载所有平台的构建产物
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: List all artifacts
+        run: |
+          echo "=== All release artifacts ==="
+          ls -lhR all-artifacts/
+
+      # 创建 Release 并上传产物
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: BiliNote ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: all-artifacts/*
