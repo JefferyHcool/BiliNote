@@ -4,6 +4,7 @@ import type { AudioMeta } from '@/store/taskStore'
 interface VideoBannerProps {
   audioMeta?: AudioMeta
   videoUrl?: string
+  baseURL?: string
 }
 
 /** 平台 label 映射 */
@@ -14,10 +15,14 @@ const platformLabel: Record<string, string> = {
   xiaohongshu: '小红书',
 }
 
-export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
+export default function VideoBanner({ audioMeta, videoUrl, baseURL = '' }: VideoBannerProps) {
   if (!audioMeta) return null
 
-  const coverUrl = audioMeta.cover_url
+  const rawCover = audioMeta.cover_url
+  // 通过后端代理加载封面，避免跨域/Referrer 限制
+  const coverUrl = rawCover
+    ? `${baseURL}/image_proxy?url=${encodeURIComponent(rawCover)}`
+    : ''
   const title = audioMeta.title
   const uploader = audioMeta.raw_info?.uploader || ''
   const platform = platformLabel[audioMeta.platform] || audioMeta.platform || ''
@@ -31,6 +36,7 @@ export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
           <img
             src={coverUrl}
             alt=""
+            referrerPolicy="no-referrer"
             className="h-full w-full object-cover blur-md brightness-[0.4] scale-110"
           />
         ) : (
@@ -45,6 +51,7 @@ export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
           <img
             src={coverUrl}
             alt={title}
+            referrerPolicy="no-referrer"
             className="h-16 w-28 shrink-0 rounded-md object-cover shadow-md"
           />
         )}
