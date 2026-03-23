@@ -1,76 +1,73 @@
-name: Build Complete Docker Image
+name: Build and Publish Docker Image
 
 on:
   push:
     tags:
-      - 'v*'  # 在推送 tag 时触发 (如 v1.0.0)
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract Version from Tag
-        id: get_version
-        run: |
-          # 获取 tag 名称 (如 refs/tags/v1.0.0 -> v1.0.0)
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Tag version: $VERSION"
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Image
-        run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          IMAGE_NAME="bilinote:${VERSION}"
-          
-          echo "Building image: ${IMAGE_NAME}"
-          
-          # 构建镜像
-          docker build -f Dockerfile.complete -t ${IMAGE_NAME} .
-          
-          # 保存镜像为 tar 文件
-          docker save ${IMAGE_NAME} -o bilinote-${VERSION}.tar
-          
-          # 显示镜像信息
-          echo "Image built successfully!"
-          docker images bilinote:${VERSION}
-
-      - name: Upload Docker Image Artifact
-        uses: actions/upload-artifact@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          name: bilinote-${{ steps.get_version.outputs.version }}
-          path: bilinote-${{ steps.get_version.outputs.version }}.tar
-          retention-days: 90
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.complete
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
 
       - name: Generate Usage Instructions
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
           echo "=========================================="
-          echo "Docker Image Build Complete!"
+          echo "Docker Image Published!"
           echo "=========================================="
           echo ""
-          echo "Image Name: bilinote:${VERSION}"
-          echo "Artifact: bilinote-${VERSION}.tar"
+          echo "Pull the image:"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo ""
-          echo "To use this Docker image:"
-          echo "1. Download the artifact from this workflow run"
-          echo "2. Load the image:"
-          echo "   docker load < bilinote-${VERSION}.tar"
-          echo "3. Run the container:"
-          echo "   docker run -d -p 80:80 --name bilinote bilinote:${VERSION}"
+          echo "Run the container:"
+          echo "  docker run -d -p 80:80 \\"
+          echo "    -v bilinote-data:/app/backend/data \\"
+          echo "    --name bilinote \\"
+          echo "    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo ""
-          echo "Or with environment variables:"
-          echo "   docker run -d -p 80:80 \\"
-          echo "     -e BACKEND_PORT=8483 \\"
-          echo "     -e BACKEND_HOST=0.0.0.0 \\"
-          echo "     -v /path/to/data:/app/backend/data \\"
-          echo "     --name bilinote bilinote:${VERSION}"
-          echo ""
-          echo "Access the application at: http://localhost:80"
+          echo "Access the application at: http://localhost"
           echo "=========================================="

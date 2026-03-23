@@ -1,41 +1,56 @@
 # === 阶段1：构建 Backend ===
 FROM python:3.11-slim AS backend-builder
 
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+
 RUN rm -f /etc/apt/sources.list && \
     rm -rf /etc/apt/sources.list.d/* && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/usr/bin:${PATH}"
 ENV HF_ENDPOINT=https://hf-mirror.com
 
 WORKDIR /tmp/backend
+
+# 先复制 requirements.txt 利用层缓存
+COPY ./backend/requirements.txt /tmp/backend/requirements.txt
+RUN pip install --no-cache-dir -i ${PIP_INDEX} -r requirements.txt
+
 COPY ./backend /tmp/backend
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # === 阶段2：构建 Frontend ===
 FROM node:18-alpine AS frontend-builder
 
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /tmp/frontend
+
+# 先复制 lockfile 利用依赖层缓存
+COPY ./BillNote_frontend/package.json ./BillNote_frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
 COPY ./BillNote_frontend /tmp/frontend
-RUN pnpm install && pnpm run build
+RUN pnpm run build
 
 # === 阶段3：完整应用镜像 ===
 FROM python:3.11-slim
 
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+
 # 安装必要的运行时依赖
 RUN rm -f /etc/apt/sources.list && \
     rm -rf /etc/apt/sources.list.d/* && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y ffmpeg nginx supervisor procps && \
+    apt-get install -y --no-install-recommends ffmpeg nginx supervisor procps && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/usr/bin:${PATH}"

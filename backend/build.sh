@@ -25,6 +25,7 @@ cp .env.example backend/.env
 # 步骤 2: PyInstaller 打包，直接添加已存在的 .env 文件
 echo "开始 PyInstaller 打包..."
 pyinstaller \
+  -y \
   --name BiliNoteBackend \
   --paths backend \
   --distpath ./BillNote_frontend/src-tauri/bin \

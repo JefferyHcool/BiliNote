@@ -6,25 +6,38 @@ on:
     tags:
       - 'v*' # 发布 tag 时触发
   workflow_dispatch:
+
 jobs:
   build:
     strategy:
       matrix:
-        platform: [macos-latest, windows-latest]
+        include:
+          - platform: macos-latest
+          - platform: ubuntu-22.04
+          - platform: windows-latest
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 设置 Python 环境
+      # Linux 系统依赖（Tauri 需要）
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # 设置 Python 环境（带 pip 缓存）
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
-      # 安装 Python 依赖并执行你的 build.sh
+      # 安装 Python 依赖并执行构建
       - name: Install Python dependencies & Build backend
         shell: bash
         run: |
@@ -38,30 +51,57 @@ jobs:
             ./backend/build.sh
           fi
 
-      # 设置 Node 环境 + 安装前端依赖
+      # 设置 pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 'latest'
+
+      # 设置 Node 环境（带 pnpm 缓存）
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: BillNote_frontend/pnpm-lock.yaml
 
-      - name: Enable Corepack + Install pnpm
+      - name: Install frontend dependencies
         working-directory: BillNote_frontend
-        run: |
-          corepack enable
-          pnpm install 
+        run: pnpm install --frozen-lockfile
 
       # 设置 Rust 环境
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      # Cargo 缓存
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            BillNote_frontend/src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('BillNote_frontend/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       # 打包 Tauri 应用
       - name: Build Tauri App
         working-directory: BillNote_frontend
         run: pnpm tauri build
 
-      # 可选：上传构建产物
+      # 生成 SHA256 校验和
+      - name: Generate Checksums
+        shell: bash
+        run: |
+          cd BillNote_frontend/src-tauri/target/release/bundle/
+          find . -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" \) -exec sha256sum {} \; > checksums.sha256 || true
+
+      # 上传构建产物
       - name: Upload Desktop Bundle
         uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.platform }}
-          path: BillNote_frontend/src-tauri/target/release/bundle/
+          path: |
+            BillNote_frontend/src-tauri/target/release/bundle/
