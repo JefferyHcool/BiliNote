@@ -221,7 +221,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
         <div className="flex flex-1 overflow-hidden bg-white py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
-              <ScrollArea className="w-full">
+              <ScrollArea className="min-w-0 flex-1">
                 <div className={'markdown-body w-full px-2'}>
                   <ReactMarkdown
                     remarkPlugins={[gfm, remarkMath]}
@@ -477,7 +477,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
                 </div>
               )}
               {showChat && currentTask && (
-                <div className="ml-2 w-2/5">
+                <div className="ml-2 h-full w-2/5 shrink-0">
                   <ChatPanel taskId={currentTask.id} />
                 </div>
               )}
