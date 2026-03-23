@@ -111,18 +111,11 @@ class VectorStoreManager:
         collection.add(documents=documents, metadatas=metadatas, ids=ids)
         logger.info(f"向量索引完成: task_id={task_id}, chunks={len(all_chunks)}")
 
-    def query(self, task_id: str, query_text: str, n_results: int = 5) -> list[dict]:
-        """检索与查询最相关的文档片段。"""
-        col_name = self._collection_name(task_id)
-        try:
-            collection = self._client.get_collection(col_name)
-        except Exception:
-            logger.warning(f"Collection 不存在: {col_name}")
-            return []
-
-        results = collection.query(query_texts=[query_text], n_results=n_results)
-
+    def _parse_results(self, results: dict) -> list[dict]:
+        """将 ChromaDB query 结果转换为 chunk 列表。"""
         chunks = []
+        if not results or not results.get("documents") or not results["documents"][0]:
+            return chunks
         for i in range(len(results["documents"][0])):
             chunks.append({
                 "text": results["documents"][0][i],
@@ -130,6 +123,36 @@ class VectorStoreManager:
                 "distance": results["distances"][0][i] if results["distances"] else None,
             })
         return chunks
+
+    def query(self, task_id: str, query_text: str, n_results: int = 5) -> list[dict]:
+        """
+        分别从 markdown 和 transcript 各检索，确保两种来源都被召回，
+        最后按距离排序返回 top-n。
+        """
+        col_name = self._collection_name(task_id)
+        try:
+            collection = self._client.get_collection(col_name)
+        except Exception:
+            logger.warning(f"Collection 不存在: {col_name}")
+            return []
+
+        all_chunks = []
+
+        # 分别从两种来源各检索 n_results 条
+        for source_type in ("markdown", "transcript"):
+            try:
+                results = collection.query(
+                    query_texts=[query_text],
+                    n_results=n_results,
+                    where={"source_type": source_type},
+                )
+                all_chunks.extend(self._parse_results(results))
+            except Exception:
+                pass
+
+        # 按距离排序，取 top-n
+        all_chunks.sort(key=lambda c: c.get("distance", 999))
+        return all_chunks[:n_results]
 
     def delete_index(self, task_id: str) -> None:
         """删除指定任务的向量索引。"""
