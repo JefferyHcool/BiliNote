@@ -31,9 +31,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /tmp/frontend
 
-# 先复制 lockfile 利用依赖层缓存
-COPY ./BillNote_frontend/package.json ./BillNote_frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# 先复制 package.json 利用依赖层缓存
+COPY ./BillNote_frontend/package.json ./
+RUN pnpm install
 
 COPY ./BillNote_frontend /tmp/frontend
 RUN pnpm run build
