@@ -23,6 +23,7 @@ import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
+import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 
 interface VersionNote {
   ver_id: string
@@ -60,6 +61,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
   const retryTask = useTaskStore.getState().retryTask
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
+  const [showChat, setShowChat] = useState(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
   const svgRef = useRef<SVGSVGElement>(null)
   // 多版本内容处理
@@ -198,6 +200,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
         createAt={createTime}
         showTranscribe={showTranscribe}
         setShowTranscribe={setShowTranscribe}
+        showChat={showChat}
+        setShowChat={setShowChat}
         viewMode={viewMode}
         setViewMode={setViewMode}
       />
@@ -470,6 +474,11 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
               {showTranscribe && (
                 <div className={'ml-2 w-2/4'}>
                   <TranscriptViewer />
+                </div>
+              )}
+              {showChat && currentTask && (
+                <div className="ml-2 w-2/5">
+                  <ChatPanel taskId={currentTask.id} />
                 </div>
               )}
             </>

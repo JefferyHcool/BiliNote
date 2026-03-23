@@ -16,6 +16,7 @@ celery==5.5.1
 certifi==2025.1.31
 cffi==1.17.1
 charset-normalizer==3.4.1
+chromadb==0.6.3
 click==8.1.8
 click-didyoumean==0.3.1
 click-plugins==1.1.1
