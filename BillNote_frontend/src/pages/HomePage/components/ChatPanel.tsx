@@ -49,11 +49,16 @@ export default function ChatPanel({ taskId }: ChatPanelProps) {
   const [indexing, setIndexing] = useState(false)
   const [indexed, setIndexed] = useState<boolean | null>(null)
 
-  const messages = useChatStore(state => state.chatHistory[taskId] || [])
+  const messages = useChatStore(state => state.chatHistory[taskId]) ?? []
   const addMessage = useChatStore(state => state.addMessage)
   const clearChat = useChatStore(state => state.clearChat)
 
-  const currentTask = useTaskStore(state => state.getCurrentTask())
+  const currentTaskId = useTaskStore(state => state.currentTaskId)
+  const tasks = useTaskStore(state => state.tasks)
+  const currentTask = useMemo(
+    () => tasks.find(t => t.id === currentTaskId) ?? null,
+    [tasks, currentTaskId],
+  )
 
   // 检查索引状态
   useEffect(() => {
