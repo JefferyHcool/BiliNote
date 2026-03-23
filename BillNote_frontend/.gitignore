@@ -22,5 +22,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-/pnpm-lock.yaml
 /src-tauri/bin/
