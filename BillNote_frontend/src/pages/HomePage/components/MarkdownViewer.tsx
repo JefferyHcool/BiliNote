@@ -22,6 +22,8 @@ import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
+import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
+import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
 
 interface VersionNote {
   ver_id: string
@@ -280,6 +282,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const retryTask = useTaskStore.getState().retryTask
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
+  const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -422,6 +425,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         createAt={createTime}
         showTranscribe={showTranscribe}
         setShowTranscribe={setShowTranscribe}
+        showChat={showChat}
+        setShowChat={setShowChat}
         viewMode={viewMode}
         setViewMode={setViewMode}
       />
@@ -441,14 +446,26 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         <div className="flex flex-1 overflow-hidden bg-white py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
-              <ScrollArea className="w-full">
+              {showChat === 'full' && currentTask ? (
+                <div className="h-full w-full">
+                  <ChatPanel taskId={currentTask.id} mode="full" onModeChange={setShowChat} />
+                </div>
+              ) : (
+              <>
+              <ScrollArea className="min-w-0 flex-1">
+                <div className="px-2">
+                  <VideoBanner
+                    audioMeta={currentTask?.audioMeta}
+                    videoUrl={currentTask?.formData?.video_url}
+                  />
+                </div>
                 <div className={'markdown-body w-full px-2'}>
                   <ReactMarkdown
                     remarkPlugins={remarkPlugins}
                     rehypePlugins={rehypePlugins}
                     components={markdownComponents}
                   >
-                    {selectedContent}
+                    {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
                   </ReactMarkdown>
                 </div>
               </ScrollArea>
@@ -456,6 +473,14 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                 <div className={'ml-2 w-2/4'}>
                   <TranscriptViewer />
                 </div>
+              )}
+              {/* 侧边问答模式：markdown + ChatPanel 各占一半 */}
+              {showChat === 'half' && currentTask && (
+                <div className="ml-2 h-full w-1/2 shrink-0">
+                  <ChatPanel taskId={currentTask.id} mode="half" onModeChange={setShowChat} />
+                </div>
+              )}
+              </>
               )}
             </>
           ) : (

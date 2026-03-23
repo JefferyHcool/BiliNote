@@ -109,6 +109,12 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
         return
     save_note_to_file(task_id, note)
 
+    # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
+    try:
+        from app.services.vector_store import VectorStoreManager
+        VectorStoreManager().index_task(task_id)
+    except Exception as e:
+        logger.warning(f"向量索引失败（不影响笔记）: {e}")
 
 
 @router.post('/delete_task')

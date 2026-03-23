@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit } from 'lucide-react'
+import { Copy, Download, BrainCircuit, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -28,6 +28,8 @@ interface NoteHeaderProps {
   onDownload: () => void
   createAt?: string | Date
   setShowTranscribe: (show: boolean) => void
+  showChat?: false | 'half' | 'full'
+  setShowChat?: (mode: false | 'half' | 'full') => void
 }
 
 export function MarkdownHeader({
@@ -43,6 +45,8 @@ export function MarkdownHeader({
   createAt,
   showTranscribe,
   setShowTranscribe,
+  showChat,
+  setShowChat,
   viewMode,
   setViewMode,
 }: NoteHeaderProps) {
@@ -183,6 +187,24 @@ export function MarkdownHeader({
             <TooltipContent>原文参照</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        {setShowChat && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setShowChat(showChat ? false : 'half')}
+                  variant={showChat ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-8 px-2"
+                >
+                  <MessageSquare className="mr-1.5 h-4 w-4" />
+                  <span className="text-sm">AI 问答</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>基于笔记内容的 AI 问答</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
     </div>
   )

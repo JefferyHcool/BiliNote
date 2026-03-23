@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/x": "^2.4.0",
     "@hookform/resolvers": "^5.0.1",
     "@lobehub/icons": "^1.97.1",
     "@lobehub/icons-static-svg": "^1.45.0",

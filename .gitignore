@@ -320,5 +320,6 @@ cython_debug/
 /backend/uploads/*
 /backend/.idea/*
 /backend/config/*
+/backend/vector_db/
 /BiliNote_frontend/.idea/*
 /BiliNote_frontend/src-tauri/bin/
