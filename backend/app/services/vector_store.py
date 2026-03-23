@@ -55,6 +55,52 @@ def _chunk_transcript(segments: list[dict], window_size: int = 15, overlap: int 
     return chunks
 
 
+def _build_meta_chunk(audio_meta: dict) -> list[dict]:
+    """将视频元信息（标题、作者、描述、标签等）构建为可检索的 chunk。"""
+    if not audio_meta:
+        return []
+
+    raw = audio_meta.get("raw_info", {}) or {}
+    parts = []
+
+    title = audio_meta.get("title") or raw.get("title", "")
+    if title:
+        parts.append(f"视频标题：{title}")
+
+    uploader = raw.get("uploader", "")
+    if uploader:
+        parts.append(f"视频作者/UP主：{uploader}")
+
+    desc = raw.get("description", "")
+    if desc:
+        parts.append(f"视频简介：{desc[:500]}")
+
+    tags = raw.get("tags", [])
+    if tags and isinstance(tags, list):
+        parts.append(f"标签：{', '.join(str(t) for t in tags[:20])}")
+
+    duration = audio_meta.get("duration", 0)
+    if duration:
+        m, s = divmod(int(duration), 60)
+        parts.append(f"视频时长：{m}分{s}秒")
+
+    platform = audio_meta.get("platform", "")
+    if platform:
+        parts.append(f"平台：{platform}")
+
+    url = raw.get("webpage_url", "")
+    if url:
+        parts.append(f"链接：{url}")
+
+    if not parts:
+        return []
+
+    return [{
+        "text": "\n".join(parts),
+        "metadata": {"source_type": "meta"},
+    }]
+
+
 class VectorStoreManager:
     """基于 ChromaDB 的笔记向量存储管理器。"""
 
@@ -83,9 +129,12 @@ class VectorStoreManager:
         transcript = note_data.get("transcript", {})
         segments = transcript.get("segments", [])
 
+        audio_meta = note_data.get("audio_meta", {})
+
+        meta_chunks = _build_meta_chunk(audio_meta)
         md_chunks = _chunk_markdown(markdown)
         tr_chunks = _chunk_transcript(segments)
-        all_chunks = md_chunks + tr_chunks
+        all_chunks = meta_chunks + md_chunks + tr_chunks
 
         if not all_chunks:
             logger.warning(f"笔记内容为空，跳过索引: {task_id}")
@@ -138,8 +187,8 @@ class VectorStoreManager:
 
         all_chunks = []
 
-        # 分别从两种来源各检索 n_results 条
-        for source_type in ("markdown", "transcript"):
+        # 分别从各来源检索
+        for source_type in ("meta", "markdown", "transcript"):
             try:
                 results = collection.query(
                     query_texts=[query_text],
@@ -164,10 +213,14 @@ class VectorStoreManager:
             pass
 
     def is_indexed(self, task_id: str) -> bool:
-        """检查指定任务是否已建立索引。"""
+        """检查指定任务是否已建立完整索引（含 meta 信息）。"""
         col_name = self._collection_name(task_id)
         try:
             col = self._client.get_collection(col_name)
-            return col.count() > 0
+            if col.count() == 0:
+                return False
+            # 检查是否包含 meta chunk，旧索引可能缺失
+            meta = col.get(where={"source_type": "meta"}, limit=1)
+            return len(meta["ids"]) > 0
         except Exception:
             return False

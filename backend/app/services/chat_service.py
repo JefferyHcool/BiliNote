@@ -9,8 +9,9 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 SYSTEM_PROMPT = """你是一个视频笔记问答助手。你可以参考两种来源回答用户的问题：
-1. [笔记] — AI 生成的视频摘要笔记
-2. [转录] — 视频原始语音转录文本（含时间戳）
+1. [视频信息] — 视频标题、作者、简介、标签等元信息
+2. [笔记] — AI 生成的视频摘要笔记
+3. [转录] — 视频原始语音转录文本（含时间戳）
 
 以下是检索到的相关内容：
 
@@ -31,7 +32,9 @@ def _build_context(chunks: list[dict]) -> str:
     for i, chunk in enumerate(chunks, 1):
         meta = chunk.get("metadata", {})
         source_type = meta.get("source_type", "unknown")
-        if source_type == "markdown":
+        if source_type == "meta":
+            label = "[视频信息]"
+        elif source_type == "markdown":
             label = f"[笔记 - {meta.get('section_title', '')}]"
         else:
             start = meta.get("start_time", 0)
@@ -77,6 +80,9 @@ def chat(
 
     # 1. 检索相关片段
     chunks = vector_store.query(task_id, question, n_results=5)
+    print(
+        f"检索到 {len(chunks)} 个相关片段: {[c['metadata'].get('source_type') for c in chunks]}"
+    )
     if not chunks:
         return {
             "answer": "暂未找到相关笔记内容，请确认笔记已生成并完成索引。",
