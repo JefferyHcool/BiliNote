@@ -221,10 +221,9 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
         <div className="flex flex-1 overflow-hidden bg-white py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
-              {/* 全屏问答模式：隐藏 markdown，ChatPanel 占满 */}
               {showChat === 'full' && currentTask ? (
                 <div className="h-full w-full">
-                  <ChatPanel taskId={currentTask.id} />
+                  <ChatPanel taskId={currentTask.id} mode="full" onModeChange={setShowChat} />
                 </div>
               ) : (
               <>
@@ -486,7 +485,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
               {/* 侧边问答模式：markdown + ChatPanel 各占一半 */}
               {showChat === 'half' && currentTask && (
                 <div className="ml-2 h-full w-1/2 shrink-0">
-                  <ChatPanel taskId={currentTask.id} />
+                  <ChatPanel taskId={currentTask.id} mode="half" onModeChange={setShowChat} />
                 </div>
               )}
               </>

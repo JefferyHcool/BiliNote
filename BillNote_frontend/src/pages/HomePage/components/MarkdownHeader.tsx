@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit, MessageSquare, PanelRight, Maximize2 } from 'lucide-react'
+import { Copy, Download, BrainCircuit, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -188,40 +188,22 @@ export function MarkdownHeader({
           </Tooltip>
         </TooltipProvider>
         {setShowChat && (
-          <div className="flex items-center gap-0.5 ml-1">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={() => setShowChat(showChat === 'half' ? false : 'half')}
-                    variant={showChat === 'half' ? 'default' : 'ghost'}
-                    size="sm"
-                    className="h-8 px-2"
-                  >
-                    <PanelRight className="mr-1.5 h-4 w-4" />
-                    <span className="text-sm">问答</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>侧边问答（半屏）</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={() => setShowChat(showChat === 'full' ? false : 'full')}
-                    variant={showChat === 'full' ? 'default' : 'ghost'}
-                    size="sm"
-                    className="h-8 px-2"
-                  >
-                    <Maximize2 className="mr-1.5 h-4 w-4" />
-                    <span className="text-sm">全屏问答</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>全屏问答</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setShowChat(showChat ? false : 'half')}
+                  variant={showChat ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-8 px-2"
+                >
+                  <MessageSquare className="mr-1.5 h-4 w-4" />
+                  <span className="text-sm">AI 问答</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>基于笔记内容的 AI 问答</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
     </div>

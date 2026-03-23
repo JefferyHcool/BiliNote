@@ -3,14 +3,18 @@ import { Bubble, Sender } from '@ant-design/x'
 import type { BubbleProps } from '@ant-design/x'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot } from 'lucide-react'
+import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot, Maximize2, Minimize2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useChatStore } from '@/store/chatStore'
 import { useTaskStore } from '@/store/taskStore'
 import { askQuestion, getChatStatus, indexTask, type ChatSource, type IndexStatus } from '@/services/chat'
 
+type ChatMode = 'half' | 'full'
+
 interface ChatPanelProps {
   taskId: string
+  mode: ChatMode
+  onModeChange: (mode: ChatMode) => void
 }
 
 function SourceBadges({ sources }: { sources: ChatSource[] }) {
@@ -43,7 +47,7 @@ function SourceBadges({ sources }: { sources: ChatSource[] }) {
   )
 }
 
-export default function ChatPanel({ taskId }: ChatPanelProps) {
+export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
@@ -218,16 +222,31 @@ export default function ChatPanel({ taskId }: ChatPanelProps) {
       {/* 头部 */}
       <div className="flex items-center justify-between border-b px-3 py-2">
         <span className="text-sm font-medium">AI 问答</span>
-        {messages.length > 0 && (
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-neutral-400 hover:text-red-500"
-            onClick={() => clearChat(taskId)}
+            className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
+            onClick={() => onModeChange(mode === 'half' ? 'full' : 'half')}
+            title={mode === 'half' ? '全屏' : '半屏'}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            {mode === 'half' ? (
+              <Maximize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Minimize2 className="h-3.5 w-3.5" />
+            )}
           </Button>
-        )}
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-neutral-400 hover:text-red-500"
+              onClick={() => clearChat(taskId)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* 消息列表 */}
