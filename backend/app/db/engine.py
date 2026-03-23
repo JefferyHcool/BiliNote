@@ -13,10 +13,19 @@ engine_args = {}
 if DATABASE_URL.startswith("sqlite"):
     engine_args["connect_args"] = {"check_same_thread": False}
 
+_pool_args = {}
+if not DATABASE_URL.startswith("sqlite"):
+    _pool_args = {
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+        "pool_pre_ping": True,
+    }
+
 engine = create_engine(
     DATABASE_URL,
     echo=os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true",
-    **engine_args
+    **engine_args,
+    **_pool_args,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

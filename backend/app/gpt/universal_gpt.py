@@ -26,6 +26,9 @@ class UniversalGPT(GPT):
         self.max_request_bytes = int(os.getenv("OPENAI_MAX_REQUEST_BYTES", str(45 * 1024 * 1024)))
         self.checkpoint_dir = Path(os.getenv("NOTE_OUTPUT_DIR", "note_results"))
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        # 初始化时缓存重试配置，避免每次请求重复读取环境变量
+        self._max_retry_attempts = max(1, int(os.getenv("OPENAI_RETRY_ATTEMPTS", "3")))
+        self._retry_base_backoff = float(os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "1.5"))
 
     def _format_time(self, seconds: float) -> str:
         return str(timedelta(seconds=int(seconds)))[2:]
@@ -176,11 +179,8 @@ class UniversalGPT(GPT):
         return status in {408, 409, 429, 500, 502, 503, 504, 524}
 
     def _chat_completion_create(self, messages: list):
-        max_attempts = max(1, int(os.getenv("OPENAI_RETRY_ATTEMPTS", "3")))
-        base_backoff = float(os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "1.5"))
-
         last_exc = None
-        for attempt in range(max_attempts):
+        for attempt in range(self._max_retry_attempts):
             try:
                 return self.client.chat.completions.create(
                     model=self.model,
@@ -189,9 +189,9 @@ class UniversalGPT(GPT):
                 )
             except Exception as exc:
                 last_exc = exc
-                if attempt == max_attempts - 1 or not self._is_retryable_error(exc):
+                if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):
                     raise
-                sleep_seconds = base_backoff * (2 ** attempt)
+                sleep_seconds = self._retry_base_backoff * (2 ** attempt)
                 time.sleep(sleep_seconds)
 
         if last_exc is not None:

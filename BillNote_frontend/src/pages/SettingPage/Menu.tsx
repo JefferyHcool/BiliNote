@@ -1,5 +1,6 @@
 import {
   BotMessageSquare,
+  Captions,
   HardDriveDownload,
   Info,
   Activity,
@@ -14,14 +15,12 @@ const Menu = () => {
       icon: <BotMessageSquare />,
       path: '/settings/model',
     },
-    // TODO ：下一版本升级优化
-    // {
-    //   id: ' transcriber',
-    //   name: '音频转译配置',
-    //   icon: <Captions />,
-    //   path: '/settings/transcriber',
-    // },
-    // //下载配置
+    {
+      id: 'transcriber',
+      name: '音频转写配置',
+      icon: <Captions />,
+      path: '/settings/transcriber',
+    },
     {
       id: 'download',
       name: '下载配置',

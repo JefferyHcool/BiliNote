@@ -22,9 +22,11 @@ export const useTaskPolling = (interval = 3000) => {
         task => task.status != 'SUCCESS' && task.status != 'FAILED'
       )
 
+      // 无活跃任务时跳过轮询
+      if (pendingTasks.length === 0) return
+
       for (const task of pendingTasks) {
         try {
-          console.log('🔄 正在轮询任务：', task.id)
           const res = await get_task_status(task.id)
           const { status } = res
 
@@ -47,9 +49,7 @@ export const useTaskPolling = (interval = 3000) => {
           }
         } catch (e) {
           console.error('❌ 任务轮询失败：', e)
-          // toast.error(`生成失败 ${e.message || e}`)
           updateTaskContent(task.id, { status: 'FAILED' })
-          // removeTask(task.id)
         }
       }
     }, interval)

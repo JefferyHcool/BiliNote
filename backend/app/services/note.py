@@ -66,9 +66,11 @@ class NoteGenerator:
     """
 
     def __init__(self):
-        self.model_size: str = "base"
+        from app.services.transcriber_config_manager import TranscriberConfigManager
+        config_manager = TranscriberConfigManager()
+        self.model_size: str = config_manager.get_whisper_model_size()
         self.device: Optional[str] = None
-        self.transcriber_type: str = os.getenv("TRANSCRIBER_TYPE", "fast-whisper")
+        self.transcriber_type: str = config_manager.get_transcriber_type()
         self.transcriber: Transcriber = self._init_transcriber()
         self.video_path: Optional[Path] = None
         self.video_img_urls=[]

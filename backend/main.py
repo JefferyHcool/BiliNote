@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
@@ -14,7 +15,7 @@ from app.exceptions.exception_handlers import register_exception_handlers
 # from app.db.provider_dao import init_provider_table
 from app.utils.logger import get_logger
 from app import create_app
-from app.transcriber.transcriber_provider import get_transcriber
+from app.services.transcriber_config_manager import TranscriberConfigManager
 from events import register_handler
 from ffmpeg_helper import ensure_ffmpeg_or_raise
 
@@ -40,7 +41,10 @@ if not os.path.exists(out_dir):
 async def lifespan(app: FastAPI):
     register_handler()
     init_db()
-    get_transcriber(transcriber_type=os.getenv("TRANSCRIBER_TYPE", "fast-whisper"))
+    # 转写器不再在启动时强制初始化，而是在首次生成笔记时按需创建
+    # 如果配置了不可用的类型（如 mlx-whisper 未安装），会在使用时报错而非静默回退
+    _cfg = TranscriberConfigManager().get_config()
+    logger.info(f"当前转写器配置: type={_cfg['transcriber_type']}, model_size={_cfg['whisper_model_size']}")
     seed_default_providers()
     yield
 
@@ -58,6 +62,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 register_exception_handlers(app)
 app.mount(static_path, StaticFiles(directory=static_dir), name="static")
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")

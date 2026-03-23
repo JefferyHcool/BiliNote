@@ -101,7 +101,7 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
             grid_size=grid_size,
         )
 
-    logger.info(f"任务进入串行队列，等待执行 (task_id={task_id})")
+    logger.info(f"任务进入执行队列 (task_id={task_id})")
     note = task_serial_executor.run(_execute_note_task)
     logger.info(f"Note generated: {task_id}")
     if not note or not note.markdown:

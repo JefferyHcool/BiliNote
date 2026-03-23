@@ -13,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
 import { Info, Loader2, Plus } from 'lucide-react'
-import { message, Alert } from 'antd'
+import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
 import { generateNote } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
 import { useTaskStore } from '@/store/taskStore'
@@ -513,17 +513,11 @@ const NoteForm = () => {
                 )}
               />
             </div>
-            <Alert
-              closable
-              type="error"
-              message={
-                <div>
-                  <strong>提示：</strong>
-                  <p>视频理解功能必须使用多模态模型。</p>
-                </div>
-              }
-              className="text-sm"
-            />
+            <Alert variant="warning" className="text-sm">
+              <AlertDescription>
+                <strong>提示：</strong>视频理解功能必须使用多模态模型。
+              </AlertDescription>
+            </Alert>
           </div>
 
           {/* 笔记格式 */}
