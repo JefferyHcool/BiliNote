@@ -233,7 +233,6 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
                   <VideoBanner
                     audioMeta={currentTask?.audioMeta}
                     videoUrl={currentTask?.formData?.video_url}
-                    baseURL={baseURL}
                   />
                 </div>
                 <div className={'markdown-body w-full px-2'}>
