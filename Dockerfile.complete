@@ -4,11 +4,12 @@ FROM python:3.11-slim AS backend-builder
 ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 
-RUN rm -f /etc/apt/sources.list && \
+RUN set -ex && \
+    rm -f /etc/apt/sources.list && \
     rm -rf /etc/apt/sources.list.d/* && \
-    echo "deb https://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb https://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg && \
     rm -rf /var/lib/apt/lists/*
@@ -44,11 +45,12 @@ FROM python:3.11-slim
 ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 
 # 安装必要的运行时依赖
-RUN rm -f /etc/apt/sources.list && \
+RUN set -ex && \
+    rm -f /etc/apt/sources.list && \
     rm -rf /etc/apt/sources.list.d/* && \
-    echo "deb https://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb https://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb http://${APT_MIRROR}/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg nginx supervisor procps && \
     rm -rf /var/lib/apt/lists/*
