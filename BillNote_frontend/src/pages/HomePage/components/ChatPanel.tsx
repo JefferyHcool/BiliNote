@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Bubble, Sender } from '@ant-design/x'
-import type { BubbleProps } from '@ant-design/x'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot, Maximize2, Minimize2 } from 'lucide-react'
@@ -161,22 +160,24 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
   }, [messages, loading])
 
   // Bubble 角色配置
-  const roles: BubbleProps['roles'] = useMemo(
+  const roles = useMemo(
     () => ({
       user: {
-        placement: 'end',
+        placement: 'end' as const,
         avatar: {
           icon: <UserRound className="h-4 w-4" />,
           style: { background: '#3b82f6' },
         },
+        variant: 'filled' as const,
+        styles: { content: { background: '#3b82f6', color: '#fff' } },
       },
       ai: {
-        placement: 'start',
+        placement: 'start' as const,
         avatar: {
           icon: <Bot className="h-4 w-4" />,
           style: { background: '#6b7280' },
         },
-        typing: { step: 5, interval: 50 },
+        variant: 'outlined' as const,
       },
     }),
     [],
@@ -261,7 +262,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
         ) : (
           <Bubble.List
             items={bubbleItems}
-            roles={roles}
+            role={roles}
             style={{ height: '100%' }}
           />
         )}
