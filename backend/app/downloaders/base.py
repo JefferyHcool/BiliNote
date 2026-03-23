@@ -22,7 +22,8 @@ class Downloader(ABC):
 
     @abstractmethod
     def download(self, video_url: str, output_dir: str = None,
-                 quality: DownloadQuality = "fast", need_video: Optional[bool] = False) -> AudioDownloadResult:
+                 quality: DownloadQuality = "fast", need_video: Optional[bool] = False,
+                 skip_download: bool = False) -> AudioDownloadResult:
         '''
 
         :param need_video:

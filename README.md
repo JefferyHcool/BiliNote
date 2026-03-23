@@ -150,6 +150,33 @@ sudo apt install ffmpeg
 
 具体 `fast-whisper` 配置方法，请参考：[fast-whisper 项目地址](http://github.com/SYSTRAN/faster-whisper#requirements)
 
+### 🐳 使用 Docker 一键部署
+
+确保你已安装 Docker，然后直接拉取预构建镜像运行：
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/jefferyhcool/bilinote:latest
+
+# 运行容器
+docker run -d -p 80:80 \
+  -v bilinote-data:/app/backend/data \
+  --name bilinote \
+  ghcr.io/jefferyhcool/bilinote:latest
+```
+
+访问：`http://localhost`
+
+也可以使用 docker-compose 本地构建：
+
+```bash
+# 标准部署
+docker-compose up -d
+
+# GPU 加速部署（需要 NVIDIA GPU）
+docker-compose -f docker-compose.gpu.yml up -d
+```
+
 ## 🧠 TODO
 
 - [x] 支持抖音及快手等视频平台
