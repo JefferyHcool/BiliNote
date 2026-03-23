@@ -61,7 +61,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
   const retryTask = useTaskStore.getState().retryTask
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
-  const [showChat, setShowChat] = useState(false)
+  const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
   const svgRef = useRef<SVGSVGElement>(null)
   // 多版本内容处理
@@ -221,6 +221,13 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
         <div className="flex flex-1 overflow-hidden bg-white py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
+              {/* 全屏问答模式：隐藏 markdown，ChatPanel 占满 */}
+              {showChat === 'full' && currentTask ? (
+                <div className="h-full w-full">
+                  <ChatPanel taskId={currentTask.id} />
+                </div>
+              ) : (
+              <>
               <ScrollArea className="min-w-0 flex-1">
                 <div className={'markdown-body w-full px-2'}>
                   <ReactMarkdown
@@ -476,10 +483,13 @@ const MarkdownViewer: FC<MarkdownViewerProps> = ({ status }) => {
                   <TranscriptViewer />
                 </div>
               )}
-              {showChat && currentTask && (
-                <div className="ml-2 h-full w-2/5 shrink-0">
+              {/* 侧边问答模式：markdown + ChatPanel 各占一半 */}
+              {showChat === 'half' && currentTask && (
+                <div className="ml-2 h-full w-1/2 shrink-0">
                   <ChatPanel taskId={currentTask.id} />
                 </div>
+              )}
+              </>
               )}
             </>
           ) : (
