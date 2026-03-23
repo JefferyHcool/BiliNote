@@ -1,21 +1,23 @@
 import './App.css'
-import { HomePage } from './pages/HomePage/Home.tsx'
+import { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { useTaskPolling } from '@/hooks/useTaskPolling.ts'
-import SettingPage from './pages/SettingPage/index.tsx'
-import { BrowserRouter, Navigate, Routes } from 'react-router-dom'
-import { Route } from 'react-router-dom'
-import Index from '@/pages/Index.tsx'
-import NotFoundPage from '@/pages/NotFoundPage'
-import Model from '@/pages/SettingPage/Model.tsx'
-import ProviderForm from '@/components/Form/modelForm/Form.tsx'
-import AboutPage from '@/pages/SettingPage/about.tsx'
-import Monitor from '@/pages/SettingPage/Monitor.tsx'
-import Downloader from '@/pages/SettingPage/Downloader.tsx'
-import DownloaderForm from '@/components/Form/DownloaderForm/Form.tsx'
-import { useEffect } from 'react'
-import { systemCheck } from '@/services/system.ts'
 import { useCheckBackend } from '@/hooks/useCheckBackend.ts'
+import { systemCheck } from '@/services/system.ts'
 import BackendInitDialog from '@/components/BackendInitDialog'
+import Index from '@/pages/Index.tsx'
+import { HomePage } from './pages/HomePage/Home.tsx'
+
+// 非首屏页面使用 React.lazy 按需加载
+const SettingPage = lazy(() => import('./pages/SettingPage/index.tsx'))
+const Model = lazy(() => import('@/pages/SettingPage/Model.tsx'))
+const ProviderForm = lazy(() => import('@/components/Form/modelForm/Form.tsx'))
+const AboutPage = lazy(() => import('@/pages/SettingPage/about.tsx'))
+const Monitor = lazy(() => import('@/pages/SettingPage/Monitor.tsx'))
+const Downloader = lazy(() => import('@/pages/SettingPage/Downloader.tsx'))
+const DownloaderForm = lazy(() => import('@/components/Form/DownloaderForm/Form.tsx'))
+const TranscriberPage = lazy(() => import('@/pages/SettingPage/transcriber.tsx'))
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 function App() {
   useTaskPolling(3000) // 每 3 秒轮询一次
@@ -41,25 +43,28 @@ function App() {
   return (
     <>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />}>
-            <Route index element={<HomePage />} />
-            <Route path="settings" element={<SettingPage />}>
-              <Route index element={<Navigate to="model" replace />} />
-              <Route path="model" element={<Model />}>
-                <Route path="new" element={<ProviderForm isCreate />} />
-                <Route path=":id" element={<ProviderForm />} />
+        <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中…</div>}>
+          <Routes>
+            <Route path="/" element={<Index />}>
+              <Route index element={<HomePage />} />
+              <Route path="settings" element={<SettingPage />}>
+                <Route index element={<Navigate to="model" replace />} />
+                <Route path="model" element={<Model />}>
+                  <Route path="new" element={<ProviderForm isCreate />} />
+                  <Route path=":id" element={<ProviderForm />} />
+                </Route>
+                <Route path="download" element={<Downloader />}>
+                  <Route path=":id" element={<DownloaderForm />} />
+                </Route>
+                <Route path="transcriber" element={<TranscriberPage />} />
+                <Route path="monitor" element={<Monitor />}></Route>
+                <Route path="about" element={<AboutPage />}></Route>
+                <Route path="*" element={<NotFoundPage />} />
               </Route>
-              <Route path="download" element={<Downloader />}>
-                <Route path=":id" element={<DownloaderForm />} />
-              </Route>
-              <Route path="monitor" element={<Monitor />}></Route>
-              <Route path="about" element={<AboutPage />}></Route>
               <Route path="*" element={<NotFoundPage />} />
             </Route>
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </>
   )

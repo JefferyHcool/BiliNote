@@ -18,6 +18,17 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            markdown: ['react-markdown', 'react-syntax-highlighter', 'remark-gfm', 'remark-math', 'rehype-katex'],
+            markmap: ['markmap-lib', 'markmap-view', 'markmap-toolbar', 'markmap-common'],
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+          },
+        },
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: port,

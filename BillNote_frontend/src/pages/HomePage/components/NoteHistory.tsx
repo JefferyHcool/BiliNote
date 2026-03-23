@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import LazyImage from "@/components/LazyImage.tsx";
-import {FC, useState ,useEffect } from 'react'
+import {FC, useState, useEffect, useMemo} from 'react'
 
 interface NoteHistoryProps {
   onSelect: (taskId: string) => void
@@ -28,10 +28,10 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
   const baseURL = (String(import.meta.env.VITE_API_BASE_URL || 'api')).replace(/\/$/, '')
   const [rawSearch, setRawSearch] = useState('')
   const [search, setSearch] = useState('')
-  const fuse = new Fuse(tasks, {
+  const fuse = useMemo(() => new Fuse(tasks, {
     keys: ['audioMeta.title'],
     threshold: 0.4 // 匹配精度（越低越严格）
-  })
+  }), [tasks])
   useEffect(() => {
     const timer = setTimeout(() => {
       if (rawSearch === '') return

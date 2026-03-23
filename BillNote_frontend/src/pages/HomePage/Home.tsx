@@ -18,14 +18,15 @@ export const HomePage: FC = () => {
   useEffect(() => {
     if (!currentTask) {
       setStatus('idle')
-    } else if (currentTask.status === 'PENDING') {
-      setStatus('loading')
     } else if (currentTask.status === 'SUCCESS') {
       setStatus('success')
     } else if (currentTask.status === 'FAILED') {
       setStatus('failed')
+    } else {
+      // PENDING、PARSING、DOWNLOADING、TRANSCRIBING、SUMMARIZING 等所有进行中状态
+      setStatus('loading')
     }
-  }, [currentTask])
+  }, [currentTask, currentTask?.status])
 
   // useEffect( () => {
   //     get_task_status('d4e87938-c066-48a0-bbd5-9bec40d53354').then(res=>{

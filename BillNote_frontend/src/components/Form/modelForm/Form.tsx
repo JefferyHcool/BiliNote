@@ -27,7 +27,7 @@ import {
 import { ModelSelector } from '@/components/Form/modelForm/ModelSelector.tsx'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert.tsx'
 import { Tags } from 'lucide-react'
-import { Tag } from 'antd'
+import { X } from 'lucide-react'
 import { useModelStore } from '@/store/modelStore'
 
 // ✅ Provider表单schema
@@ -312,12 +312,12 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             {
               models && models.map(model => {
                 return (
-                  <>
-                    <Tag onClose={()=>{
-                      handelDelete(model.id)
-                    }} key={model.id} closable color={'blue'}>
-                      {model.model_name}
-                    </Tag></>
+                  <span key={model.id} className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-sm text-blue-700">
+                    {model.model_name}
+                    <button type="button" onClick={() => handelDelete(model.id)} className="hover:text-blue-900">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
 
                 )
               })
