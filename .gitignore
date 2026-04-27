@@ -327,3 +327,16 @@ cython_debug/
 # FFmpeg 构建文件（不应该提交到仓库）
 ffmpeg*/
 ffmpg*/
+
+# B站登录 cookies（含敏感信息，禁止提交）
+backend/cookies.txt
+cookies.txt
+
+# 本地调试/临时脚本
+backend/check_db.py
+backend/fix_key.py
+backend/update_key.py
+backend/test_cookie.py
+backend/server_log.txt
+backend/server_err.txt
+backend/requirements_minimal.txt
