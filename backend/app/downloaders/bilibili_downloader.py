@@ -15,8 +15,8 @@ from app.utils.url_parser import extract_video_id
 
 logger = logging.getLogger(__name__)
 
-# B站 cookies 文件路径
-BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", "cookies.txt")
+# B站 cookies 文件路径（绝对路径，避免相对路径解析歧义）
+BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", r"I:\BiliNote\BiliNote_src\backend\cookies.txt")
 
 
 class BilibiliDownloader(Downloader, ABC):
@@ -51,6 +51,11 @@ class BilibiliDownloader(Downloader, ABC):
             'noplaylist': True,
             'quiet': False,
         }
+
+        # 添加 cookies 支持
+        if Path(BILIBILI_COOKIES_FILE).exists():
+            ydl_opts['cookiefile'] = BILIBILI_COOKIES_FILE
+            logger.info(f"download: 使用 cookies 文件: {BILIBILI_COOKIES_FILE}")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -101,6 +106,11 @@ class BilibiliDownloader(Downloader, ABC):
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4
         }
+
+        # 添加 cookies 支持
+        if Path(BILIBILI_COOKIES_FILE).exists():
+            ydl_opts['cookiefile'] = BILIBILI_COOKIES_FILE
+            logger.info(f"download_video: 使用 cookies 文件: {BILIBILI_COOKIES_FILE}")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -154,16 +164,11 @@ class BilibiliDownloader(Downloader, ABC):
         }
 
         # 添加 cookies 支持
-        cookies_path = Path(BILIBILI_COOKIES_FILE)
-        if not cookies_path.is_absolute():
-            # 相对于 backend 目录
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
-
-        if cookies_path.exists():
-            ydl_opts['cookiefile'] = str(cookies_path)
-            logger.info(f"使用 cookies 文件: {cookies_path}")
+        if Path(BILIBILI_COOKIES_FILE).exists():
+            ydl_opts['cookiefile'] = BILIBILI_COOKIES_FILE
+            logger.info(f"使用 cookies 文件: {BILIBILI_COOKIES_FILE}")
         else:
-            logger.warning(f"B站 cookies 文件不存在: {cookies_path}，字幕获取可能失败")
+            logger.warning(f"B站 cookies 文件不存在: {BILIBILI_COOKIES_FILE}，字幕获取可能失败")
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
