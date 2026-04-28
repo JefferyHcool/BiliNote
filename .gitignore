@@ -313,6 +313,7 @@ cython_debug/
 /backend/note_tasks.db
 /backend/bin/
 /backend/logs/
+**/cookies.txt
 /backend/note_results
 /backend/models
 /backend/.idea/*

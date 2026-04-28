@@ -16,7 +16,7 @@ from app.utils.url_parser import extract_video_id
 logger = get_logger(__name__)
 
 # B站 cookies 文件路径
-BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", "D:/iori/openSourceProject/BiliNote/backend/cookies.txt")
+BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", "cookies.txt")
 
 
 class BilibiliDownloader(Downloader, ABC):
@@ -67,26 +67,22 @@ class BilibiliDownloader(Downloader, ABC):
 
         # 添加 cookies 支持 - 尝试多个位置
         found = False
-        # 1. Absolute path (Windows local)
-        cookies_path = Path("D:/iori/openSourceProject/BiliNote/backend/cookies.txt")
-        if cookies_path.exists():
+        # 1. 环境变量指定的路径
+        cookies_path = Path(BILIBILI_COOKIES_FILE)
+        if cookies_path.is_absolute() and cookies_path.exists():
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try current working directory (when running locally from backend folder)
+        # 2. Try relative to this file (backend root)
         if not found:
-            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try relative to this file (when running in Docker)
+        # 3. Try current working directory
         if not found:
-            # __file__ = /app/app/downloaders/bilibili_downloader.py
-            # parent = /app/app/downloaders
-            # parent.parent = /app/app
-            # parent.parent.parent = /app  <- backend root
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
@@ -166,26 +162,22 @@ class BilibiliDownloader(Downloader, ABC):
 
         # 添加 cookies 支持 - 尝试多个位置
         found = False
-        # 1. Absolute path (Windows local)
-        cookies_path = Path("D:/iori/openSourceProject/BiliNote/backend/cookies.txt")
-        if cookies_path.exists():
+        # 1. 环境变量指定的路径
+        cookies_path = Path(BILIBILI_COOKIES_FILE)
+        if cookies_path.is_absolute() and cookies_path.exists():
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try current working directory (when running locally from backend folder)
+        # 2. Try relative to this file (backend root)
         if not found:
-            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try relative to this file (when running in Docker)
+        # 3. Try current working directory
         if not found:
-            # __file__ = /app/app/downloaders/bilibili_downloader.py
-            # parent = /app/app/downloaders
-            # parent.parent = /app/app
-            # parent.parent.parent = /app  <- backend root
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
@@ -266,22 +258,22 @@ class BilibiliDownloader(Downloader, ABC):
 
         # 添加 cookies 支持 - 尝试多个位置
         found = False
-        # 1. Absolute path (Windows local)
-        cookies_path = Path("D:/iori/openSourceProject/BiliNote/backend/cookies.txt")
-        if cookies_path.exists():
+        # 1. 环境变量指定的路径
+        cookies_path = Path(BILIBILI_COOKIES_FILE)
+        if cookies_path.is_absolute() and cookies_path.exists():
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try current working directory (when running locally from backend folder)
+        # 2. Try relative to this file (backend root)
         if not found:
-            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try relative to this file (when running in Docker)
+        # 3. Try current working directory
         if not found:
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
