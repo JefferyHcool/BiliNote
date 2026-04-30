@@ -8,7 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { FieldErrors, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -162,9 +162,15 @@ const NoteForm = () => {
   /* ---- 副作用 ---- */
   useEffect(() => {
     loadEnabledModels()
-
-    return
   }, [])
+
+  useEffect(() => {
+    if (currentTask || modelList.length === 0) return
+    const currentModel = form.getValues('model_name')
+    if (!currentModel || !modelList.some(m => m.model_name === currentModel)) {
+      form.setValue('model_name', modelList[0].model_name, { shouldValidate: true })
+    }
+  }, [currentTask, form, modelList])
   useEffect(() => {
     if (!currentTask) return
     const { formData } = currentTask
@@ -217,10 +223,15 @@ const NoteForm = () => {
   }
 
   const onSubmit = async (values: NoteFormValues) => {
-    console.log('Not even go here')
+    const provider = modelList.find(m => m.model_name === values.model_name)
+    if (!provider) {
+      form.setError('model_name', { type: 'manual', message: '请选择模型' })
+      return
+    }
+
     const payload: NoteFormValues = {
       ...values,
-      provider_id: modelList.find(m => m.model_name === values.model_name)!.provider_id,
+      provider_id: provider.provider_id,
       task_id: currentTaskId || '',
     }
     if (currentTaskId) {

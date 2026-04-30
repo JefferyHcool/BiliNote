@@ -140,14 +140,10 @@ class NoteGenerator:
             if transcript_cache_file.exists():
                 logger.info(f"检测到转写缓存 ({transcript_cache_file})，尝试读取")
                 try:
-                    data = json.loads(transcript_cache_file.read_text(encoding="utf-8"))
-                    segments = [TranscriptSegment(**seg) for seg in data.get("segments", [])]
-                    transcript = TranscriptResult(
-                        language=data.get("language"),
-                        full_text=data["full_text"],
-                        segments=segments,
-                    )
-                    logger.info(f"已从缓存加载转写结果，共 {len(segments)} 段")
+                    transcript = self._load_transcript_cache(transcript_cache_file)
+                    if transcript is None:
+                        raise ValueError("转写缓存为空或格式无效")
+                    logger.info(f"已从缓存加载转写结果，共 {len(transcript.segments)} 段")
                 except Exception as e:
                     logger.warning(f"加载转写缓存失败: {e}")
 
@@ -230,7 +226,6 @@ class NoteGenerator:
             self._save_metadata(video_id=audio_meta.video_id, platform=platform, task_id=task_id)
 
             # 6. 完成
-            self._update_status(task_id, TaskStatus.SUCCESS)
             logger.info(f"笔记生成成功 (task_id={task_id})")
             return NoteResult(markdown=markdown, transcript=transcript, audio_meta=audio_meta)
 
@@ -397,7 +392,7 @@ class NoteGenerator:
         if audio_cache_file.exists():
             logger.info(f"检测到音频缓存 ({audio_cache_file})，直接读取")
             try:
-                data = json.loads(audio_cache_file.read_text(encoding="utf-8"))
+                data = json.loads(audio_cache_file.read_text(encoding="utf-8-sig"))
                 return AudioDownloadResult(**data)
             except Exception as e:
                 logger.warning(f"读取音频缓存失败，将重新下载：{e}")
@@ -431,7 +426,7 @@ class NoteGenerator:
         if need_video:
             try:
                 logger.info("开始下载视频")
-                video_path_str = downloader.download_video(video_url)
+                video_path_str = downloader.download_video(video_url, output_dir=output_path)
                 self.video_path = Path(video_path_str)
                 logger.info(f"视频下载完成：{self.video_path}")
 
@@ -469,6 +464,106 @@ class NoteGenerator:
             raise
 
 
+    @staticmethod
+    def _env_enabled(name: str, default: bool = False) -> bool:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+    def _build_bilibili_page_transcript(self, audio_meta: AudioDownloadResult) -> Optional[TranscriptResult]:
+        """Use Bilibili page metadata captured by the CDP fallback as a fast transcript draft."""
+        # Disabled by default because page metadata has no real speech timeline.
+        # Enable only as emergency fallback with BILIBILI_PAGE_TRANSCRIPT_FALLBACK=1.
+        if not self._env_enabled("BILIBILI_PAGE_TRANSCRIPT_FALLBACK", False):
+            return None
+        if not audio_meta or not isinstance(audio_meta.raw_info, dict):
+            return None
+        if audio_meta.raw_info.get("source") != "chrome-cdp-playinfo":
+            return None
+        title = (audio_meta.title or audio_meta.raw_info.get("title") or audio_meta.video_id or "").strip()
+        desc = (audio_meta.raw_info.get("description") or "").strip()
+        tags = audio_meta.raw_info.get("tags") or []
+        owner = (audio_meta.raw_info.get("owner") or "").strip()
+        parts = [title]
+        if owner:
+            parts.append(f"UP??{owner}")
+        if desc:
+            parts.append(desc)
+        if tags:
+            parts.append("???" + "?".join(str(tag) for tag in tags if tag))
+        full_text = "\n\n".join(part for part in parts if part).strip()
+        if not full_text:
+            return None
+        return TranscriptResult(
+            language="zh",
+            full_text=full_text,
+            segments=[TranscriptSegment(start=0, end=float(audio_meta.duration or 0), text=full_text)],
+            raw={"source": "bilibili_page_metadata"},
+        )
+
+    @staticmethod
+    def _load_transcript_cache(cache_file: Path) -> Optional[TranscriptResult]:
+        try:
+            data = json.loads(cache_file.read_text(encoding="utf-8-sig"))
+            segments = [TranscriptSegment(**seg) for seg in data.get("segments", [])]
+            if not data.get("full_text") or not segments:
+                return None
+            return TranscriptResult(
+                language=data.get("language"),
+                full_text=data["full_text"],
+                segments=segments,
+                raw=data.get("raw"),
+            )
+        except Exception as exc:
+            logger.warning("读取转写缓存失败 (%s): %s", cache_file, exc)
+            return None
+
+    def _reuse_prior_transcript(
+        self,
+        audio_meta: AudioDownloadResult,
+        transcript_cache_file: Path,
+    ) -> Optional[TranscriptResult]:
+        if not self._env_enabled("BILIBILI_REUSE_TRANSCRIPT_CACHE", True):
+            return None
+        if not audio_meta or audio_meta.platform != "bilibili" or not audio_meta.video_id:
+            return None
+
+        current_audio_file = transcript_cache_file.with_name(
+            transcript_cache_file.name.replace("_transcript.json", "_audio.json")
+        )
+        candidates: list[Path] = []
+        for audio_file in NOTE_OUTPUT_DIR.glob("*_audio.json"):
+            if audio_file == current_audio_file:
+                continue
+            try:
+                audio_data = json.loads(audio_file.read_text(encoding="utf-8-sig"))
+            except Exception:
+                continue
+            if audio_data.get("video_id") != audio_meta.video_id:
+                continue
+            transcript_file = audio_file.with_name(audio_file.name.replace("_audio.json", "_transcript.json"))
+            if transcript_file.exists():
+                candidates.append(transcript_file)
+
+        candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        for candidate in candidates:
+            transcript = self._load_transcript_cache(candidate)
+            if transcript is None:
+                continue
+            transcript_cache_file.write_text(
+                json.dumps(asdict(transcript), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info(
+                "复用同视频历史转写缓存 video_id=%s source=%s -> %s",
+                audio_meta.video_id,
+                candidate,
+                transcript_cache_file,
+            )
+            return transcript
+        return None
+
     def _get_transcript(
         self,
         downloader: Downloader,
@@ -494,12 +589,9 @@ class NoteGenerator:
         # 已有缓存，直接返回
         if transcript_cache_file.exists():
             logger.info(f"检测到转写缓存 ({transcript_cache_file})，尝试读取")
-            try:
-                data = json.loads(transcript_cache_file.read_text(encoding="utf-8"))
-                segments = [TranscriptSegment(**seg) for seg in data.get("segments", [])]
-                return TranscriptResult(language=data.get("language"), full_text=data["full_text"], segments=segments)
-            except Exception as e:
-                logger.warning(f"加载转写缓存失败，将重新获取：{e}")
+            cached_transcript = self._load_transcript_cache(transcript_cache_file)
+            if cached_transcript is not None:
+                return cached_transcript
 
         # 1. 先尝试获取平台字幕
         logger.info("尝试获取平台字幕...")
@@ -518,7 +610,33 @@ class NoteGenerator:
         except Exception as e:
             logger.warning(f"获取平台字幕失败: {e}，将使用音频转写")
 
-        # 2. Fallback 到音频转写
+        # 2. If CDP audio fallback captured page metadata, use it as a fast transcript draft.
+        try:
+            audio_cache_file = transcript_cache_file.with_name(transcript_cache_file.name.replace("_transcript.json", "_audio.json"))
+            if audio_cache_file.exists():
+                audio_data = json.loads(audio_cache_file.read_text(encoding="utf-8-sig"))
+                page_transcript = self._build_bilibili_page_transcript(AudioDownloadResult(**audio_data))
+                if page_transcript is not None:
+                    transcript_cache_file.write_text(
+                        json.dumps(asdict(page_transcript), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    logger.info("?? B ???????????")
+                    return page_transcript
+        except Exception as e:
+            logger.warning(f"B ???????????????????: {e}")
+
+        try:
+            audio_cache_file = transcript_cache_file.with_name(transcript_cache_file.name.replace("_transcript.json", "_audio.json"))
+            if audio_cache_file.exists():
+                audio_meta = AudioDownloadResult(**json.loads(audio_cache_file.read_text(encoding="utf-8-sig")))
+                cached_transcript = self._reuse_prior_transcript(audio_meta, transcript_cache_file)
+                if cached_transcript is not None:
+                    return cached_transcript
+        except Exception as e:
+            logger.warning("同视频历史转写复用失败: %s", e)
+
+        # 3. Fallback ?????
         return self._transcribe_audio(
             audio_file=audio_file,
             transcript_cache_file=transcript_cache_file,
@@ -546,12 +664,9 @@ class NoteGenerator:
         # 已有缓存，尝试加载
         if transcript_cache_file.exists():
             logger.info(f"检测到转写缓存 ({transcript_cache_file})，尝试读取")
-            try:
-                data = json.loads(transcript_cache_file.read_text(encoding="utf-8"))
-                segments = [TranscriptSegment(**seg) for seg in data.get("segments", [])]
-                return TranscriptResult(language=data["language"], full_text=data["full_text"], segments=segments)
-            except Exception as e:
-                logger.warning(f"加载转写缓存失败，将重新转写：{e}")
+            cached_transcript = self._load_transcript_cache(transcript_cache_file)
+            if cached_transcript is not None:
+                return cached_transcript
 
         # 调用转写器
         try:

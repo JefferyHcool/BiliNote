@@ -6,8 +6,6 @@ import toast from 'react-hot-toast'
 export const useTaskPolling = (interval = 3000) => {
   const tasks = useTaskStore(state => state.tasks)
   const updateTaskContent = useTaskStore(state => state.updateTaskContent)
-  const updateTaskStatus = useTaskStore(state => state.updateTaskStatus)
-  const removeTask = useTaskStore(state => state.removeTask)
 
   const tasksRef = useRef(tasks)
 
@@ -48,8 +46,7 @@ export const useTaskPolling = (interval = 3000) => {
             }
           }
         } catch (e) {
-          console.error('❌ 任务轮询失败：', e)
-          updateTaskContent(task.id, { status: 'FAILED' })
+          console.error('❌ 任务轮询失败，保留当前状态等待下次轮询：', e)
         }
       }
     }, interval)

@@ -39,10 +39,12 @@ interface MarkdownViewerProps {
 }
 
 const steps = [
+  { label: '排队中', key: 'PENDING' },
   { label: '解析链接', key: 'PARSING' },
   { label: '下载音频', key: 'DOWNLOADING' },
   { label: '转写文字', key: 'TRANSCRIBING' },
   { label: '总结内容', key: 'SUMMARIZING' },
+  { label: '保存结果', key: 'SAVING' },
   { label: '保存完成', key: 'SUCCESS' },
 ]
 
