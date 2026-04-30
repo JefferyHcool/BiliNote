@@ -5,6 +5,7 @@ import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ffmpeg
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from app.utils.logger import get_logger
@@ -67,12 +68,29 @@ class VideoReader:
         except subprocess.CalledProcessError:
             return None
 
+    @staticmethod
+    def _scene_change_score(img_path_a: str, img_path_b: str) -> float:
+        """计算两帧之间的场景变化分数（0-1）。
+        使用缩略图差异，对画面内容变化敏感，忽略细微噪声。"""
+        try:
+            a = Image.open(img_path_a).convert("L").resize((64, 36), Image.Resampling.NEAREST)
+            b = Image.open(img_path_b).convert("L").resize((64, 36), Image.Resampling.NEAREST)
+            arr_a = np.array(a, dtype=np.float32)
+            arr_b = np.array(b, dtype=np.float32)
+            diff = np.abs(arr_a - arr_b).mean() / 255.0
+            return float(diff)
+        except Exception:
+            return 0.0
+
     def extract_frames(self, max_frames=1000) -> list[str]:
 
         try:
             os.makedirs(self.frame_dir, exist_ok=True)
             duration = float(ffmpeg.probe(self.video_path)["format"]["duration"])
-            timestamps = [i for i in range(0, int(duration), self.frame_interval)][:max_frames]
+
+            # 按 1 秒间隔密集采样，后续用场景检测筛选关键帧
+            dense_interval = 1
+            timestamps = [i for i in range(0, int(duration), dense_interval)][:max_frames * 2]
 
             # 并行提取帧
             max_workers = min(os.cpu_count() or 4, 8, len(timestamps))
@@ -83,10 +101,61 @@ class VideoReader:
                     ts = futures[future]
                     frame_results[ts] = future.result()
 
-            # 按时间戳顺序整理结果，并进行去重
+            # 收集有效帧（按时间戳排序）
+            valid_frames: list[tuple[int, str]] = []
+            for ts in timestamps:
+                output_path = frame_results.get(ts)
+                if output_path and os.path.exists(output_path):
+                    valid_frames.append((ts, output_path))
+
+            if not valid_frames:
+                logger.warning("未提取到任何有效帧")
+                return []
+
+            # 场景检测：计算相邻帧差异，为每帧打分
+            scores: dict[int, float] = {}
+            for i in range(1, len(valid_frames)):
+                prev_ts, prev_path = valid_frames[i - 1]
+                curr_ts, curr_path = valid_frames[i]
+                diff = self._scene_change_score(prev_path, curr_path)
+                # 当前帧得分 = 与前帧的差异（它引入了多少新画面）
+                scores[curr_ts] = max(scores.get(curr_ts, 0), diff)
+                # 前一帧也得分（它是变化前的最后一帧，可能也很关键）
+                scores[prev_ts] = max(scores.get(prev_ts, 0), diff)
+
+            # 根据 grid_size 计算需要的帧数，取分数最高的帧
+            grid_capacity = self.grid_size[0] * self.grid_size[1]
+            MAX_GRIDS = 25  # 最多发送 25 张网格图，避免超出多模态模型的 token 上限
+            max_selected = grid_capacity * MAX_GRIDS
+            # 估算网格组数：按 frame_interval 估算有多少组
+            total_groups = max(1, int(duration) // self.frame_interval)
+            needed_frames = min(max_frames, grid_capacity * total_groups, max_selected)
+            needed_frames = max(grid_capacity, needed_frames)
+
+            # 按场景变化分数排序，取 top-N 关键帧
+            scored_timestamps = sorted(scores.keys(), key=lambda t: scores[t], reverse=True)
+            selected_timestamps = set(scored_timestamps[:needed_frames])
+
+            # 同时确保覆盖视频全程：每隔 frame_interval 至少保留一帧
+            for ts in range(0, int(duration), self.frame_interval):
+                # 找到该区间内得分最高的帧
+                candidates = [(t, p) for t, p in valid_frames if ts <= t < ts + self.frame_interval]
+                if candidates:
+                    best = max(candidates, key=lambda x: scores.get(x[0], 0))
+                    selected_timestamps.add(best[0])
+
+            # 最终上限：场景分最高的 N 帧，确保不超出模型 token 限制
+            if len(selected_timestamps) > max_selected:
+                selected_timestamps = set(sorted(
+                    selected_timestamps, key=lambda t: scores.get(t, 0), reverse=True
+                )[:max_selected])
+
+            # 按时间戳顺序输出，并去重
             image_paths = []
             last_hash = None
             for ts in timestamps:
+                if ts not in selected_timestamps:
+                    continue
                 output_path = frame_results.get(ts)
                 if not output_path or not os.path.exists(output_path):
                     continue
@@ -94,11 +163,20 @@ class VideoReader:
                 if self.dedupe_enabled:
                     frame_hash = self._calculate_file_md5(output_path)
                     if frame_hash == last_hash:
-                        os.remove(output_path)
+                        # 删掉未被选中的冗余帧
+                        if ts not in selected_timestamps:
+                            os.remove(output_path)
                         continue
                     last_hash = frame_hash
 
                 image_paths.append(output_path)
+
+            # 清理未选中的帧文件
+            for ts, output_path in valid_frames:
+                if ts not in selected_timestamps and os.path.exists(output_path):
+                    os.remove(output_path)
+
+            logger.info(f"场景检测完成：从 {len(valid_frames)} 帧中筛选了 {len(image_paths)} 个关键帧")
             return image_paths
         except Exception as e:
             logger.error(f"分割帧发生错误：{str(e)}")

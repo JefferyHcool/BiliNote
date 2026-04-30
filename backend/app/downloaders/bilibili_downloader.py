@@ -73,21 +73,21 @@ class BilibiliDownloader(Downloader, ABC):
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try relative to this file (backend root)
+        # 2. 尝试相对于本文件的路径（backend 根目录）
         if not found:
             cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try current working directory
+        # 3. 尝试当前工作目录
         if not found:
             cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 4. Try Docker root
+        # 4. 尝试 Docker 根目录
         if not found:
             cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
@@ -168,21 +168,21 @@ class BilibiliDownloader(Downloader, ABC):
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try relative to this file (backend root)
+        # 2. 尝试相对于本文件的路径（backend 根目录）
         if not found:
             cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try current working directory
+        # 3. 尝试当前工作目录
         if not found:
             cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 4. Try Docker root
+        # 4. 尝试 Docker 根目录
         if not found:
             cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
@@ -264,21 +264,21 @@ class BilibiliDownloader(Downloader, ABC):
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
             found = True
-        # 2. Try relative to this file (backend root)
+        # 2. 尝试相对于本文件的路径（backend 根目录）
         if not found:
             cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 3. Try current working directory
+        # 3. 尝试当前工作目录
         if not found:
             cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
             if cookies_path.exists():
                 ydl_opts['cookiefile'] = str(cookies_path)
                 logger.info(f"使用 cookies 文件: {cookies_path}")
                 found = True
-        # 4. Try Docker root
+        # 4. 尝试 Docker 根目录
         if not found:
             cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
             if cookies_path.exists():

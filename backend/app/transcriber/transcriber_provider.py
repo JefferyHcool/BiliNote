@@ -112,6 +112,6 @@ def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="
     elif transcriber_enum == TranscriberType.GROQ:
         return get_groq_transcriber()
 
-    # fallback
+    # 兜底：未识别类型时默认使用 fast-whisper
     logger.warning(f'未识别转录器类型 "{transcriber_type}"，使用 fast-whisper 作为默认')
     return get_whisper_transcriber(whisper_model_size, device=device)

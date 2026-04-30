@@ -23,14 +23,13 @@ DOUYIN_DOMAIN = "https://www.douyin.com"
 cfm=CookieConfigManager()
 def get_timestamp(unit: str = "milli"):
     """
-    根据给定的单位获取当前时间 (Get the current time based on the given unit)
+    根据给定的单位获取当前时间
 
     Args:
         unit (str): 时间单位，可以是 "milli"、"sec"、"min" 等
-            (The time unit, which can be "milli", "sec", "min", etc.)
 
     Returns:
-        int: 根据给定单位的当前时间 (The current time based on the given unit)
+        int: 根据给定单位的当前时间
     """
 
     now = datetime.datetime.utcnow() - datetime.datetime(1970, 1, 1)
