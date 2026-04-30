@@ -1,4 +1,3 @@
-import Provider from '@/components/Form/modelForm/Provider.tsx'
 import { Outlet } from 'react-router-dom'
 import Options from '@/components/Form/DownloaderForm/Options.tsx'
 const Downloader = () => {

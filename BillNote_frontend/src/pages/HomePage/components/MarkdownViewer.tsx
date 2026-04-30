@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { Components } from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
-import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
+import { Copy, ArrowRight, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
@@ -24,6 +24,9 @@ import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
+import mermaid from 'mermaid'
+
+mermaid.initialize({ startOnLoad: false, theme: 'neutral' })
 
 interface VersionNote {
   ver_id: string
@@ -49,13 +52,42 @@ const steps = [
 const remarkPlugins = [gfm, remarkMath]
 const rehypePlugins = [rehypeKatex]
 
+/** Mermaid 图表渲染组件 */
+const MermaidBlock: FC<{ chart: string }> = ({ chart }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [svg, setSvg] = useState<string>('')
+  const [error, setError] = useState<string>('')
+
+  useEffect(() => {
+    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
+    mermaid.render(id, chart)
+      .then(({ svg }) => setSvg(svg))
+      .catch((e) => setError(e.message || 'Mermaid 渲染失败'))
+  }, [chart])
+
+  if (error) {
+    return (
+      <div className="my-6 overflow-hidden rounded-lg border border-red-200 bg-red-50 p-4">
+        <div className="mb-2 text-sm font-medium text-red-600">图表渲染失败</div>
+        <pre className="text-muted-foreground text-xs whitespace-pre-wrap">{chart}</pre>
+      </div>
+    )
+  }
+
+  return (
+    <div className="my-6 flex justify-center overflow-x-auto rounded-lg border bg-white p-4 shadow-sm">
+      <div ref={containerRef} dangerouslySetInnerHTML={{ __html: svg }} className="max-w-full" />
+    </div>
+  )
+}
+
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。
  * 使用函数 + useMemo 避免每次渲染都创建新的函数实例。
  */
-function createMarkdownComponents(baseURL: string) {
+function createMarkdownComponents(baseURL: string): Components {
   return {
-    h1: ({ children, ...props }: any) => (
+    h1: ({ children, ...props }) => (
       <h1
         className="text-primary my-6 scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl"
         {...props}
@@ -63,7 +95,7 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </h1>
     ),
-    h2: ({ children, ...props }: any) => (
+    h2: ({ children, ...props }) => (
       <h2
         className="text-primary mt-10 mb-4 scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight first:mt-0"
         {...props}
@@ -71,7 +103,7 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </h2>
     ),
-    h3: ({ children, ...props }: any) => (
+    h3: ({ children, ...props }) => (
       <h3
         className="text-primary mt-8 mb-4 scroll-m-20 text-xl font-semibold tracking-tight"
         {...props}
@@ -79,7 +111,7 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </h3>
     ),
-    h4: ({ children, ...props }: any) => (
+    h4: ({ children, ...props }) => (
       <h4
         className="text-primary mt-6 mb-2 scroll-m-20 text-lg font-semibold tracking-tight"
         {...props}
@@ -87,12 +119,12 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </h4>
     ),
-    p: ({ children, ...props }: any) => (
+    p: ({ children, ...props }) => (
       <p className="leading-7 [&:not(:first-child)]:mt-6" {...props}>
         {children}
       </p>
     ),
-    a: ({ href, children, ...props }: any) => {
+    a: ({ href, children, ...props }) => {
       const isOriginLink =
         typeof children[0] === 'string' &&
         (children[0] as string).startsWith('原片 @')
@@ -132,7 +164,7 @@ function createMarkdownComponents(baseURL: string) {
         </a>
       )
     },
-    img: ({ node, ...props }: any) => {
+    img: ({ ...props }) => {
       let src = props.src
       if (src.startsWith('/')) {
         src = baseURL + src
@@ -151,12 +183,12 @@ function createMarkdownComponents(baseURL: string) {
         </div>
       )
     },
-    strong: ({ children, ...props }: any) => (
+    strong: ({ children, ...props }) => (
       <strong className="text-primary font-bold" {...props}>
         {children}
       </strong>
     ),
-    li: ({ children, ...props }: any) => {
+    li: ({ children, ...props }) => {
       const rawText = String(children)
       const isFakeHeading = /^(\*\*.+\*\*)$/.test(rawText.trim())
 
@@ -172,17 +204,17 @@ function createMarkdownComponents(baseURL: string) {
         </li>
       )
     },
-    ul: ({ children, ...props }: any) => (
+    ul: ({ children, ...props }) => (
       <ul className="my-6 ml-6 list-disc [&>li]:mt-2" {...props}>
         {children}
       </ul>
     ),
-    ol: ({ children, ...props }: any) => (
+    ol: ({ children, ...props }) => (
       <ol className="my-6 ml-6 list-decimal [&>li]:mt-2" {...props}>
         {children}
       </ol>
     ),
-    blockquote: ({ children, ...props }: any) => (
+    blockquote: ({ children, ...props }) => (
       <blockquote
         className="border-primary/20 text-muted-foreground mt-6 border-l-4 pl-4 italic"
         {...props}
@@ -190,9 +222,13 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </blockquote>
     ),
-    code: ({ inline, className, children, ...props }: any) => {
+    code: ({ inline, className, children, ...props }) => {
       const match = /language-(\w+)/.exec(className || '')
       const codeContent = String(children).replace(/\n$/, '')
+
+      if (!inline && match && match[1] === 'mermaid') {
+        return <MermaidBlock chart={codeContent} />
+      }
 
       if (!inline && match) {
         return (
@@ -238,14 +274,14 @@ function createMarkdownComponents(baseURL: string) {
         </code>
       )
     },
-    table: ({ children, ...props }: any) => (
+    table: ({ children, ...props }) => (
       <div className="my-6 w-full overflow-y-auto">
         <table className="w-full border-collapse text-sm" {...props}>
           {children}
         </table>
       </div>
     ),
-    th: ({ children, ...props }: any) => (
+    th: ({ children, ...props }) => (
       <th
         className="border-muted-foreground/20 border px-4 py-2 text-left font-medium [&[align=center]]:text-center [&[align=right]]:text-right"
         {...props}
@@ -253,7 +289,7 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </th>
     ),
-    td: ({ children, ...props }: any) => (
+    td: ({ children, ...props }) => (
       <td
         className="border-muted-foreground/20 border px-4 py-2 text-left [&[align=center]]:text-center [&[align=right]]:text-right"
         {...props}
@@ -261,14 +297,13 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </td>
     ),
-    hr: ({ ...props }: any) => (
+    hr: ({ ...props }) => (
       <hr className="border-muted-foreground/20 my-8" {...props} />
     ),
   }
 }
 
 const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
-  const [copied, setCopied] = useState(false)
   const [currentVerId, setCurrentVerId] = useState<string>('')
   const [selectedContent, setSelectedContent] = useState<string>('')
   const [modelName, setModelName] = useState<string>('')
@@ -284,7 +319,6 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
-  const svgRef = useRef<SVGSVGElement>(null)
 
   // 缓存 ReactMarkdown components，仅在 baseURL 变化时重建
   const markdownComponents = useMemo(() => createMarkdownComponents(baseURL), [baseURL])
@@ -323,44 +357,41 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
-      setCopied(true)
       toast.success('已复制到剪贴板')
-      setTimeout(() => setCopied(false), 2000)
-    } catch (e) {
+    } catch {
       toast.error('复制失败')
     }
   }
-  const alertButton = {
-    id: 'alert',
-    title: '测试警告',
-    content: '⚠️',
-    onClick: () => alert('你点击了自定义按钮！'),
-  }
-  const exportButton = {
-    id: 'export',
-    title: '导出思维导图',
-    content: '⤓',
-    onClick: () => {
-      const svgEl = svgRef.current
-      if (!svgEl) return
-      // 同上面的序列化逻辑
-      const serializer = new XMLSerializer()
-      const source = serializer.serializeToString(svgEl)
-      const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>', source], {
-        type: 'image/svg+xml;charset=utf-8',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'mindmap.svg'
-      a.click()
-      URL.revokeObjectURL(url)
-    },
-  }
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const task = getCurrentTask()
     const name = task?.audioMeta.title || 'note'
-    const blob = new Blob([selectedContent], { type: 'text/markdown;charset=utf-8' })
+    // 将图片转 base64 内嵌，确保 .md 文件在任何环境都能显示图片
+    let content = selectedContent
+    const imgRegex = /!\[([^\]]*)\]\((\/[^)]+)\)/g
+    const replacements: Promise<{ search: string; replace: string }>[] = []
+    let match: RegExpExecArray | null
+    while ((match = imgRegex.exec(selectedContent)) !== null) {
+      const [full, alt, src] = match
+      if (src.startsWith('/')) {
+        const fullUrl = baseURL + src
+        replacements.push(
+          fetch(fullUrl)
+            .then(res => res.blob())
+            .then(blob => new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(`![${alt}](${reader.result})`)
+              reader.readAsDataURL(blob)
+            }))
+            .catch(() => full)
+            .then(replacement => ({ search: full, replace: replacement }))
+        )
+      }
+    }
+    const results = await Promise.all(replacements)
+    for (const { search, replace } of results) {
+      content = content.replace(search, replace)
+    }
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `${name}.md`

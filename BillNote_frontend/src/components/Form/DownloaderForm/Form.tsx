@@ -56,7 +56,7 @@ const DownloaderForm = () => {
         cookie: String(values.cookie),
       })
       toast.success('保存成功')
-    } catch (e) {
+    } catch {
       toast.error('保存失败')
     }
   }

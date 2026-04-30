@@ -1,6 +1,5 @@
 import os
 import json
-import logging
 from abc import ABC
 from typing import Union, Optional, List
 from pathlib import Path
@@ -10,10 +9,11 @@ import yt_dlp
 from app.downloaders.base import Downloader, DownloadQuality, QUALITY_MAP
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
+from app.utils.logger import get_logger
 from app.utils.path_helper import get_data_dir
 from app.utils.url_parser import extract_video_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # B站 cookies 文件路径
 BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", "cookies.txt")
@@ -50,7 +50,52 @@ class BilibiliDownloader(Downloader, ABC):
             ],
             'noplaylist': True,
             'quiet': False,
+            # 添加 B 站反爬绕过
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.bilibili.com/',
+                'Origin': 'https://www.bilibili.com',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-site',
+            },
+            'extractor_retries': 5,
         }
+
+        # 添加 cookies 支持 - 尝试多个位置
+        found = False
+        # 1. 环境变量指定的路径
+        cookies_path = Path(BILIBILI_COOKIES_FILE)
+        if cookies_path.is_absolute() and cookies_path.exists():
+            ydl_opts['cookiefile'] = str(cookies_path)
+            logger.info(f"使用 cookies 文件: {cookies_path}")
+            found = True
+        # 2. 尝试相对于本文件的路径（backend 根目录）
+        if not found:
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 3. 尝试当前工作目录
+        if not found:
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 4. 尝试 Docker 根目录
+        if not found:
+            cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        if not found:
+            logger.warning(f"B站 cookies 文件不存在，下载可能失败")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -100,7 +145,52 @@ class BilibiliDownloader(Downloader, ABC):
             'noplaylist': True,
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4
+            # 添加 B 站反爬绕过
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.bilibili.com/',
+                'Origin': 'https://www.bilibili.com',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-site',
+            },
+            'extractor_retries': 5,
         }
+
+        # 添加 cookies 支持 - 尝试多个位置
+        found = False
+        # 1. 环境变量指定的路径
+        cookies_path = Path(BILIBILI_COOKIES_FILE)
+        if cookies_path.is_absolute() and cookies_path.exists():
+            ydl_opts['cookiefile'] = str(cookies_path)
+            logger.info(f"使用 cookies 文件: {cookies_path}")
+            found = True
+        # 2. 尝试相对于本文件的路径（backend 根目录）
+        if not found:
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 3. 尝试当前工作目录
+        if not found:
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 4. 尝试 Docker 根目录
+        if not found:
+            cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        if not found:
+            logger.warning(f"B站 cookies 文件不存在，下载可能失败")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -151,19 +241,52 @@ class BilibiliDownloader(Downloader, ABC):
             'skip_download': True,
             'outtmpl': os.path.join(output_dir, f'{video_id}.%(ext)s'),
             'quiet': True,
+            # 添加 B 站反爬绕过
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.bilibili.com/',
+                'Origin': 'https://www.bilibili.com',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-site',
+            },
+            'extractor_retries': 5,
         }
 
-        # 添加 cookies 支持
+        # 添加 cookies 支持 - 尝试多个位置
+        found = False
+        # 1. 环境变量指定的路径
         cookies_path = Path(BILIBILI_COOKIES_FILE)
-        if not cookies_path.is_absolute():
-            # 相对于 backend 目录
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
-
-        if cookies_path.exists():
+        if cookies_path.is_absolute() and cookies_path.exists():
             ydl_opts['cookiefile'] = str(cookies_path)
             logger.info(f"使用 cookies 文件: {cookies_path}")
-        else:
-            logger.warning(f"B站 cookies 文件不存在: {cookies_path}，字幕获取可能失败")
+            found = True
+        # 2. 尝试相对于本文件的路径（backend 根目录）
+        if not found:
+            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 3. 尝试当前工作目录
+        if not found:
+            cookies_path = Path(os.getcwd()) / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        # 4. 尝试 Docker 根目录
+        if not found:
+            cookies_path = Path('/app') / BILIBILI_COOKIES_FILE
+            if cookies_path.exists():
+                ydl_opts['cookiefile'] = str(cookies_path)
+                logger.info(f"使用 cookies 文件: {cookies_path}")
+                found = True
+        if not found:
+            logger.warning(f"B站 cookies 文件不存在，字幕获取可能失败")
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

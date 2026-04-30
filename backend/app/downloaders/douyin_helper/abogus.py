@@ -527,13 +527,12 @@ class ABogus:
         代码参考: https://github.com/Johnserf-Seed/f2/blob/main/f2/utils/abogus.py
 
         计算请求体的 SM3 哈希值，并将结果转换为整数数组
-        Calculate the SM3 hash value of the request body and convert the result to an array of integers
 
         Args:
-            data (Union[str, List[int]]): 输入数据 (Input data).
+            data (str | list[int]): 输入数据
 
         Returns:
-            List[int]: 哈希值的整数数组 (Array of integers representing the hash value).
+            list[int]: 哈希值的整数数组
         """
 
         if isinstance(data, str):

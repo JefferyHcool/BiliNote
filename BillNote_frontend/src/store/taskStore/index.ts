@@ -12,7 +12,7 @@ export interface AudioMeta {
   duration: number
   file_path: string
   platform: string
-  raw_info: any
+  raw_info: unknown
   title: string
   video_id: string
 }
@@ -26,7 +26,7 @@ export interface Segment {
 export interface Transcript {
   full_text: string
   language: string
-  raw: any
+  raw: unknown
   segments: Segment[]
 }
 export interface Markdown {
@@ -73,7 +73,7 @@ export const useTaskStore = create<TaskStore>()(
       tasks: [],
       currentTaskId: null,
 
-      addPendingTask: (taskId: string, platform: string, formData: any) =>
+      addPendingTask: (taskId: string, platform: string, formData: Record<string, unknown>) =>
 
         set(state => ({
           tasks: [
@@ -157,7 +157,7 @@ export const useTaskStore = create<TaskStore>()(
         const currentTaskId = get().currentTaskId
         return get().tasks.find(task => task.id === currentTaskId) || null
       },
-      retryTask: async (id: string, payload?: any) => {
+      retryTask: async (id: string, payload?: Record<string, unknown>) => {
 
         if (!id){
           toast.error('任务不存在')

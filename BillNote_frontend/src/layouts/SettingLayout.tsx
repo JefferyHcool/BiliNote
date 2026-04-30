@@ -23,7 +23,7 @@ const SettingLayout = ({ Menu }: ISettingLayoutProps) => {
       <div className="flex flex-1">
         {/* 左侧部分：Header + 表单 */}
         <aside className="flex w-[300px] flex-col border-r border-neutral-200 bg-white">
-          {/* Header */}
+          {/* 页头 */}
           <header className="flex h-16 items-center justify-between px-6">
             <div className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl">

@@ -15,7 +15,7 @@ from modelscope import snapshot_download
 
 
 '''
- Size of the model to use (tiny, tiny.en, base, base.en, small, small.en, distil-small.en, medium, medium.en, distil-medium.en, large-v1, large-v2, large-v3, large, distil-large-v2, distil-large-v3, large-v3-turbo, or turbo
+ 可用模型大小：tiny, tiny.en, base, base.en, small, small.en, distil-small.en, medium, medium.en, distil-medium.en, large-v1, large-v2, large-v3, large, distil-large-v2, distil-large-v3, large-v3-turbo, 或 turbo
 '''
 logger=get_logger(__name__)
 
@@ -55,10 +55,15 @@ class WhisperTranscriber(Transcriber):
             repo_id = MODEL_MAP[model_size]
             model_path = snapshot_download(
                 repo_id,
-
                 local_dir=model_path,
             )
             logger.info("模型下载完成")
+
+        # snapshot_download 会创建 repo_id 子目录，检查是否存在并调整路径
+        repo_id = MODEL_MAP[model_size]
+        nested_model_path = os.path.join(model_path, repo_id)
+        if Path(nested_model_path).exists():
+            model_path = nested_model_path
 
         self.model = WhisperModel(
             model_size_or_path=model_path,

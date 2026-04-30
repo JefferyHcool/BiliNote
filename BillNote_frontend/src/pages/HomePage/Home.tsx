@@ -13,8 +13,6 @@ export const HomePage: FC = () => {
 
   const [status, setStatus] = useState<ViewStatus>('idle')
 
-  const content = currentTask?.markdown || ''
-
   useEffect(() => {
     if (!currentTask) {
       setStatus('idle')

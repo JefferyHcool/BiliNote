@@ -6,15 +6,15 @@ export const getProviderList = async () => {
 export const getProviderById = async (id: string) => {
   return await request.get(`/get_provider_by_id/${id}`)
 }
-export const updateProviderById = async (data: any) => {
+export const updateProviderById = async (data: Record<string, unknown>) => {
   return await request.post('/update_provider', data)
 }
 
-export const addProvider = async (data: any) => {
+export const addProvider = async (data: Record<string, unknown>) => {
   return await request.post('/add_provider', data)
 }
 
-export const testConnection = async (data: any) => {
+export const testConnection = async (data: Record<string, unknown>) => {
   return await request.post('/connect_test', data)
 }
 

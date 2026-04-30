@@ -1,4 +1,4 @@
-// components/LazyImage.tsx
+// 懒加载图片组件
 import { useInView } from 'react-intersection-observer'
 import { FC, useState } from 'react'
 import clsx from 'clsx'

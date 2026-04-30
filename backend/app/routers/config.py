@@ -83,7 +83,7 @@ def update_transcriber_config(data: TranscriberConfigRequest):
 # ---- Whisper 模型下载状态 & 下载触发 ----
 
 # 用于跟踪正在进行的下载任务
-_downloading: dict[str, str] = {}  # model_size -> status ("downloading" | "done" | "failed")
+_downloading: dict[str, str] = {}  # model_size -> 下载状态（"downloading" | "done" | "failed"）
 
 
 def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> bool:

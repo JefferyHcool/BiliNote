@@ -139,7 +139,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
 
   // 转换为 Bubble.List 的数据格式
   const bubbleItems = useMemo(() => {
-    const items = messages.map((msg, i) => ({
+    const items: Record<string, unknown>[] = messages.map((msg, i) => ({
       key: `msg-${i}`,
       role: msg.role === 'user' ? ('user' as const) : ('ai' as const),
       content: msg.content,
@@ -155,7 +155,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
         role: 'ai' as const,
         content: '思考中...',
         loading: true,
-      } as any)
+      })
     }
 
     return items
@@ -182,7 +182,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
           </div>
         ),
         variant: 'outlined' as const,
-        contentRender: (content: any) => (
+        contentRender: (content: string) => (
           <div className="markdown-body prose prose-sm max-w-none prose-p:my-1 prose-li:my-0.5 prose-headings:my-2">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {typeof content === 'string' ? content : String(content)}

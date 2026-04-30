@@ -11,6 +11,7 @@ export const noteFormats = [
   { label: '目录', value: 'toc' },
   { label: '原片跳转', value: 'link' },
   { label: '原片截图', value: 'screenshot' },
+  { label: '示意图', value: 'mermaid' },
   { label: 'AI总结', value: 'summary' },
 ] as const
 

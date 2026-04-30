@@ -172,7 +172,7 @@ class NoteGenerator:
             # 2. 下载音频/视频
             # 有字幕时只提取元信息，不下载音视频文件（除非需要截图/视频理解）
             has_transcript = transcript is not None
-            need_full_download = not has_transcript or screenshot or video_understanding
+            need_full_download = not has_transcript or screenshot or video_understanding or "screenshot" in (_format or [])
             audio_meta = self._download_media(
                 downloader=downloader,
                 video_url=video_url,
@@ -186,6 +186,7 @@ class NoteGenerator:
                 video_interval=video_interval,
                 grid_size=grid_size,
                 skip_download=not need_full_download,
+                _format=_format,
             )
 
             # 3. 如果前面没拿到字幕，走转写流程
@@ -321,31 +322,15 @@ class NoteGenerator:
 
         NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        print(f"写入状态文件: {status_file} 当前状态: {status}")
         data = {"status": status.value if isinstance(status, TaskStatus) else status}
         if message:
             data["message"] = message
 
         try:
-            # First create a temporary file
-            temp_file = status_file.with_suffix('.tmp')
-
-            # Write to temporary file
-            with temp_file.open('w', encoding='utf-8') as f:
+            with status_file.open('w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # Atomic rename operation
-            temp_file.replace(status_file)
-
-            print(f"状态文件写入成功: {status_file}")
         except Exception as e:
             logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
-            # Try to write error to file directly as fallback
-            try:
-                with status_file.open('w', encoding='utf-8') as f:
-                    f.write(f"Error writing status: {str(e)}")
-            except:
-                logger.error(f"写入错误  {e}")
 
     def _handle_exception(self, task_id, exc):
         logger.error(f"任务异常 (task_id={task_id})", exc_info=True)
@@ -371,6 +356,7 @@ class NoteGenerator:
         video_interval: int,
         grid_size: List[int],
         skip_download: bool = False,
+        _format: Optional[List[str]] = None,
     ) -> AudioDownloadResult | None:
         """
         1. 检查音频缓存；若不存在，则根据需要下载音频或视频（若需截图/可视化）。
@@ -393,8 +379,11 @@ class NoteGenerator:
         task_id = audio_cache_file.stem.split("_")[0]
         self._update_status(task_id, status_phase)
 
-        # 已有缓存，尝试加载
-        if audio_cache_file.exists():
+        # 判断是否需要下载视频（放在缓存检查之前，避免缓存提前返回）
+        need_video = screenshot or video_understanding or "screenshot" in (_format or [])
+
+        # 已有缓存，但需要视频时不能直接返回（视频可能未下载）
+        if audio_cache_file.exists() and not need_video:
             logger.info(f"检测到音频缓存 ({audio_cache_file})，直接读取")
             try:
                 data = json.loads(audio_cache_file.read_text(encoding="utf-8"))
@@ -421,13 +410,10 @@ class NoteGenerator:
                 return audio
             except Exception as exc:
                 logger.warning(f"元信息提取失败，将尝试完整下载: {exc}")
-
-        # 判断是否需要下载视频
-        need_video = screenshot or video_understanding
         if screenshot and not grid_size:
-            grid_size = [2, 2]
+            grid_size = [3, 3]
 
-        frame_interval = video_interval if video_interval and video_interval > 0 else 6
+        frame_interval = video_interval if video_interval and video_interval > 0 else 3
         if need_video:
             try:
                 logger.info("开始下载视频")

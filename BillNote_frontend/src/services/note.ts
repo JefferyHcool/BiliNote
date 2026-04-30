@@ -31,7 +31,7 @@ export const generateNote = async (data: {
     // 成功提示
 
     return response
-  } catch (e: any) {
+  } catch (e) {
     console.error('❌ 请求出错', e)
 
     // 错误提示

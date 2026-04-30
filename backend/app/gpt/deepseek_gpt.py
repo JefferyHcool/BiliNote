@@ -19,7 +19,7 @@ class DeepSeekGPT(GPT):
         self.screenshot = False
 
     def _format_time(self, seconds: float) -> str:
-        return str(timedelta(seconds=int(seconds)))[2:]  # e.g., 03:15
+        return str(timedelta(seconds=int(seconds)))[2:]  # 格式如 03:15
 
     def _build_segment_text(self, segments: List[TranscriptSegment]) -> str:
         return "\n".join(

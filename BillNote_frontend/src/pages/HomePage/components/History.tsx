@@ -1,6 +1,6 @@
 import NoteHistory from '@/pages/HomePage/components/NoteHistory.tsx'
 import { useTaskStore } from '@/store/taskStore'
-import { Info, Clock, Loader2 } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 const History = () => {
   const currentTaskId = useTaskStore(state => state.currentTaskId)

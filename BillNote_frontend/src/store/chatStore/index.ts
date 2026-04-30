@@ -30,7 +30,8 @@ export const useChatStore = create<ChatState>()(
 
       clearChat: (taskId) =>
         set(state => {
-          const { [taskId]: _, ...rest } = state.chatHistory
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { [taskId]: _unused, ...rest } = state.chatHistory
           return { chatHistory: rest }
         }),
 
