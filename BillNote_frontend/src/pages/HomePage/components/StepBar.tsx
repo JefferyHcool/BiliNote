@@ -19,7 +19,7 @@ const StepBar: FC<StepBarProps> = ({ steps, currentStep }) => {
       {steps.map((step, index) => {
         const isActive = index <= currentIndex
         const isCurrent = index === currentIndex
-        const isLast = index === steps.length - 1
+        
         return (
           <div key={step.key} className="relative flex flex-1 flex-col items-center">
             {/* 圆圈或者Lottie */}

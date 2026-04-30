@@ -1,4 +1,4 @@
-// src/pages/NotFoundPage.tsx
+// 404 页面组件
 import NotFound from '@/components/Lottie/404.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import { useNavigate } from 'react-router-dom'

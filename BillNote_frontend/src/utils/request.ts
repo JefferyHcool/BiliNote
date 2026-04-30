@@ -2,14 +2,14 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast'
 
 // 统一响应类型
-export interface IResponse<T = any> {
+export interface IResponse<T = unknown> {
   code: number;
   msg: string;
   data: T;
 }
 
 // 模拟一个消息提示函数 (实际项目中会使用UI库的组件，如 Ant Design 的 message 或 Element UI 的 ElMessage)
-// This function simulates a message display (in real projects, you'd use a UI library's component)
+// 在实际项目中会使用 UI 库的消息提示组件
 
 const baseURL = import.meta.env.VITE_API_BASE_URL;
 
@@ -29,7 +29,7 @@ request.interceptors.response.use(
       return res.data; // 返回data部分，简化后续业务代码
     } else {
       // 业务错误，统一显示后端返回的错误消息
-      // Business error, uniformly display the error message returned from the backend
+      // 业务错误，统一显示后端返回的错误消息
       toast.error(res.msg || '操作失败，请稍后再试');
       return Promise.reject(res); // 拒绝Promise，让业务代码可以捕获并处理
     }
@@ -39,13 +39,13 @@ request.interceptors.response.use(
     const res = error?.response?.data as IResponse | undefined;
     if (res) {
       // 如果后端有返回错误信息，则显示后端信息
-      // If the backend returns an error message, display it
+      // 如果后端返回了错误信息，则显示该信息
 
       toast.error(res.msg || '服务器错误，请稍后再试');
       return Promise.reject(res);
     } else {
       // 没有响应数据（如网络中断），显示通用网络错误
-      // No response data (e.g., network disconnected), display generic network error
+      // 无响应数据（如网络中断），显示通用网络错误提示
       toast.error( '请求失败，请检查网络连接或稍后再试')
       return Promise.reject({
         code: -1,

@@ -28,7 +28,7 @@ export default function Monitor() {
             const data = await getDeployStatus()
             setStatus(data)
             setLastUpdated(new Date())
-        } catch (err) {
+        } catch {
             setError('无法连接到后端服务')
             setStatus(null)
         } finally {
@@ -59,7 +59,7 @@ export default function Monitor() {
     return (
         <ScrollArea className="h-full overflow-y-auto bg-white">
             <div className="container mx-auto px-4 py-8">
-                {/* Header */}
+                {/* 页头 */}
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">部署监控</h1>
@@ -95,9 +95,9 @@ export default function Monitor() {
                     </div>
                 )}
 
-                {/* Status Cards */}
+                {/* 状态卡片 */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    {/* Backend FastAPI */}
+                    {/* 后端 FastAPI */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-lg font-medium">
@@ -167,7 +167,7 @@ export default function Monitor() {
                         </CardContent>
                     </Card>
 
-                    {/* Whisper Model */}
+                    {/* Whisper 模型 */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-lg font-medium">
@@ -231,7 +231,7 @@ export default function Monitor() {
                     </Card>
                 </div>
 
-                {/* Footer Info */}
+                {/* 页脚信息 */}
                 <div className="mt-8 text-center text-xs text-gray-400">
                     状态每 30 秒自动刷新
                 </div>

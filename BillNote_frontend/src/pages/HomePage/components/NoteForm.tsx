@@ -1,4 +1,4 @@
-/* NoteForm.tsx ---------------------------------------------------- */
+/* 笔记表单组件 ---------------------------------------------------- */
 import {
   Form,
   FormControl,
@@ -25,7 +25,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
-import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
   Select,
@@ -37,7 +36,7 @@ import {
 import { Input } from '@/components/ui/input.tsx'
 import { Textarea } from '@/components/ui/textarea.tsx'
 import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
-import { fetchModels } from '@/services/model.ts'
+// fetchModels — keep import for potential future use
 import { useNavigate } from 'react-router-dom'
 
 /* -------------------- 校验 Schema -------------------- */
@@ -53,10 +52,10 @@ const formSchema = z
     style: z.string().nonempty('请选择笔记生成风格'),
     extras: z.string().optional(),
     video_understanding: z.boolean().optional(),
-    video_interval: z.coerce.number().min(1).max(30).default(6).optional(),
+    video_interval: z.coerce.number().min(1).max(30).default(3).optional(),
     grid_size: z
       .tuple([z.coerce.number().min(1).max(10), z.coerce.number().min(1).max(10)])
-      .default([2, 2])
+      .default([3, 3])
       .optional(),
   })
   .superRefine(({ video_url, platform }, ctx) => {
@@ -134,7 +133,7 @@ const NoteForm = () => {
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
-  const { loadEnabledModels, modelList, showFeatureHint, setShowFeatureHint } = useModelStore()
+  const { loadEnabledModels, modelList } = useModelStore()
 
   /* ---- 表单 ---- */
   const form = useForm<NoteFormValues>({
@@ -144,8 +143,8 @@ const NoteForm = () => {
       quality: 'medium',
       model_name: modelList[0]?.model_name || '',
       style: 'minimal',
-      video_interval: 6,
-      grid_size: [2, 2],
+      video_interval: 3,
+      grid_size: [3, 3],
       format: [],
     },
   })
@@ -181,8 +180,8 @@ const NoteForm = () => {
       screenshot: formData.screenshot ?? false,
       link: formData.link ?? false,
       video_understanding: formData.video_understanding ?? false,
-      video_interval: formData.video_interval ?? 6,
-      grid_size: formData.grid_size ?? [2, 2],
+      video_interval: formData.video_interval ?? 3,
+      grid_size: formData.grid_size ?? [3, 3],
       format: formData.format ?? [],
     })
   }, [
@@ -457,7 +456,7 @@ const NoteForm = () => {
             <FormField
               control={form.control}
               name="video_understanding"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
@@ -532,7 +531,6 @@ const NoteForm = () => {
                   onChange={field.onChange}
                   disabledMap={{
                     link: platform === 'local',
-                    screenshot: !videoUnderstandingEnabled,
                   }}
                 />
                 <FormMessage />

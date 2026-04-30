@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save, XCircle } from 'lucide-react'
+import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   getTranscriberConfig,
@@ -32,14 +32,12 @@ export default function Transcriber() {
   const [selectedModelSize, setSelectedModelSize] = useState('')
   const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([])
   const [mlxModelStatuses, setMlxModelStatuses] = useState<ModelStatus[]>([])
-  const [mlxAvailable, setMlxAvailable] = useState(false)
 
   const fetchModelsStatus = useCallback(async () => {
     try {
       const data = await getModelsStatus()
       setModelStatuses(data.whisper)
       setMlxModelStatuses(data.mlx_whisper)
-      setMlxAvailable(data.mlx_available)
     } catch {
       // 静默失败，不阻塞主流程
     }

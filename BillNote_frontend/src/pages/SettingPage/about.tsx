@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Github, Star, ExternalLink, Download } from 'lucide-react'
+import { Github, ExternalLink, Download } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import logo from '@/assets/icon.svg'
 
@@ -16,7 +16,7 @@ export default function AboutPage() {
   return (
     <ScrollArea className={'h-full overflow-y-auto bg-white'}>
       <div className="container mx-auto px-4 py-12">
-        {/* Hero Section */}
+        {/* 主视觉区域 */}
         <div className="mb-16 flex flex-col items-center justify-center text-center">
           <div className="mb-4 flex items-center gap-4">
             <img
@@ -62,7 +62,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        {/* Project Introduction */}
+        {/* 项目简介 */}
         <section className="mb-16">
           <h2 className="mb-6 text-center text-3xl font-bold">✨ 项目简介</h2>
           <div className="mx-auto max-w-3xl text-center">
@@ -74,7 +74,7 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Features Section */}
+        {/* 功能特性 */}
         <section className="mb-16">
           <h2 className="mb-8 text-center text-3xl font-bold">🔧 功能特性</h2>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -99,7 +99,7 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Screenshots Section */}
+        {/* 截图预览 */}
         <section className="mb-16">
           <h2 className="mb-8 text-center text-3xl font-bold">📸 截图预览</h2>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -117,7 +117,7 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Quick Start Section */}
+        {/* 快速开始 */}
         <section className="mb-16">
           <h2 className="mb-8 text-center text-3xl font-bold">🚀 快速开始</h2>
           <Tabs defaultValue="manual" className="mx-auto max-w-3xl">
@@ -192,7 +192,7 @@ export default function AboutPage() {
           </Tabs>
         </section>
 
-        {/* Community Section */}
+        {/* 社区联系 */}
         <section className="mb-16">
           <h2 className="mb-8 text-center text-3xl font-bold">联系和加入社区</h2>
           <div className="mx-auto max-w-3xl">
@@ -211,13 +211,13 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* License Section */}
+        {/* 开源协议 */}
         <section className="mb-8 text-center">
           <h2 className="mb-4 text-3xl font-bold">📜 License</h2>
           <p>MIT License</p>
         </section>
 
-        {/* Footer */}
+        {/* 页脚 */}
         <footer className="border-t pt-8 text-center">
           <p className="mb-4">💬 你的支持与反馈是我持续优化的动力！欢迎 PR、提 issue、Star ⭐️</p>
         </footer>

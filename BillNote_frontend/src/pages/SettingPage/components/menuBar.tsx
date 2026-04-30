@@ -1,5 +1,5 @@
 import styles from './index.module.css'
-import { FC, JSX } from 'react'
+import { JSX } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 export interface IMenuProps {
@@ -9,11 +9,7 @@ export interface IMenuProps {
   path: string
 }
 
-interface IMenuItem {
-  menuItem: IMenuProps
-}
-
-const MenuBar: ({ menuItem }: { menuItem: any }) => JSX.Element = ({ menuItem }) => {
+const MenuBar = ({ menuItem }: { menuItem: IMenuProps }): JSX.Element => {
   const location = useLocation()
   const isActive =
     location.pathname.startsWith(menuItem.path + '/') || location.pathname === menuItem.path

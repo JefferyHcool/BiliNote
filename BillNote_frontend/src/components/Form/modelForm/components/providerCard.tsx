@@ -28,9 +28,7 @@ const ProviderCard: FC<IProviderCardProps> = ({
       enabled: enable == 1 ? 0 : 1,
     })
   }
-  const rawId = useParams()
-  console.log('rawId', rawId)
-  // @ts-ignore
+  // @ts-expect-error useParams may return incomplete type
   const { id: currentId } = useParams()
   const isActive = currentId === id
   return (
