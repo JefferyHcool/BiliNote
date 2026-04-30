@@ -12,7 +12,8 @@ interface StepBarProps {
 }
 
 const StepBar: FC<StepBarProps> = ({ steps, currentStep }) => {
-  const currentIndex = steps.findIndex(step => step.key === currentStep)
+  const rawIndex = steps.findIndex(step => step.key === currentStep)
+  const currentIndex = rawIndex >= 0 ? rawIndex : 0
 
   return (
     <div className="flex w-full items-center justify-between">

@@ -58,7 +58,11 @@ def get_whisper_transcriber(model_size="base", device="cuda"):
     return _init_transcriber(TranscriberType.FAST_WHISPER, WhisperTranscriber, model_size=model_size, device=device)
 
 def get_bcut_transcriber():
-    return _init_transcriber(TranscriberType.BCUT, BcutTranscriber)
+    # BcutTranscriber keeps per-upload state such as resource_id, upload_id,
+    # etags and task_id on the instance. Reusing one singleton across parallel
+    # note jobs lets those fields overwrite each other, so create a fresh
+    # instance per task when note concurrency is enabled.
+    return BcutTranscriber()
 
 def get_kuaishou_transcriber():
     return _init_transcriber(TranscriberType.KUAISHOU, KuaishouTranscriber)

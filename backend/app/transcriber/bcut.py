@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from typing import Optional, List, Dict, Union
 
@@ -118,19 +119,31 @@ class BcutTranscriber(Transcriber):
             "UploadId": self.__upload_id,
             "model_id": "8",
         })
-        resp = self.session.post(
-            API_COMMIT_UPLOAD,
-            data=data,
-            headers=self.headers
-        )
-        resp.raise_for_status()
-        resp = resp.json()
-        print('Bili',resp)
-        if resp.get("code") != 0:
-            error_msg = f"上传提交失败: {resp.get('message', '未知错误')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-            
+        max_attempts = max(1, int(os.getenv("BCUT_COMMIT_RETRY_ATTEMPTS", "4")))
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                resp = self.session.post(
+                    API_COMMIT_UPLOAD,
+                    data=data,
+                    headers=self.headers
+                )
+                resp.raise_for_status()
+                resp = resp.json()
+                if resp.get("code") == 0:
+                    break
+                last_error = f"上传提交失败: {resp.get('message', '未知错误')}"
+                logger.warning("%s (attempt %s/%s)", last_error, attempt, max_attempts)
+            except Exception as exc:
+                last_error = exc
+                logger.warning("上传提交异常 (attempt %s/%s): %s", attempt, max_attempts, exc)
+
+            if attempt < max_attempts:
+                time.sleep(min(3 * attempt, 10))
+        else:
+            logger.error(str(last_error))
+            raise Exception(str(last_error))
+
         self.__download_url = resp["data"]["download_url"]
         logger.info(f"提交成功，下载链接: {self.__download_url}")
 
