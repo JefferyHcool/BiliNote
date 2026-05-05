@@ -1,9 +1,9 @@
 import os
 import json
 import logging
+import tempfile
 from abc import ABC
 from typing import Union, Optional, List
-from pathlib import Path
 
 import yt_dlp
 
@@ -12,16 +12,33 @@ from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.utils.path_helper import get_data_dir
 from app.utils.url_parser import extract_video_id
+from app.services.cookie_manager import CookieConfigManager
 
 logger = logging.getLogger(__name__)
-
-# B站 cookies 文件路径
-BILIBILI_COOKIES_FILE = os.getenv("BILIBILI_COOKIES_FILE", "cookies.txt")
 
 
 class BilibiliDownloader(Downloader, ABC):
     def __init__(self):
         super().__init__()
+        self._cookie_mgr = CookieConfigManager()
+        self._cookie = self._cookie_mgr.get('bilibili')
+        self._cookiefile = self._write_netscape_cookie_file()
+
+    def _write_netscape_cookie_file(self) -> Optional[str]:
+        """将 Cookie 写入 Netscape 格式临时文件，返回文件路径（供 yt-dlp cookiefile 使用）"""
+        if not self._cookie:
+            logger.warning("B站 Cookie 未配置，下载可能失败")
+            return None
+        lines = ["# Netscape HTTP Cookie File\n"]
+        for pair in self._cookie.split("; "):
+            if "=" in pair:
+                key, value = pair.split("=", 1)
+                lines.append(f".bilibili.com\tTRUE\t/\tFALSE\t0\t{key}\t{value}\n")
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
+        tmp.writelines(lines)
+        tmp.close()
+        logger.info("已生成 B站 Netscape Cookie 文件: %s (条目: %d)", tmp.name, len(lines) - 1)
+        return tmp.name
 
     def download(
         self,
@@ -41,6 +58,7 @@ class BilibiliDownloader(Downloader, ABC):
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_path,
+            'http_headers': {'Referer': 'https://www.bilibili.com'},
             'postprocessors': [
                 {
                     'key': 'FFmpegExtractAudio',
@@ -51,6 +69,8 @@ class BilibiliDownloader(Downloader, ABC):
             'noplaylist': True,
             'quiet': False,
         }
+        if self._cookiefile:
+            ydl_opts['cookiefile'] = self._cookiefile
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -97,10 +117,13 @@ class BilibiliDownloader(Downloader, ABC):
         ydl_opts = {
             'format': 'bv*[ext=mp4]/bestvideo+bestaudio/best',
             'outtmpl': output_path,
+            'http_headers': {'Referer': 'https://www.bilibili.com'},
             'noplaylist': True,
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4
         }
+        if self._cookiefile:
+            ydl_opts['cookiefile'] = self._cookiefile
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -153,17 +176,10 @@ class BilibiliDownloader(Downloader, ABC):
             'quiet': True,
         }
 
-        # 添加 cookies 支持
-        cookies_path = Path(BILIBILI_COOKIES_FILE)
-        if not cookies_path.is_absolute():
-            # 相对于 backend 目录
-            cookies_path = Path(__file__).parent.parent.parent / BILIBILI_COOKIES_FILE
-
-        if cookies_path.exists():
-            ydl_opts['cookiefile'] = str(cookies_path)
-            logger.info(f"使用 cookies 文件: {cookies_path}")
-        else:
-            logger.warning(f"B站 cookies 文件不存在: {cookies_path}，字幕获取可能失败")
+        # 通过 CookieConfigManager 注入 B站 Cookie（Netscape cookiefile）
+        if self._cookiefile:
+            ydl_opts['cookiefile'] = self._cookiefile
+            ydl_opts['http_headers'] = {'Referer': 'https://www.bilibili.com'}
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
