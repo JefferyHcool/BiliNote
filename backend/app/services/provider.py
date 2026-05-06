@@ -123,7 +123,12 @@ class ProviderService:
             filtered_data = {k: v for k, v in data.items() if v is not None and k != 'id'}
             print('更新模型供应商',filtered_data)
             update_provider(id, **filtered_data)
-            return id
+            # 获取更新后的供应商信息
+            updated_provider = get_provider_by_id(id)
+            return {
+                'id': id,
+                'enabled': updated_provider.enabled,
+            }
 
         except Exception as e:
             print('更新模型供应商失败：',e)

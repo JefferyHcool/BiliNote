@@ -59,10 +59,23 @@ const MermaidBlock: FC<{ chart: string }> = ({ chart }) => {
   const [error, setError] = useState<string>('')
 
   useEffect(() => {
+    let cancelled = false
     const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`
+    setSvg('')
+    setError('')
     mermaid.render(id, chart)
-      .then(({ svg }) => setSvg(svg))
-      .catch((e) => setError(e.message || 'Mermaid 渲染失败'))
+      .then(({ svg }) => {
+        if (!cancelled) setSvg(svg)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Mermaid 渲染失败')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [chart])
 
   if (error) {
@@ -366,30 +379,40 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
     const task = getCurrentTask()
     const name = task?.audioMeta.title || 'note'
     // 将图片转 base64 内嵌，确保 .md 文件在任何环境都能显示图片
-    let content = selectedContent
     const imgRegex = /!\[([^\]]*)\]\((\/[^)]+)\)/g
-    const replacements: Promise<{ search: string; replace: string }>[] = []
-    let match: RegExpExecArray | null
-    while ((match = imgRegex.exec(selectedContent)) !== null) {
-      const [full, alt, src] = match
-      if (src.startsWith('/')) {
-        const fullUrl = baseURL + src
-        replacements.push(
-          fetch(fullUrl)
-            .then(res => res.blob())
-            .then(blob => new Promise<string>((resolve) => {
-              const reader = new FileReader()
-              reader.onloadend = () => resolve(`![${alt}](${reader.result})`)
-              reader.readAsDataURL(blob)
-            }))
-            .catch(() => full)
-            .then(replacement => ({ search: full, replace: replacement }))
-        )
-      }
-    }
-    const results = await Promise.all(replacements)
-    for (const { search, replace } of results) {
-      content = content.replace(search, replace)
+    const matches = [...selectedContent.matchAll(imgRegex)].map(match => ({
+      full: match[0],
+      alt: match[1],
+      src: match[2],
+      index: match.index ?? 0,
+    }))
+    const renderedImages = await Promise.all(
+      matches.map(async ({ full, alt, src }) => {
+        try {
+          const res = await fetch(baseURL + src)
+          if (!res.ok) return full
+          const blob = await res.blob()
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onerror = () => reject(new Error('图片读取失败'))
+            reader.onloadend = () => resolve(String(reader.result))
+            reader.readAsDataURL(blob)
+          })
+          return `![${alt}](${dataUrl})`
+        } catch {
+          return full
+        }
+      })
+    )
+    let content = selectedContent
+    if (matches.length) {
+      let cursor = 0
+      content = ''
+      matches.forEach((match, index) => {
+        content += selectedContent.slice(cursor, match.index) + renderedImages[index]
+        cursor = match.index + match.full.length
+      })
+      content += selectedContent.slice(cursor)
     }
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const link = document.createElement('a')

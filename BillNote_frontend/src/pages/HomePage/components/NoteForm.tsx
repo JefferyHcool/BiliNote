@@ -8,7 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { FieldErrors, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -143,6 +143,7 @@ const NoteForm = () => {
       quality: 'medium',
       model_name: modelList[0]?.model_name || '',
       style: 'minimal',
+      video_understanding: false,
       video_interval: 3,
       grid_size: [3, 3],
       format: [],
@@ -152,7 +153,8 @@ const NoteForm = () => {
 
   /* ---- 派生状态（只 watch 一次，提高性能） ---- */
   const platform = useWatch({ control: form.control, name: 'platform' }) as string
-  const videoUnderstandingEnabled = useWatch({ control: form.control, name: 'video_understanding' })
+  const videoUnderstandingEnabled =
+    useWatch({ control: form.control, name: 'video_understanding' }) === true
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
@@ -456,13 +458,13 @@ const NoteForm = () => {
             <FormField
               control={form.control}
               name="video_understanding"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
                     <Checkbox
-                      checked={videoUnderstandingEnabled}
-                      onCheckedChange={v => form.setValue('video_understanding', v)}
+                      checked={field.value === true}
+                      onCheckedChange={v => field.onChange(v === true)}
                     />
                   </div>
                   <FormMessage />

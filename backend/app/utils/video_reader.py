@@ -91,6 +91,9 @@ class VideoReader:
             # 按 1 秒间隔密集采样，后续用场景检测筛选关键帧
             dense_interval = 1
             timestamps = [i for i in range(0, int(duration), dense_interval)][:max_frames * 2]
+            if not timestamps:
+                logger.warning("视频时长过短，未生成可提取帧时间戳")
+                return []
 
             # 并行提取帧
             max_workers = min(os.cpu_count() or 4, 8, len(timestamps))
@@ -136,13 +139,14 @@ class VideoReader:
             scored_timestamps = sorted(scores.keys(), key=lambda t: scores[t], reverse=True)
             selected_timestamps = set(scored_timestamps[:needed_frames])
 
-            # 同时确保覆盖视频全程：每隔 frame_interval 至少保留一帧
-            for ts in range(0, int(duration), self.frame_interval):
-                # 找到该区间内得分最高的帧
-                candidates = [(t, p) for t, p in valid_frames if ts <= t < ts + self.frame_interval]
-                if candidates:
-                    best = max(candidates, key=lambda x: scores.get(x[0], 0))
-                    selected_timestamps.add(best[0])
+            # 同时确保覆盖视频全程：每个采样区间保留该区间分数最高的一帧
+            interval_best: dict[int, int] = {}
+            for ts, _ in valid_frames:
+                bucket = ts // self.frame_interval
+                current = interval_best.get(bucket)
+                if current is None or scores.get(ts, 0) > scores.get(current, 0):
+                    interval_best[bucket] = ts
+            selected_timestamps.update(interval_best.values())
 
             # 最终上限：场景分最高的 N 帧，确保不超出模型 token 限制
             if len(selected_timestamps) > max_selected:
@@ -163,9 +167,7 @@ class VideoReader:
                 if self.dedupe_enabled:
                     frame_hash = self._calculate_file_md5(output_path)
                     if frame_hash == last_hash:
-                        # 删掉未被选中的冗余帧
-                        if ts not in selected_timestamps:
-                            os.remove(output_path)
+                        os.remove(output_path)
                         continue
                     last_hash = frame_hash
 

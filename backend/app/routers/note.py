@@ -183,12 +183,28 @@ def get_task_status(task_id: str):
                 content = f.read()
                 if not content.strip():
                     logger.warning(f"状态文件为空: {status_path}")
-                    status_content = {"status": TaskStatus.PENDING.value}
+                    status_content = {
+                        "status": TaskStatus.PENDING.value,
+                        "message": "任务排队中",
+                        "task_id": task_id,
+                    }
+                    with open(status_path, "w", encoding="utf-8") as wf:
+                        json.dump(status_content, wf, ensure_ascii=False)
                 else:
                     status_content = json.loads(content)
         except json.JSONDecodeError:
             logger.warning(f"状态文件 JSON 解析失败: {status_path}")
-            if os.path.exists(result_path):
+            status_content = {
+                "status": TaskStatus.PENDING.value,
+                "message": "任务排队中",
+                "task_id": task_id,
+            }
+            try:
+                with open(status_path, "w", encoding="utf-8") as wf:
+                    json.dump(status_content, wf, ensure_ascii=False)
+            except OSError as e:
+                logger.warning(f"重建状态文件失败: {status_path}, {e}")
+            if os.path.exists(result_path) and os.path.exists(status_path):
                 os.remove(status_path)
             return R.success({
                 "status": TaskStatus.PENDING.value,

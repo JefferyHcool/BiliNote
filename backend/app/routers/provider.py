@@ -77,11 +77,14 @@ def update_provider(data: ProviderUpdateRequest):
         ):
             return R.error(msg='请至少填写一个参数')
 
-        provider_id =ProviderService.update_provider(
+        updated_provider =ProviderService.update_provider(
             id=data.id,
             data=dict(data)
         )
-        return R.success(msg='更新模型供应商成功',data={'id': provider_id})
+        if updated_provider:
+            return R.success(msg='更新模型供应商成功', data=updated_provider)
+        else:
+            return R.error(msg='更新模型供应商失败')
     except Exception as e:
         print(e)
         return R.error(msg=str(e))

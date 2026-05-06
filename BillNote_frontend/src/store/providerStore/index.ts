@@ -75,19 +75,19 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   getProviderById: id => get().provider.find(p => p.id === id),
   updateProvider: async (provider: IProvider) => {
     try {
+      const existing = get().provider.find(p => p.id === provider.id)
+      const merged = { ...existing, ...provider }
+
       const data = {
-        ...provider,
-        api_key: provider.apiKey,
-        base_url: provider.baseUrl,
+        ...merged,
+        api_key: merged.apiKey,
+        base_url: merged.baseUrl,
       }
-      const res = await updateProviderById(data)
-      if (res.data.code === 0) {
-        const item = res.data.data
-        console.log('Provider ', item)
-        await get().fetchProviderList()
-      }
+      // 拦截器已解包：成功时直接返回 data 部分
+      await updateProviderById(data)
+      await get().fetchProviderList()
     } catch (error) {
-      console.error('Error fetching provider:', error)
+      console.error('Error updating provider:', error)
     }
   },
   getProviderList: () => get().provider,
