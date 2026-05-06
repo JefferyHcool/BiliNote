@@ -175,11 +175,38 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
 def get_task_status(task_id: str):
     status_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.status.json")
     result_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json")
+    pending_status = {
+        "status": TaskStatus.PENDING.value,
+        "message": "任务排队中",
+        "task_id": task_id,
+    }
 
     # 优先读状态文件
     if os.path.exists(status_path):
-        with open(status_path, "r", encoding="utf-8") as f:
-            status_content = json.load(f)
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                if content.strip():
+                    status_content = json.loads(content)
+                elif os.path.exists(result_path):
+                    logger.warning(f"状态文件为空但结果文件已存在: {status_path}")
+                    status_content = {"status": TaskStatus.SUCCESS.value, "task_id": task_id}
+                else:
+                    logger.warning(f"状态文件为空: {status_path}")
+                    status_content = pending_status
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"读取状态文件失败: {status_path}, {e}")
+            if os.path.exists(result_path):
+                status_content = {"status": TaskStatus.SUCCESS.value, "task_id": task_id}
+            else:
+                status_content = pending_status
+
+        if status_content == pending_status:
+            try:
+                with open(status_path, "w", encoding="utf-8") as wf:
+                    json.dump(status_content, wf, ensure_ascii=False)
+            except OSError as e:
+                logger.warning(f"重建状态文件失败: {status_path}, {e}")
 
         status = status_content.get("status")
         message = status_content.get("message", "")
