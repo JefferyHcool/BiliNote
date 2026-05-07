@@ -4,7 +4,7 @@ import { detectPlatform } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
-import type { TaskRecord } from '~/logic/types'
+import { NOTE_FORMATS, NOTE_STYLES, type NoteFormat, type TaskRecord } from '~/logic/types'
 
 const tabUrl = ref<string>('')
 const tabTitle = ref<string>('')
@@ -67,19 +67,19 @@ async function start() {
   try {
     // B 站：在用户浏览器里直接抓字幕（带本地登录态 cookie），跳过后端的 download_subtitles 与音频转写
     const prefetched = platform.value === 'bilibili' ? await fetchBilibiliSubtitle(tabUrl.value) : null
+    const formats = settings.value.formats || []
     const { task_id } = await generateNote({
       video_url: tabUrl.value,
       platform: platform.value!,
       quality: settings.value.quality,
       provider_id: settings.value.providerId,
       model_name: settings.value.modelName,
-      screenshot: settings.value.screenshot,
-      link: settings.value.link,
+      // backend VideoRequest 同时接受 format 数组与 screenshot/link 单独布尔，从 formats 派生保持单一真相源
+      format: [...formats],
+      screenshot: formats.includes('screenshot'),
+      link: formats.includes('link'),
       style: settings.value.style || undefined,
-      format: [
-        ...(settings.value.screenshot ? ['screenshot'] : []),
-        ...(settings.value.link ? ['link'] : []),
-      ],
+      extras: settings.value.extras || undefined,
       prefetched_transcript: prefetched ?? undefined,
     })
     activeTaskId.value = task_id
@@ -106,6 +106,13 @@ async function start() {
 
 function openOptions() {
   browser.runtime.openOptionsPage()
+}
+
+function toggleFormat(value: NoteFormat, checked: boolean) {
+  const cur = settings.value.formats || []
+  settings.value.formats = checked
+    ? Array.from(new Set([...cur, value]))
+    : cur.filter(v => v !== value)
 }
 
 async function openSidePanel() {
@@ -176,7 +183,7 @@ onUnmounted(() => {
     </div>
 
     <fieldset class="border rounded p-2 flex flex-col gap-2" :disabled="!supported || submitting">
-      <div class="grid grid-cols-3 gap-2 text-xs">
+      <div class="grid grid-cols-2 gap-2 text-xs">
         <label class="flex flex-col gap-1">
           <span class="text-gray-600">画质</span>
           <select v-model="settings.quality" class="border rounded px-1 py-0.5">
@@ -185,13 +192,40 @@ onUnmounted(() => {
             <option value="slow">高质</option>
           </select>
         </label>
-        <label class="flex items-center gap-1 mt-4">
-          <input v-model="settings.screenshot" type="checkbox"> 截图
-        </label>
-        <label class="flex items-center gap-1 mt-4">
-          <input v-model="settings.link" type="checkbox"> 跳转
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600">笔记风格</span>
+          <select v-model="settings.style" class="border rounded px-1 py-0.5">
+            <option v-for="s in NOTE_STYLES" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
         </label>
       </div>
+
+      <div class="flex flex-col gap-1 text-xs">
+        <span class="text-gray-600">输出形式</span>
+        <div class="flex flex-wrap gap-x-3 gap-y-1">
+          <label v-for="f in NOTE_FORMATS" :key="f.value" class="flex items-center gap-1">
+            <input
+              type="checkbox"
+              :checked="(settings.formats || []).includes(f.value)"
+              @change="toggleFormat(f.value, ($event.target as HTMLInputElement).checked)"
+            >
+            {{ f.label }}
+          </label>
+        </div>
+      </div>
+
+      <details class="text-xs">
+        <summary class="cursor-pointer text-gray-500">高级</summary>
+        <label class="flex flex-col gap-1 mt-2">
+          <span class="text-gray-600">额外提示词（追加到 prompt 末尾）</span>
+          <textarea
+            v-model="settings.extras"
+            class="border rounded px-1 py-1 resize-y"
+            rows="2"
+            placeholder="例如：重点关注游戏开发部分；保留所有专业术语原文"
+          />
+        </label>
+      </details>
 
       <div class="text-xs text-gray-600">
         <span v-if="settings.providerId && settings.modelName">

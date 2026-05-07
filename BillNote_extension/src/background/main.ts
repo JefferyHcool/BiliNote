@@ -70,6 +70,7 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
   // B 站：先在浏览器里抓字幕（带本地登录态 cookie），随提交带过去
   const prefetched = platform === 'bilibili' ? await fetchBilibiliSubtitle(url) : null
 
+  const formats = settings.formats || []
   try {
     const res = await fetch(`${backend}/api/generate_note`, {
       method: 'POST',
@@ -80,13 +81,12 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
         quality: settings.quality,
         provider_id: settings.providerId,
         model_name: settings.modelName,
-        screenshot: settings.screenshot,
-        link: settings.link,
+        // backend 同时接受 format 数组与 screenshot/link 单独布尔；从 formats 派生保持单一真相源
+        format: [...formats],
+        screenshot: formats.includes('screenshot'),
+        link: formats.includes('link'),
         style: settings.style || undefined,
-        format: [
-          ...(settings.screenshot ? ['screenshot'] : []),
-          ...(settings.link ? ['link'] : []),
-        ],
+        extras: settings.extras || undefined,
         prefetched_transcript: prefetched ?? undefined,
       }),
     })
