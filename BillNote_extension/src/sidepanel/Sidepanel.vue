@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getTaskStatus } from '~/logic/api'
+import { getTaskStatus, resolveImageUrl } from '~/logic/api'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
 
@@ -83,8 +83,24 @@ onUnmounted(() => {
     </section>
 
     <section v-else class="flex-1 flex flex-col gap-3 p-3 overflow-hidden">
-      <div class="text-xs text-gray-500 truncate" :title="activeTask.videoUrl">
-        {{ activeTask.videoUrl }}
+      <div class="flex gap-3 items-start">
+        <img
+          v-if="activeTask.result?.audio_meta?.cover_url"
+          :src="resolveImageUrl(activeTask.result.audio_meta.cover_url as string)"
+          class="w-24 h-14 object-cover rounded border bg-gray-100 shrink-0"
+          alt="cover"
+          @error="($event.target as HTMLImageElement).style.display = 'none'"
+        >
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium leading-snug line-clamp-2 break-words">
+            {{ (activeTask.result?.audio_meta as { title?: string } | undefined)?.title || activeTask.videoUrl }}
+          </div>
+          <a
+            class="text-xs text-blue-600 hover:underline break-all line-clamp-1"
+            :href="activeTask.videoUrl"
+            target="_blank"
+          >{{ activeTask.videoUrl }}</a>
+        </div>
       </div>
       <TaskProgress :status="activeTask.status" :message="activeTask.message" />
 
@@ -144,3 +160,8 @@ onUnmounted(() => {
     </details>
   </main>
 </template>
+
+<style>
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+</style>

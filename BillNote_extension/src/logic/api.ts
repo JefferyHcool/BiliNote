@@ -213,3 +213,16 @@ export function absolutizeMarkdownImages(md: string): string {
   const base = backendUrl()
   return md.replace(/!\[([^\]]*)\]\((\/static\/[^)]+)\)/g, (_, alt, path) => `![${alt}](${base}${path})`)
 }
+
+// 单个图片 URL 的处理：相对路径 → 拼后端域名；B 站等带防盗链的封面 → 走后端 image_proxy
+export function resolveImageUrl(url: string | undefined | null): string {
+  if (!url)
+    return ''
+  const base = backendUrl()
+  if (url.startsWith('/'))
+    return `${base}${url}`
+  // B 站封面、抖音封面等会做 referer 校验；走后端代理
+  if (/(hdslb|byteimg|kpcdn|akamaized|ytimg)\.com/i.test(url))
+    return `${base}/api/image_proxy?url=${encodeURIComponent(url)}`
+  return url
+}

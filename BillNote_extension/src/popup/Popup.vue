@@ -2,11 +2,12 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { detectPlatform } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
-import { generateNote, getTaskStatus } from '~/logic/api'
+import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
 import type { TaskRecord } from '~/logic/types'
 
 const tabUrl = ref<string>('')
 const tabTitle = ref<string>('')
+const tabId = ref<number | undefined>(undefined)
 const platform = computed(() => detectPlatform(tabUrl.value))
 const supported = computed(() => platform.value !== null)
 
@@ -22,6 +23,7 @@ async function loadActiveTab() {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
     tabUrl.value = tab?.url ?? ''
     tabTitle.value = tab?.title ?? ''
+    tabId.value = tab?.id
   }
   catch (e) {
     console.warn('无法读取当前 tab:', e)
@@ -87,6 +89,8 @@ async function start() {
       updatedAt: Date.now(),
     })
     poll(task_id)
+    // 提交后顺手把侧边栏拉起来，免得用户来回切窗口
+    openSidePanel()
   }
   catch (e) {
     errorMsg.value = (e as Error).message
@@ -100,6 +104,22 @@ function openOptions() {
   browser.runtime.openOptionsPage()
 }
 
+async function openSidePanel() {
+  // 只能在用户操作触发的同步上下文里调，且需要明确的 tabId
+  try {
+    const target = tabId.value ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id
+    if (target == null)
+      return
+    // @ts-expect-error sidePanel 类型在 polyfill 中不全
+    if (typeof chrome !== 'undefined' && chrome.sidePanel?.open)
+      // @ts-expect-error see above
+      await chrome.sidePanel.open({ tabId: target })
+  }
+  catch (err) {
+    console.warn('打开侧边栏失败:', err)
+  }
+}
+
 function selectTask(id: string) {
   activeTaskId.value = id
   const t = tasks.value?.find(x => x.taskId === id)
@@ -107,10 +127,19 @@ function selectTask(id: string) {
     poll(id)
 }
 
+const activeCover = computed(() => activeTask.value?.result?.audio_meta?.cover_url as string | undefined)
+const activeTitle = computed(() => (activeTask.value?.result?.audio_meta?.title as string | undefined) || tabTitle.value)
+
+function fmtTime(ts?: number) {
+  if (!ts)
+    return ''
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
   await loadActiveTab()
-  // 如果有进行中的任务，恢复轮询
   const running = tasks.value?.find(t => t.status !== 'SUCCESS' && t.status !== 'FAILED')
   if (running) {
     activeTaskId.value = running.taskId
@@ -180,12 +209,40 @@ onUnmounted(() => {
     </div>
 
     <section v-if="activeTask" class="flex flex-col gap-2">
+      <div v-if="activeCover || activeTitle" class="flex gap-3 items-start">
+        <img
+          v-if="activeCover"
+          :src="resolveImageUrl(activeCover)"
+          class="w-20 h-12 object-cover rounded border bg-gray-100 shrink-0"
+          alt="cover"
+          @error="($event.target as HTMLImageElement).style.display = 'none'"
+        >
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium leading-snug line-clamp-2 break-words" :title="activeTitle">
+            {{ activeTitle || '（未取到标题）' }}
+          </div>
+          <div class="text-xs text-gray-400 mt-0.5">
+            {{ fmtTime(activeTask.updatedAt) }}
+          </div>
+        </div>
+      </div>
+
       <TaskProgress :status="activeTask.status" :message="activeTask.message" />
-      <MarkdownView
-        v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown"
-        :markdown="activeTask.result.markdown"
-        :title="activeTask.result.audio_meta?.title || tabTitle"
-      />
+
+      <button
+        v-if="activeTask.status === 'SUCCESS'"
+        class="btn-primary"
+        @click="openSidePanel"
+      >
+        在侧边栏查看笔记 / 思维导图 / AI 问答
+      </button>
+      <button
+        v-else
+        class="btn-secondary"
+        @click="openSidePanel"
+      >
+        在侧边栏看进度
+      </button>
     </section>
 
     <details v-if="(tasks?.length ?? 0) > 0" class="text-xs">
@@ -198,8 +255,10 @@ onUnmounted(() => {
           :class="{ 'bg-blue-50': t.taskId === activeTaskId }"
           @click="selectTask(t.taskId)"
         >
-          <span class="truncate flex-1" :title="t.videoUrl">{{ t.result?.audio_meta?.title || t.videoUrl }}</span>
-          <span class="text-gray-500">{{ t.status }}</span>
+          <span class="truncate flex-1" :title="t.videoUrl">
+            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.videoUrl }}
+          </span>
+          <span class="text-gray-500 shrink-0">{{ t.status }}</span>
         </li>
       </ul>
     </details>
@@ -209,4 +268,5 @@ onUnmounted(() => {
 <style>
 .btn-primary { @apply bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm; }
 .btn-secondary { @apply bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 text-xs; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
