@@ -1,32 +1,21 @@
 import { useWebExtensionStorage } from '~/composables/useWebExtensionStorage'
 import type { Settings, TaskRecord } from './types'
+import { DEFAULT_SETTINGS, MAX_TASKS, SETTINGS_KEY, TASKS_KEY } from './constants'
 
-export const DEFAULT_BACKEND_URL = 'http://localhost:8483'
+export { DEFAULT_BACKEND_URL, DEFAULT_SETTINGS, MAX_TASKS } from './constants'
 
-export const DEFAULT_SETTINGS: Settings = {
-  backendUrl: DEFAULT_BACKEND_URL,
-  providerId: '',
-  modelName: '',
-  quality: 'medium',
-  screenshot: false,
-  link: false,
-  style: '',
-}
-
-// 全局共享设置（popup / options / sidepanel / background 都读这一份）
+// 全局共享设置（popup / options / sidepanel 三个 Vue 上下文都读这一份）
+// 注意：background service worker 不要 import 这个文件，改用 chrome.storage 直读
 export const { data: settings, dataReady: settingsReady } = useWebExtensionStorage<Settings>(
-  'bilinote-settings',
+  SETTINGS_KEY,
   DEFAULT_SETTINGS,
   { mergeDefaults: true },
 )
 
-// 历史任务列表，最近的在前
 export const { data: tasks, dataReady: tasksReady } = useWebExtensionStorage<TaskRecord[]>(
-  'bilinote-tasks',
+  TASKS_KEY,
   [],
 )
-
-export const MAX_TASKS = 30
 
 export function upsertTask(record: TaskRecord) {
   const list = tasks.value ?? []

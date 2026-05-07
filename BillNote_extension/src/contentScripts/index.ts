@@ -1,19 +1,13 @@
-/* eslint-disable no-console */
-import { onMessage } from 'webext-bridge/content-script'
 import { createApp } from 'vue'
 import App from './views/App.vue'
 import { setupApp } from '~/logic/common-setup'
+import { detectPlatform } from '~/logic/platform'
 
-// Firefox `browser.tabs.executeScript()` requires scripts return a primitive value
+// 只在支持的视频平台上挂悬浮按钮，避免污染其他网站
 (() => {
-  console.info('[vitesse-webext] Hello world from content script')
+  if (!detectPlatform(window.location.href))
+    return
 
-  // communication example: send previous tab title from background page
-  onMessage('tab-prev', ({ data }) => {
-    console.log(`[vitesse-webext] Navigate from page "${data.title}"`)
-  })
-
-  // mount component to context window
   const container = document.createElement('div')
   container.id = __NAME__
   const root = document.createElement('div')

@@ -2,7 +2,9 @@
 import { onMounted, ref, watch } from 'vue'
 import { getModelsByProvider, getProviders, ping } from '~/logic/api'
 import { settings, settingsReady } from '~/logic/storage'
-import type { Model, Provider } from '~/logic/types'
+import { SUPPORTED_COOKIE_PLATFORMS, syncCookieToBackend } from '~/logic/cookies'
+import { PLATFORM_LABELS } from '~/logic/platform'
+import type { Model, Platform, Provider } from '~/logic/types'
 
 const providers = ref<Provider[]>([])
 const models = ref<Model[]>([])
@@ -47,6 +49,19 @@ async function testConnection() {
   status.value = ok
     ? { kind: 'ok', text: '后端连通 ✓' }
     : { kind: 'err', text: '无法连接后端，请检查地址、端口与 CORS 配置' }
+}
+
+const cookieStatus = ref<Record<string, { kind: 'ok' | 'err' | 'idle', text: string }>>({})
+const cookieBusy = ref<Record<string, boolean>>({})
+
+async function syncCookie(platform: Exclude<Platform, 'local'>) {
+  cookieBusy.value[platform] = true
+  cookieStatus.value[platform] = { kind: 'idle', text: '同步中…' }
+  const res = await syncCookieToBackend(platform)
+  cookieStatus.value[platform] = res.ok
+    ? { kind: 'ok', text: `已同步 ${res.count} 条 cookie ✓` }
+    : { kind: 'err', text: res.error || '同步失败' }
+  cookieBusy.value[platform] = false
 }
 
 watch(() => settings.value?.providerId, (id) => {
@@ -143,6 +158,36 @@ onMounted(async () => {
         <label class="flex items-center gap-2">
           <input v-model="settings.link" type="checkbox"> 插入原片跳转链接
         </label>
+      </div>
+    </section>
+
+    <section class="bg-white dark:bg-gray-800 border rounded p-4 mb-4 flex flex-col gap-3">
+      <h2 class="font-semibold">浏览器 Cookie 同步</h2>
+      <p class="text-xs text-gray-500">
+        从当前浏览器读取你已登录站点的 cookie，并写入后端 (POST /api/update_downloader_cookie)。
+        Bilibili / Douyin / Kuaishou 这类需要登录态的下载尤其需要这一步。
+      </p>
+      <div class="flex flex-col gap-2">
+        <div
+          v-for="p in SUPPORTED_COOKIE_PLATFORMS"
+          :key="p"
+          class="flex items-center justify-between gap-2 text-sm"
+        >
+          <span class="w-20">{{ PLATFORM_LABELS[p] }}</span>
+          <button class="btn-secondary" :disabled="cookieBusy[p]" @click="syncCookie(p)">
+            {{ cookieBusy[p] ? '同步中…' : '同步 Cookie' }}
+          </button>
+          <span
+            class="flex-1 text-xs"
+            :class="{
+              'text-green-700': cookieStatus[p]?.kind === 'ok',
+              'text-red-600': cookieStatus[p]?.kind === 'err',
+              'text-gray-500': cookieStatus[p]?.kind === 'idle',
+            }"
+          >
+            {{ cookieStatus[p]?.text || '' }}
+          </span>
+        </div>
       </div>
     </section>
 

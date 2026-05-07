@@ -34,7 +34,14 @@ export async function getProviders(): Promise<Provider[]> {
 }
 
 export async function getModelsByProvider(providerId: string): Promise<Model[]> {
-  return request<Model[]>(`/api/get_models_by_provider/${providerId}`)
+  return request<Model[]>(`/api/model_enable/${providerId}`)
+}
+
+export async function setDownloaderCookie(platform: string, cookie: string): Promise<void> {
+  await request('/api/update_downloader_cookie', {
+    method: 'POST',
+    body: JSON.stringify({ platform, cookie }),
+  })
 }
 
 export async function generateNote(payload: GenerateRequest): Promise<{ task_id: string }> {
