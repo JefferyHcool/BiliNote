@@ -42,10 +42,13 @@ git push -u origin release/X.Y.Z
 
 在 GitHub 上发起两个 PR：
 
-| PR | base | 合并方式 |
-|---|---|---|
-| `release/X.Y.Z` → `master` | `master` | **Merge commit (--no-ff)** |
-| `release/X.Y.Z` → `develop` | `develop` | **Merge commit (--no-ff)** |
+| PR | base | 合并方式 | 合并后 commit 标题 |
+|---|---|---|---|
+| `release/X.Y.Z` → `master` | `master` | **Merge commit (--no-ff)** | `chore(release): vX.Y.Z` |
+| `release/X.Y.Z` → `develop` | `develop` | **Merge commit (--no-ff)** | `chore(release): merge release/X.Y.Z back into develop` |
+
+> ⚠️ Merge commit 的标题**必须**符合 `type(scope): subject` 格式（commitlint 在 push 到 master/develop 时会校验）。
+> 历史上用过 `Release vX.Y.Z` 这种形式，会被 commitlint 报 `type-empty` / `subject-empty`。
 
 `master` 分支保护要求 review 通过。回灌 `develop` 是为了把发版冻结期内的小修同步回来。
 

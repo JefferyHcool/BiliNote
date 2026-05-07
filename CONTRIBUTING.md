@@ -250,6 +250,7 @@ chore(ci): 优化 docker 构建缓存
 
 - `feature/*` / `fix/*` 合入 `develop`：推荐 **Squash and merge**，保持 develop 历史线性。
 - `release/*` 合入 `master` 与回灌 `develop`：使用 **Merge commit (--no-ff)**，保留发版结构。
+  · merge commit 标题用 `chore(release): vX.Y.Z`（合 master）或 `chore(release): merge release/X.Y.Z back into develop`（回灌 develop），保证 commitlint 通过。
 - `hotfix/*` 同上 release。
 
 ### 6.4 合并后

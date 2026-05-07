@@ -26,7 +26,5 @@ jobs:
         uses: wagoid/commitlint-github-action@v6
         with:
           configFile: .commitlintrc.json
-          # PR 上检查 base..head 之间所有 commit；push 上只校验最新 commit
-          firstParent: false
           failOnWarnings: false
           helpURL: https://github.com/JefferyHcool/BiliNote/blob/develop/CONTRIBUTING.md#5-提交规范
