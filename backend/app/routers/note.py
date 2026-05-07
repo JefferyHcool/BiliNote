@@ -50,6 +50,10 @@ class VideoRequest(BaseModel):
     video_understanding: Optional[bool] = False
     video_interval: Optional[int] = 0
     grid_size: Optional[list] = []
+    # 客户端（如浏览器插件）已经在用户浏览器里抓到字幕，直接传给后端复用，
+    # 跳过 download_subtitles 和音频转写。形如：
+    #   {"language": "zh", "full_text": "...", "segments": [{"start","end","text"}, ...]}
+    prefetched_transcript: Optional[dict] = None
 
     @field_validator("video_url")
     def validate_supported_url(cls, v):
@@ -72,6 +76,40 @@ def save_note_to_file(task_id: str, note):
     os.makedirs(NOTE_OUTPUT_DIR, exist_ok=True)
     with open(os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json"), "w", encoding="utf-8") as f:
         json.dump(asdict(note), f, ensure_ascii=False, indent=2)
+
+
+def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
+    """把客户端预取的字幕写到 NoteGenerator 期望的转写缓存文件里。
+
+    NoteGenerator.generate 会优先读 <task_id>_transcript.json，命中即跳过 download_subtitles
+    与音频转写流程。要求字段：language(可空)/full_text/segments[{start,end,text}]
+    """
+    segments = transcript.get("segments") or []
+    cleaned_segments = []
+    for s in segments:
+        text = (s.get("text") or "").strip()
+        if not text:
+            continue
+        cleaned_segments.append({
+            "start": float(s.get("start", 0)),
+            "end": float(s.get("end", 0)),
+            "text": text,
+        })
+    if not cleaned_segments:
+        raise ValueError("prefetched_transcript 没有可用的 segments")
+
+    full_text = transcript.get("full_text") or " ".join(s["text"] for s in cleaned_segments)
+    payload = {
+        "language": transcript.get("language") or "zh",
+        "full_text": full_text,
+        "segments": cleaned_segments,
+    }
+
+    os.makedirs(NOTE_OUTPUT_DIR, exist_ok=True)
+    target = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}_transcript.json")
+    with open(target, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    logger.info(f"已写入客户端预取字幕缓存: {target} ({len(cleaned_segments)} 段)")
 
 
 def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
@@ -162,6 +200,13 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
 
         # 统一先写入 PENDING，表示已进入队列等待串行执行
         NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
+
+        # 客户端已经抓好字幕的话，写到转写缓存文件，NoteGenerator 的 cache-hit 逻辑会直接用上
+        if data.prefetched_transcript:
+            try:
+                _persist_prefetched_transcript(task_id, data.prefetched_transcript)
+            except Exception as e:
+                logger.warning(f"写入预取字幕失败 (task_id={task_id}): {e}")
 
         background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
                                   data.screenshot, data.model_name, data.provider_id, data.format, data.style,

@@ -8,9 +8,11 @@ interface AILogoProps {
 }
 
 const AILogo = ({ name, style = 'Color', size = 24 }: AILogoProps) => {
-  const Icon = Icons[name as keyof typeof Icons]
+  const Icon = name ? Icons[name as keyof typeof Icons] : undefined
   if (!Icon) {
-    console.error(`❌ 图标组件不存在: ${name}`)
+    if (name && name !== 'custom') {
+      console.warn(`AILogo: 未匹配到图标，使用自定义占位: ${name}`)
+    }
     return (
       <span style={{ fontSize: size }}>
         <img src={CustomLogo} alt="CustomLogo" style={{ width: size, height: size }} />

@@ -8,6 +8,7 @@ from typing import Union, Optional, List
 import yt_dlp
 
 from app.downloaders.base import Downloader, DownloadQuality, QUALITY_MAP
+from app.downloaders.bilibili_subtitle import BilibiliSubtitleFetcher
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.utils.path_helper import get_data_dir
@@ -155,6 +156,15 @@ class BilibiliDownloader(Downloader, ABC):
         :param langs: 优先语言列表
         :return: TranscriptResult 或 None
         """
+        # 1) 优先走 B 站官方 player API（直拉，无需下视频；AI 字幕需 SESSDATA cookie）
+        try:
+            result = BilibiliSubtitleFetcher().fetch_subtitles(video_url)
+            if result and result.segments:
+                return result
+        except Exception as e:
+            logger.warning(f"player API 直拉字幕异常，回退到 yt-dlp: {e}")
+
+        # 2) Fallback：原 yt-dlp 路径（更脆弱，遇到签名/Cookie 问题失败概率较高）
         if output_dir is None:
             output_dir = get_data_dir()
         if not output_dir:
