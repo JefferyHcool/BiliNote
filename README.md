@@ -205,7 +205,12 @@ docker-compose -f docker-compose.gpu.yml up -d
 - [ ] 笔记导出为 PDF / Word / Notion
 
 ### Contact and Join-联系和加入社区
-年会恢复更新以后放出最新社区地址
+
+扫码加入 BiliNote 交流微信群（如二维码失效，请到 [Issues](https://github.com/JefferyHcool/BiliNote/issues) 反馈）：
+
+<p align="center">
+  <img src="./doc/wechat.png" alt="BiliNote 交流微信群" width="240" />
+</p>
 
 
 
