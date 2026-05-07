@@ -26,15 +26,18 @@ RUN pip install --no-cache-dir -i ${PIP_INDEX} -r requirements.txt
 COPY ./backend /tmp/backend
 
 # === 阶段2：构建 Frontend ===
-FROM node:18-alpine AS frontend-builder
+# Node 18-alpine 跑不动 Tailwind v4 / Vite 6（前者要求 Node 20+，后者推荐 Node 20+），
+# 升到 node:20-alpine。alpine 走 musl，pnpm 会按 lockfile 拉 *-linux-x64-musl native binary。
+FROM node:20-alpine AS frontend-builder
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /tmp/frontend
 
-# 先复制 package.json 利用依赖层缓存
-COPY ./BillNote_frontend/package.json ./
-RUN pnpm install
+# 先复制 package.json + lockfile 利用依赖层缓存
+# --frozen-lockfile 保证 CI 与本地开发依赖版本一致，杜绝 semver 漂移引入的破坏性升级
+COPY ./BillNote_frontend/package.json ./BillNote_frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY ./BillNote_frontend /tmp/frontend
 
