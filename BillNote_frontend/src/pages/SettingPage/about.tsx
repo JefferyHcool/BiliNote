@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Github, Star, ExternalLink, Download } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import logo from '@/assets/icon.svg'
+import wechatQr from '@/assets/wechat.png'
 
 export default function AboutPage() {
   const images = [
@@ -204,7 +205,7 @@ export default function AboutPage() {
               <div className="text-center">
                 <h3 className="mb-3 text-xl font-semibold">BiliNote 交流微信群</h3>
                 <div className="bg-muted mx-auto flex h-52 w-52 items-center justify-center rounded-md">
-                  <img src={'https://common-1304618721.cos.ap-chengdu.myqcloud.com/wechat.png'} />
+                  <img src={wechatQr} alt="BiliNote 交流微信群" className="h-full w-full object-contain" />
                 </div>
               </div>
             </div>
