@@ -71,11 +71,19 @@ class ProviderService:
     @staticmethod
     def add_provider( name: str, api_key: str, base_url: str, logo: str, type_: str, enabled: int = 1):
         try:
+            # 内置供应商（type='built-in'）只能由 seed 流程写入；API 创建一律落到 'custom'，
+            # 否则历史上出现过批量伪内置脏数据
+            if type_ != 'custom':
+                type_ = 'custom'
+            existing = get_provider_by_name(name)
+            if existing is not None:
+                raise ValueError(f'供应商名称已存在: {name}')
             id = uuid().lower()
-            logo='custom'
+            logo = 'custom'
             return insert_provider(id, name, api_key, base_url, logo, type_, enabled)
         except Exception as  e:
             print('创建模式失败',e)
+            raise
     @staticmethod
     def provider_to_dict(p: Provider):
         return {
