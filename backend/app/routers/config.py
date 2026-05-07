@@ -110,15 +110,19 @@ def get_transcriber_models_status():
     mlx_available = platform.system() == "Darwin"
     mlx_statuses = []
     if mlx_available:
+        from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
         for size in WHISPER_MODEL_SIZES:
             mlx_key = f"mlx-{size}"
             model_dir = get_model_dir("mlx-whisper")
-            model_path = os.path.join(model_dir, f"mlx-community/whisper-{size}")
-            downloaded = Path(model_path).exists()
+            repo_id = MLX_MODEL_MAP.get(size)
+            # 模型在本地按 repo_id（如 mlx-community/whisper-small-mlx）落盘
+            model_path = os.path.join(model_dir, repo_id) if repo_id else None
+            downloaded = bool(model_path and Path(model_path).exists())
             mlx_statuses.append({
                 "model_size": size,
                 "downloaded": downloaded,
                 "downloading": _downloading.get(mlx_key) == "downloading",
+                "available": repo_id is not None,
             })
 
     return R.success(data={
@@ -164,15 +168,22 @@ def _do_download_mlx_whisper(model_size: str):
     try:
         _downloading[key] = "downloading"
         from huggingface_hub import snapshot_download as hf_download
+        from app.transcriber.mlx_whisper_transcriber import resolve_mlx_repo_id
+
+        try:
+            repo_id = resolve_mlx_repo_id(model_size)
+        except ValueError as e:
+            logger.error(str(e))
+            _downloading[key] = "failed"
+            return
 
         model_dir = get_model_dir("mlx-whisper")
-        model_name = f"mlx-community/whisper-{model_size}"
-        model_path = os.path.join(model_dir, model_name)
+        model_path = os.path.join(model_dir, repo_id)
         if Path(model_path).exists():
             _downloading[key] = "done"
             return
-        logger.info(f"开始下载 mlx-whisper 模型: {model_size}")
-        hf_download(model_name, local_dir=model_path, local_dir_use_symlinks=False)
+        logger.info(f"开始下载 mlx-whisper 模型: {model_size} ← {repo_id}")
+        hf_download(repo_id, local_dir=model_path, local_dir_use_symlinks=False)
         logger.info(f"mlx-whisper 模型下载完成: {model_size}")
         _downloading[key] = "done"
     except Exception as e:

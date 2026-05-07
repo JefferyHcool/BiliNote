@@ -36,6 +36,16 @@ cd backend && ./build.sh          # Build PyInstaller backend binary
 cd BillNote_frontend && pnpm tauri build
 ```
 
+### Browser Extension (Vue 3 + vitesse-webext, MV3)
+```bash
+cd BillNote_extension
+pnpm install
+pnpm dev          # watch mode → ./extension/
+pnpm build        # production build → ./extension/
+pnpm typecheck
+```
+Load unpacked at `chrome://extensions/` → select `BillNote_extension/extension/`. Talks to the same backend at `http://localhost:8483` (configurable in the options page). CORS in `backend/main.py` already accepts `chrome-extension://` and `moz-extension://` via regex.
+
 ## Architecture
 
 **Backend** (`backend/`) — FastAPI app, entry point `main.py`:
@@ -67,6 +77,16 @@ cd BillNote_frontend && pnpm tauri build
 - Path alias: `@` → `./src`
 
 **Core Workflow**: User submits URL → task queued → download video → extract audio (FFmpeg) → transcribe (Whisper/Groq/etc) → generate notes (LLM) → frontend polls for completion → display Markdown + mind map.
+
+**Browser Extension** (`BillNote_extension/`) — Vue 3 + Vite + UnoCSS + webextension-polyfill, MV3:
+- `src/popup/Popup.vue` — main entry: detects platform from active tab URL, drives generate flow, shows progress + markdown
+- `src/options/Options.vue` — settings: backend URL, default provider/model (loaded from `/get_all_providers` + `/get_models_by_provider/{id}`), quality, screenshot/link toggles, style
+- `src/logic/api.ts` — backend API client (uses `settings.backendUrl`, unwraps `ResponseWrapper`, absolutizes `/static/screenshots/...` image paths)
+- `src/logic/storage.ts` — `chrome.storage.local`-backed Pinia-like state via `useWebExtensionStorage` for settings + last 30 tasks
+- `src/logic/platform.ts` — URL → platform detection mirroring `backend/app/validators/video_url_validator.py`
+- `src/sidepanel/`, `src/contentScripts/` — placeholders for P2/P3 (floating button, side panel mind map, RAG chat); not wired into MVP UX
+- `src/manifest.ts` — MV3 manifest, popup is default action; `host_permissions: *://*/*`
+- Polling lives client-side in popup (3 s interval while open); MV3 service worker is intentionally thin in P1
 
 ## Key Configuration
 

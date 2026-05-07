@@ -1,0 +1,23 @@
+image:
+  file: .gitpod.Dockerfile
+
+tasks:
+  - init: pnpm install && pnpm run build
+    name: dev
+    command: |
+      gp sync-done ready
+      pnpm run dev
+  - name: pnpm start:chromium
+    command: |
+      gp sync-await ready
+      gp ports await 6080
+      gp preview $(gp url 6080)
+      sleep 5
+      pnpm start:chromium
+    openMode: split-right
+
+ports:
+  - port: 5900
+    onOpen: ignore
+  - port: 6080
+    onOpen: ignore

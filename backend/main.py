@@ -49,15 +49,19 @@ async def lifespan(app: FastAPI):
     yield
 
 app = create_app(lifespan=lifespan)
-origins = [
-    "http://localhost",
-    "http://127.0.0.1",
-    "http://tauri.localhost",
-]
+
+# 允许的源：本地 web 端 + Tauri 桌面端 + 浏览器扩展（chrome/edge/firefox）
+# 用 regex 是因为 chrome-extension://<id> 的 id 在每次开发版加载时不固定
+CORS_ORIGIN_REGEX = (
+    r"^chrome-extension://[a-z]+$"
+    r"|^moz-extension://.+$"
+    r"|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+    r"|^http://tauri\.localhost$"
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  #  加上 Tauri 的 origin
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
