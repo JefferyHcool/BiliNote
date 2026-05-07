@@ -12,6 +12,9 @@ export const DEFAULT_SETTINGS: Settings = {
   link: false,
   style: 'minimal',
   extras: '',
+  video_understanding: false,
+  video_interval: 6,
+  grid_size: [2, 2],
 }
 
 export const MAX_TASKS = 30
