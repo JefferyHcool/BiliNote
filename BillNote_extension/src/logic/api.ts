@@ -185,11 +185,17 @@ export async function generateNote(payload: GenerateRequest): Promise<{ task_id:
 }
 
 export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse> {
-  // /task_status/{id} 返回的是裸对象（非 ResponseWrapper 包装），见 routers/note.py
+  // /task_status 永远 HTTP 200；body 是 ResponseWrapper：
+  //   成功：{code:0, data:{status, message, task_id, result?}}
+  //   任务失败：{code:500, msg:'xxx', data:null}
+  // 这里手动拆，把任务失败翻译成 status:'FAILED'，避免 request() 抛错让 UI 收不到状态
   const res = await fetch(`${backendUrl()}/api/task_status/${taskId}`)
   if (!res.ok)
     throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as TaskStatusResponse
+  const body = (await res.json()) as { code: number, msg: string, data: TaskStatusResponse | null }
+  if (body.code === 0 && body.data)
+    return body.data
+  return { status: 'FAILED', message: body.msg || '任务失败', task_id: taskId }
 }
 
 export async function ping(): Promise<boolean> {
