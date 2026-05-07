@@ -1,0 +1,93 @@
+name: 🐛 Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供完整的复现路径与日志，便于排查。
+        ⚠️ **不要**贴 API key、SESSDATA、密钥等敏感信息。
+  - type: dropdown
+    id: workspace
+    attributes:
+      label: 受影响的工作区
+      multiple: true
+      options:
+        - 后端 (backend/)
+        - Web 前端 (BillNote_frontend/)
+        - 浏览器插件 (BillNote_extension/)
+        - Tauri 桌面端
+        - 文档 / 其他
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: BiliNote 版本号（README 顶部，例如 v2.1.0）
+      placeholder: v2.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 部署方式
+      options:
+        - 源码运行
+        - Docker (docker-compose.yml)
+        - Docker GPU (docker-compose.gpu.yml)
+        - 桌面端安装包 (Tauri Release)
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 一步步说明如何触发问题
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 看到 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 含错误信息、截图、录屏均可
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 运行环境
+      description: 操作系统、Python 版本、Node 版本、浏览器（如适用）
+      placeholder: |
+        - OS: macOS 14.5 / Windows 11 / Ubuntu 22.04
+        - Python: 3.11.6
+        - Node: 20.18.0
+        - Browser: Chrome 124（如涉及插件/前端）
+        - GPU: 无 / NVIDIA 4070（如涉及 fast-whisper / video understanding）
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 堆栈
+      description: 后端 console、前端 DevTools、扩展 background 页都可以贴
+      render: text
+  - type: checkboxes
+    id: pre-checks
+    attributes:
+      label: 提交前自查
+      options:
+        - label: 我已搜索过 [Issues](https://github.com/JefferyHcool/BiliNote/issues?q=)，确认不是重复问题
+          required: true
+        - label: 我提供的日志中**不**包含 API key、cookie、SESSDATA 等敏感信息
+          required: true
