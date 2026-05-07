@@ -13,6 +13,31 @@ from events import transcription_finished
 
 logger = get_logger(__name__)
 
+
+# mlx-community 上的 Whisper 仓库命名不统一：常规版本是 'whisper-{size}-mlx'，
+# turbo 例外没有 -mlx 后缀。直接拼 'mlx-community/whisper-{size}' 会 404。
+# 已用 https://huggingface.co/api/models?author=mlx-community&search=whisper 核对过。
+MLX_MODEL_MAP = {
+    "tiny": "mlx-community/whisper-tiny-mlx",
+    "base": "mlx-community/whisper-base-mlx",
+    "small": "mlx-community/whisper-small-mlx",
+    "medium": "mlx-community/whisper-medium-mlx",
+    "large-v1": "mlx-community/whisper-large-v1-mlx",
+    "large-v2": "mlx-community/whisper-large-v2-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
+}
+
+
+def resolve_mlx_repo_id(model_size: str) -> str:
+    if model_size not in MLX_MODEL_MAP:
+        raise ValueError(
+            f"不支持的 MLX Whisper 模型大小: {model_size}。"
+            f"可选: {', '.join(MLX_MODEL_MAP.keys())}"
+        )
+    return MLX_MODEL_MAP[model_size]
+
+
 class MLXWhisperTranscriber(Transcriber):
     def __init__(
             self,
@@ -21,13 +46,13 @@ class MLXWhisperTranscriber(Transcriber):
         # 检查平台
         if platform.system() != "Darwin":
             raise RuntimeError("MLX Whisper 仅支持 Apple 平台")
-            
+
         # 检查环境变量
         if os.environ.get("TRANSCRIBER_TYPE") != "mlx-whisper":
             raise RuntimeError("必须设置环境变量 TRANSCRIBER_TYPE=mlx-whisper 才能使用 MLX Whisper")
-            
+
         self.model_size = model_size
-        self.model_name = f"mlx-community/whisper-{model_size}"
+        self.model_name = resolve_mlx_repo_id(model_size)
         self.model_path = None
         
         # 设置模型路径
