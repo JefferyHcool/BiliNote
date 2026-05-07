@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.1.2</h1>
+<h1 align="center" > BiliNote v2.1.3</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -52,6 +52,11 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.1.3 修订
+
+- 修复 DeepSeek 等非多模态供应商被 400 拒绝的问题（issue #282）：`UniversalGPT` 的 message builder 按是否带图切换 string / 多模态数组形态
+- 感谢 @voidborne-d (#345)
 
 ### v2.1.2 修订
 
