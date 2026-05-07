@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { absolutizeMarkdownImages } from '~/logic/api'
 
-const props = defineProps<{ markdown: string, title?: string }>()
+const props = defineProps<{ markdown: string, title?: string, hideActions?: boolean }>()
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -25,12 +25,12 @@ function download() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2">
-    <div class="flex gap-2 justify-end">
+  <div class="flex flex-col gap-2 h-full">
+    <div v-if="!hideActions" class="flex gap-2 justify-end shrink-0">
       <button class="btn-secondary" @click="copy">复制 Markdown</button>
       <button class="btn-secondary" @click="download">下载 .md</button>
     </div>
-    <div class="prose prose-sm max-w-none border rounded p-3 bg-gray-50 max-h-[400px] overflow-auto" v-html="html" />
+    <div class="prose prose-sm max-w-none px-3 py-2 flex-1 min-h-0 overflow-auto" v-html="html" />
   </div>
 </template>
 

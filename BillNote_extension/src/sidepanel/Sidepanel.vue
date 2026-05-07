@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getTaskStatus, resolveImageUrl } from '~/logic/api'
-import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
+import { tasks, tasksReady, settingsReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
 
 type ViewMode = 'markdown' | 'mindmap' | 'chat'
@@ -10,6 +10,23 @@ const activeTaskId = ref<string>('')
 const activeTask = computed<TaskRecord | undefined>(() => tasks.value?.find(t => t.taskId === activeTaskId.value))
 const errorMsg = ref('')
 const viewMode = ref<ViewMode>('markdown')
+const showHistory = ref(false)
+
+const isDone = computed(() => activeTask.value?.status === 'SUCCESS')
+const isFailed = computed(() => activeTask.value?.status === 'FAILED')
+const isRunning = computed(() => !!activeTask.value && !isDone.value && !isFailed.value)
+
+const STAGE_LABELS: Record<string, string> = {
+  PENDING: '排队中',
+  PARSING: '解析中',
+  DOWNLOADING: '下载中',
+  TRANSCRIBING: '转写中',
+  SUMMARIZING: '总结中',
+  FORMATTING: '格式化',
+  SAVING: '保存中',
+  SUCCESS: '完成',
+  FAILED: '失败',
+}
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -41,6 +58,7 @@ function selectTask(id: string) {
     pollTimer = null
   }
   activeTaskId.value = id
+  showHistory.value = false
   const t = tasks.value?.find(x => x.taskId === id)
   if (t && t.status !== 'SUCCESS' && t.status !== 'FAILED')
     poll(id)
@@ -50,9 +68,34 @@ function openOptions() {
   browser.runtime.openOptionsPage()
 }
 
+async function copyMarkdown() {
+  const md = activeTask.value?.result?.markdown
+  if (md)
+    await navigator.clipboard.writeText(md)
+}
+
+function downloadMarkdown() {
+  const md = activeTask.value?.result?.markdown
+  if (!md)
+    return
+  const title = (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title || 'bilinote'
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${title}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const activeTitle = computed(() =>
+  (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title || activeTask.value?.videoUrl || '')
+
+const activeCover = computed(() =>
+  (activeTask.value?.result?.audio_meta as { cover_url?: string } | undefined)?.cover_url)
+
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
-  // 默认选中最近的任务（无论是否完成）
   const latest = tasks.value?.[0]
   if (latest) {
     activeTaskId.value = latest.taskId
@@ -69,12 +112,43 @@ onUnmounted(() => {
 
 <template>
   <main class="w-full h-full flex flex-col bg-white text-sm text-gray-800">
-    <header class="flex items-center justify-between px-3 py-2 border-b">
-      <div class="font-semibold">BiliNote 侧边栏</div>
-      <button class="text-xs text-gray-500 hover:text-gray-800" @click="openOptions">设置</button>
+    <!-- 顶栏：极简 -->
+    <header class="flex items-center justify-between px-3 py-2 border-b shrink-0">
+      <div class="font-semibold">BiliNote</div>
+      <div class="flex items-center gap-1">
+        <button
+          v-if="(tasks?.length ?? 0) > 0"
+          class="text-xs text-gray-500 hover:text-gray-800 px-2 py-0.5 rounded hover:bg-gray-100"
+          :class="{ 'bg-gray-100': showHistory }"
+          @click="showHistory = !showHistory"
+        >
+          历史 {{ tasks?.length }}
+        </button>
+        <button class="text-xs text-gray-500 hover:text-gray-800 px-2 py-0.5 rounded hover:bg-gray-100" @click="openOptions">
+          设置
+        </button>
+      </div>
     </header>
 
-    <div v-if="errorMsg" class="text-xs text-red-600 px-3 py-2 break-words bg-red-50">
+    <!-- 历史弹层（覆盖在内容上方） -->
+    <div v-if="showHistory" class="border-b bg-gray-50 px-2 py-2 max-h-60 overflow-auto shrink-0">
+      <ul class="flex flex-col gap-0.5 text-xs">
+        <li
+          v-for="t in tasks"
+          :key="t.taskId"
+          class="flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-white"
+          :class="{ 'bg-white border': t.taskId === activeTaskId }"
+          @click="selectTask(t.taskId)"
+        >
+          <span class="truncate flex-1" :title="t.videoUrl">
+            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.videoUrl }}
+          </span>
+          <span class="text-gray-400 shrink-0">{{ STAGE_LABELS[t.status] || t.status }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="errorMsg" class="text-xs text-red-600 px-3 py-1 break-words bg-red-50 shrink-0">
       {{ errorMsg }}
     </div>
 
@@ -82,86 +156,103 @@ onUnmounted(() => {
       还没有任务。在视频页点悬浮按钮、在 popup 提交，或右键菜单选「用 BiliNote 总结」。
     </section>
 
-    <section v-else class="flex-1 flex flex-col gap-3 p-3 overflow-hidden">
-      <div class="flex gap-3 items-start">
+    <section v-else class="flex-1 flex flex-col min-h-0">
+      <!-- 标题区：紧凑一行 -->
+      <div class="flex items-center gap-2 px-3 py-2 border-b shrink-0">
         <img
-          v-if="activeTask.result?.audio_meta?.cover_url"
-          :src="resolveImageUrl(activeTask.result.audio_meta.cover_url as string)"
-          class="w-24 h-14 object-cover rounded border bg-gray-100 shrink-0"
-          alt="cover"
+          v-if="activeCover"
+          :src="resolveImageUrl(activeCover)"
+          class="w-12 h-7 object-cover rounded bg-gray-100 shrink-0"
+          alt=""
           @error="($event.target as HTMLImageElement).style.display = 'none'"
         >
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium leading-snug line-clamp-2 break-words">
-            {{ (activeTask.result?.audio_meta as { title?: string } | undefined)?.title || activeTask.videoUrl }}
-          </div>
-          <a
-            class="text-xs text-blue-600 hover:underline break-all line-clamp-1"
-            :href="activeTask.videoUrl"
-            target="_blank"
-          >{{ activeTask.videoUrl }}</a>
-        </div>
+        <a
+          class="text-sm font-medium leading-tight line-clamp-1 break-all flex-1 min-w-0 hover:text-blue-600"
+          :href="activeTask.videoUrl"
+          target="_blank"
+          :title="activeTask.videoUrl"
+        >{{ activeTitle }}</a>
+        <span
+          v-if="isDone"
+          class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 shrink-0"
+          title="完成"
+        >✓</span>
+        <span
+          v-else-if="isFailed"
+          class="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0"
+          :title="activeTask.message"
+        >失败</span>
+        <span
+          v-else
+          class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0 animate-pulse"
+        >{{ STAGE_LABELS[activeTask.status] || activeTask.status }}</span>
       </div>
-      <TaskProgress :status="activeTask.status" :message="activeTask.message" />
 
-      <div v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown" class="flex gap-1 text-xs">
+      <!-- 进行中：进度条；完成：tab + 操作按钮 -->
+      <div v-if="isRunning" class="px-3 py-2 border-b shrink-0">
+        <TaskProgress :status="activeTask.status" :message="activeTask.message" />
+      </div>
+      <div
+        v-else-if="isDone && activeTask.result?.markdown"
+        class="flex items-center gap-1 px-2 py-1.5 border-b shrink-0 text-xs"
+      >
         <button
           class="px-2 py-1 rounded"
-          :class="viewMode === 'markdown' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          :class="viewMode === 'markdown' ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'"
           @click="viewMode = 'markdown'"
         >Markdown</button>
         <button
           class="px-2 py-1 rounded"
-          :class="viewMode === 'mindmap' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          :class="viewMode === 'mindmap' ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'"
           @click="viewMode = 'mindmap'"
         >思维导图</button>
         <button
           class="px-2 py-1 rounded"
-          :class="viewMode === 'chat' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          :class="viewMode === 'chat' ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'"
           @click="viewMode = 'chat'"
         >AI 问答</button>
+        <div class="flex-1" />
+        <button
+          v-if="viewMode === 'markdown'"
+          class="text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-gray-100"
+          title="复制 Markdown"
+          @click="copyMarkdown"
+        >复制</button>
+        <button
+          v-if="viewMode === 'markdown'"
+          class="text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-gray-100"
+          title="下载 .md"
+          @click="downloadMarkdown"
+        >下载</button>
       </div>
 
+      <!-- 内容区：占满剩余空间 -->
       <div class="flex-1 overflow-auto min-h-0">
         <MarkdownView
-          v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown && viewMode === 'markdown'"
+          v-if="isDone && activeTask.result?.markdown && viewMode === 'markdown'"
           :markdown="activeTask.result.markdown"
-          :title="activeTask.result.audio_meta?.title"
+          :title="(activeTask.result.audio_meta as { title?: string } | undefined)?.title"
+          :hide-actions="true"
         />
         <MindMap
-          v-else-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown && viewMode === 'mindmap'"
+          v-else-if="isDone && activeTask.result?.markdown && viewMode === 'mindmap'"
           :markdown="activeTask.result.markdown"
           class="h-full"
         />
         <ChatPanel
-          v-else-if="activeTask.status === 'SUCCESS' && viewMode === 'chat'"
+          v-else-if="isDone && viewMode === 'chat'"
           :task-id="activeTask.taskId"
           class="h-full"
         />
+        <div v-else-if="isFailed" class="p-4 text-sm text-red-600">
+          {{ activeTask.message || '任务失败' }}
+        </div>
       </div>
     </section>
-
-    <details v-if="(tasks?.length ?? 0) > 1" class="text-xs border-t px-3 py-2">
-      <summary class="cursor-pointer text-gray-500">
-        历史任务（{{ tasks!.length }}）
-      </summary>
-      <ul class="mt-1 flex flex-col gap-1 max-h-40 overflow-auto">
-        <li
-          v-for="t in tasks"
-          :key="t.taskId"
-          class="flex justify-between items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-100 cursor-pointer"
-          :class="{ 'bg-blue-50': t.taskId === activeTaskId }"
-          @click="selectTask(t.taskId)"
-        >
-          <span class="truncate flex-1" :title="t.videoUrl">{{ t.result?.audio_meta?.title || t.videoUrl }}</span>
-          <span class="text-gray-500">{{ t.status }}</span>
-        </li>
-      </ul>
-    </details>
   </main>
 </template>
 
 <style>
-.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
