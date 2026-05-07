@@ -1,0 +1,40 @@
+name: ✨ 功能建议
+description: 提议新功能或改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题？
+      description: 描述你遇到的实际场景或痛点。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 期望的功能或交互。可附草图 / 示例。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+      description: 你考虑过哪些其他做法？为什么没采用？
+  - type: dropdown
+    id: workspace
+    attributes:
+      label: 涉及的工作区
+      multiple: true
+      options:
+        - 后端 (backend/)
+        - Web 前端 (BillNote_frontend/)
+        - 浏览器插件 (BillNote_extension/)
+        - Tauri 桌面端
+        - 不确定
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他补充
+      description: 关联 issue、参考资料、产品截图等

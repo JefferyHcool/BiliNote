@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.1.0</h1>
+<h1 align="center" > BiliNote v2.1.1</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -52,6 +52,13 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.1.1 修订
+
+- 工程化与文档收尾：CONTRIBUTING.md / RELEASING.md / issue + PR 模板 / commitlint CI / 插件发版工作流
+- 关于页群聊二维码：换成最新版，改为 import 本地资源，不再依赖 CDN
+- 关于页移除 QQ 群入口（仅保留微信群）
+- 详见 [CHANGELOG.md](./CHANGELOG.md)
 
 ### v2.1.0 新增
 

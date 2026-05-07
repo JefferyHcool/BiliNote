@@ -1,0 +1,115 @@
+name: Release Extension
+
+# 在 v* tag push 时触发，构建插件并把产物挂到对应 GitHub Release。
+# 商店上传仍走人工（详见 RELEASING.md）；如果将来配齐了商店 API secrets，
+# 把本文件末尾注释的 publish-* job 解开就是自动发布。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & attach to release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BillNote_extension
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: BillNote_extension/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack zip (Chrome / Edge upload format)
+        run: pnpm pack:zip
+
+      - name: Pack xpi (Firefox Add-ons)
+        run: pnpm pack:xpi
+
+      - name: Pack crx (self-host sideload)
+        # crx 需要稳定 key.pem 才能保持插件 ID 不变；CI 没有就跳过，不阻塞主流程。
+        # 想生成稳定 crx：把 key 存到 secret EXTENSION_CRX_KEY，下面解开几行。
+        run: |
+          # if [ -n "${{ secrets.EXTENSION_CRX_KEY }}" ]; then
+          #   echo "${{ secrets.EXTENSION_CRX_KEY }}" > key.pem
+          #   pnpm pack:crx
+          # else
+            pnpm pack:crx || true
+          # fi
+        continue-on-error: true
+
+      - name: Rename artifacts with version suffix
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          [ -f extension.zip ] && mv extension.zip "bilinote-extension-${VERSION}.zip"
+          [ -f extension.xpi ] && mv extension.xpi "bilinote-extension-${VERSION}.xpi"
+          [ -f extension.crx ] && mv extension.crx "bilinote-extension-${VERSION}.crx"
+          ls -la *.zip *.xpi *.crx 2>/dev/null || true
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            BillNote_extension/bilinote-extension-*.zip
+            BillNote_extension/bilinote-extension-*.xpi
+            BillNote_extension/bilinote-extension-*.crx
+          fail_on_unmatched_files: false
+          generate_release_notes: false
+
+# ---------- 商店自动发布（默认禁用，配齐 secrets 后可启用） ----------
+#
+#  publish-chrome:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/download-artifact@v4
+#      - uses: mnao305/chrome-extension-upload@v5
+#        with:
+#          file-path: BillNote_extension/bilinote-extension-${{ github.ref_name }}.zip
+#          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+#          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+#          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+#          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+#
+#  publish-edge:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: wdzeng/edge-addon@v2
+#        with:
+#          product-id: ${{ secrets.EDGE_PRODUCT_ID }}
+#          zip-path: BillNote_extension/bilinote-extension-${{ github.ref_name }}.zip
+#          client-id: ${{ secrets.EDGE_CLIENT_ID }}
+#          api-key: ${{ secrets.EDGE_API_KEY }}
+#
+#  publish-firefox:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: trmcnvn/firefox-addon@v3
+#        with:
+#          uuid: ${{ secrets.FIREFOX_ADDON_UUID }}
+#          xpi: BillNote_extension/bilinote-extension-${{ github.ref_name }}.xpi
+#          api-key: ${{ secrets.FIREFOX_API_KEY }}
+#          api-secret: ${{ secrets.FIREFOX_API_SECRET }}
