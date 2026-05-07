@@ -214,6 +214,13 @@ export function absolutizeMarkdownImages(md: string): string {
   return md.replace(/!\[([^\]]*)\]\((\/static\/[^)]+)\)/g, (_, alt, path) => `![${alt}](${base}${path})`)
 }
 
+// backend 用 note_helper 在笔记开头插一行 '> 来源链接：URL'。侧边栏顶部已经有原片链接卡片，
+// 渲染前把它剥掉，避免重复占位。复制/下载的 .md 保留原样以便溯源。
+// 与 BillNote_frontend/src/pages/HomePage/components/MarkdownViewer.tsx:468 对齐
+export function stripSourceLink(md: string): string {
+  return md.replace(/^>\s*来源链接：[^\n]*\n*/m, '')
+}
+
 // 单个图片 URL 的处理：相对路径 → 拼后端域名；B 站等带防盗链的封面 → 走后端 image_proxy
 export function resolveImageUrl(url: string | undefined | null): string {
   if (!url)

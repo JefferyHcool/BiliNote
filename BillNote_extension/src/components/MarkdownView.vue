@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { absolutizeMarkdownImages } from '~/logic/api'
+import { absolutizeMarkdownImages, stripSourceLink } from '~/logic/api'
 
 const props = defineProps<{ markdown: string, title?: string, hideActions?: boolean }>()
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
-const html = computed(() => md.render(absolutizeMarkdownImages(props.markdown || '')))
+const html = computed(() => md.render(absolutizeMarkdownImages(stripSourceLink(props.markdown || ''))))
 
 async function copy() {
   await navigator.clipboard.writeText(props.markdown)
