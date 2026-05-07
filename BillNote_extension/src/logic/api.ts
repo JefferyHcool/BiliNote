@@ -1,4 +1,16 @@
-import type { GenerateRequest, Model, Provider, TaskStatusResponse } from './types'
+import type {
+  DeployStatus,
+  GenerateRequest,
+  Model,
+  Provider,
+  ProviderCreatePayload,
+  ProviderUpdatePayload,
+  TaskStatusResponse,
+  TranscriberConfig,
+  TranscriberModelsStatus,
+  TranscriberType,
+  WhisperModelSize,
+} from './types'
 import { settings } from './storage'
 
 interface ApiEnvelope<T> {
@@ -42,6 +54,97 @@ export async function setDownloaderCookie(platform: string, cookie: string): Pro
     method: 'POST',
     body: JSON.stringify({ platform, cookie }),
   })
+}
+
+export async function getDownloaderCookie(platform: string): Promise<string | null> {
+  // 后端：未配置时返回 {code:0, msg:'未找到Cookies', data:null}；配置时 data: {platform, cookie}
+  const data = await request<{ platform: string, cookie: string } | null>(
+    `/api/get_downloader_cookie/${platform}`,
+  )
+  return data?.cookie ?? null
+}
+
+// ---- Provider CRUD ----
+export async function addProvider(payload: ProviderCreatePayload): Promise<string | null> {
+  return request<string | null>('/api/add_provider', {
+    method: 'POST',
+    body: JSON.stringify({ logo: 'custom', ...payload }),
+  })
+}
+
+export async function updateProvider(payload: ProviderUpdatePayload): Promise<{ id: string, enabled: number }> {
+  return request<{ id: string, enabled: number }>('/api/update_provider', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getProviderById(id: string): Promise<Provider> {
+  return request<Provider>(`/api/get_provider_by_id/${id}`)
+}
+
+export async function connectTest(id: string): Promise<void> {
+  await request('/api/connect_test', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  })
+}
+
+// ---- Model CRUD ----
+export async function listAllModels(providerId: string): Promise<Model[]> {
+  return request<Model[]>(`/api/model_list/${providerId}`)
+}
+
+export async function addModel(providerId: string, modelName: string): Promise<void> {
+  await request('/api/models', {
+    method: 'POST',
+    body: JSON.stringify({ provider_id: providerId, model_name: modelName }),
+  })
+}
+
+export async function deleteModel(modelId: number | string): Promise<void> {
+  await request(`/api/models/delete/${modelId}`)
+}
+
+// ---- Transcriber ----
+export async function getTranscriberConfig(): Promise<TranscriberConfig> {
+  return request<TranscriberConfig>('/api/transcriber_config')
+}
+
+export async function setTranscriberConfig(transcriberType: TranscriberType, whisperModelSize?: WhisperModelSize): Promise<TranscriberConfig> {
+  return request<TranscriberConfig>('/api/transcriber_config', {
+    method: 'POST',
+    body: JSON.stringify({
+      transcriber_type: transcriberType,
+      whisper_model_size: whisperModelSize ?? null,
+    }),
+  })
+}
+
+export async function getTranscriberModelsStatus(): Promise<TranscriberModelsStatus> {
+  return request<TranscriberModelsStatus>('/api/transcriber_models_status')
+}
+
+export async function downloadTranscriberModel(modelSize: WhisperModelSize, transcriberType: TranscriberType = 'fast-whisper'): Promise<void> {
+  await request('/api/transcriber_download', {
+    method: 'POST',
+    body: JSON.stringify({ model_size: modelSize, transcriber_type: transcriberType }),
+  })
+}
+
+// ---- Monitor ----
+export async function getDeployStatus(): Promise<DeployStatus> {
+  return request<DeployStatus>('/api/deploy_status')
+}
+
+export async function getSysHealth(): Promise<{ ok: boolean, msg?: string }> {
+  try {
+    await request('/api/sys_health')
+    return { ok: true }
+  }
+  catch (e) {
+    return { ok: false, msg: (e as Error).message }
+  }
 }
 
 export async function generateNote(payload: GenerateRequest): Promise<{ task_id: string }> {

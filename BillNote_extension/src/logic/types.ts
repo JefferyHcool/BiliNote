@@ -80,3 +80,56 @@ export interface Settings {
   link: boolean
   style: string
 }
+
+export interface ProviderUpdatePayload {
+  id: string
+  name?: string
+  api_key?: string
+  base_url?: string
+  type?: string
+  enabled?: number
+}
+
+export interface ProviderCreatePayload {
+  name: string
+  api_key: string
+  base_url: string
+  type: string
+  logo?: string
+}
+
+export type TranscriberType = 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
+export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
+
+export interface TranscriberOption {
+  value: TranscriberType
+  label: string
+}
+
+export interface TranscriberConfig {
+  transcriber_type: TranscriberType
+  whisper_model_size: WhisperModelSize | null
+  available_types: TranscriberOption[]
+  whisper_model_sizes: WhisperModelSize[]
+  mlx_whisper_available: boolean
+}
+
+export interface WhisperModelStatus {
+  model_size: WhisperModelSize
+  downloaded: boolean
+  downloading: boolean
+}
+
+export interface TranscriberModelsStatus {
+  whisper: WhisperModelStatus[]
+  mlx_whisper: WhisperModelStatus[]
+  mlx_available: boolean
+}
+
+export interface DeployStatus {
+  backend: { status: string, port: number }
+  cuda: { available: boolean, version: string | null, gpu_name: string | null }
+  whisper: { model_size: string, transcriber_type: string }
+  ffmpeg: { available: boolean }
+}
+
