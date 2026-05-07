@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.1.1</h1>
+<h1 align="center" > BiliNote v2.1.2</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -52,6 +52,11 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.1.2 修订
+
+- 修复 v2.1.1 触发的 ghcr.io Docker 镜像构建失败（Node 18 + Tailwind v4 不兼容、缺 lockfile）
+- README 补上微信群二维码
 
 ### v2.1.1 修订
 
@@ -205,7 +210,12 @@ docker-compose -f docker-compose.gpu.yml up -d
 - [ ] 笔记导出为 PDF / Word / Notion
 
 ### Contact and Join-联系和加入社区
-年会恢复更新以后放出最新社区地址
+
+扫码加入 BiliNote 交流微信群（如二维码失效，请到 [Issues](https://github.com/JefferyHcool/BiliNote/issues) 反馈）：
+
+<p align="center">
+  <img src="./doc/wechat.png" alt="BiliNote 交流微信群" width="240" />
+</p>
 
 
 
