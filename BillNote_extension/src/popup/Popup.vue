@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { detectPlatform } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
+import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
 import type { TaskRecord } from '~/logic/types'
 
 const tabUrl = ref<string>('')
@@ -64,6 +65,8 @@ async function start() {
   }
   submitting.value = true
   try {
+    // B 站：在用户浏览器里直接抓字幕（带本地登录态 cookie），跳过后端的 download_subtitles 与音频转写
+    const prefetched = platform.value === 'bilibili' ? await fetchBilibiliSubtitle(tabUrl.value) : null
     const { task_id } = await generateNote({
       video_url: tabUrl.value,
       platform: platform.value!,
@@ -77,6 +80,7 @@ async function start() {
         ...(settings.value.screenshot ? ['screenshot'] : []),
         ...(settings.value.link ? ['link'] : []),
       ],
+      prefetched_transcript: prefetched ?? undefined,
     })
     activeTaskId.value = task_id
     upsertTask({

@@ -2,6 +2,7 @@ import { onMessage } from 'webext-bridge/background'
 import type { Settings, TaskRecord } from '~/logic/types'
 import { DEFAULT_SETTINGS, MAX_TASKS, SETTINGS_KEY, TASKS_KEY } from '~/logic/constants'
 import { detectPlatform } from '~/logic/platform'
+import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
 
 // only on dev mode
 if (import.meta.hot) {
@@ -65,6 +66,10 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
     return { ok: false, error: '请先在设置页选择供应商与模型' }
 
   const backend = settings.backendUrl.replace(/\/$/, '')
+
+  // B 站：先在浏览器里抓字幕（带本地登录态 cookie），随提交带过去
+  const prefetched = platform === 'bilibili' ? await fetchBilibiliSubtitle(url) : null
+
   try {
     const res = await fetch(`${backend}/api/generate_note`, {
       method: 'POST',
@@ -82,6 +87,7 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
           ...(settings.screenshot ? ['screenshot'] : []),
           ...(settings.link ? ['link'] : []),
         ],
+        prefetched_transcript: prefetched ?? undefined,
       }),
     })
     if (!res.ok)

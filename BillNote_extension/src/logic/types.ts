@@ -40,6 +40,13 @@ export interface GenerateRequest {
   format?: string[]
   style?: string
   extras?: string
+  // 客户端在浏览器里直接抓到的字幕，跳过后端的 download_subtitles + 音频转写
+  prefetched_transcript?: {
+    language: string
+    full_text: string
+    segments: Array<{ start: number, end: number, text: string }>
+    source?: string
+  }
 }
 
 export interface NoteResult {
