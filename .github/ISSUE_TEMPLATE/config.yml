@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 文档与常见问题
+    url: https://docs.bilinote.app/
+    about: 安装与配置遇到问题，先看一下文档
+  - name: 💬 提问 / 讨论
+    url: https://github.com/JefferyHcool/BiliNote/discussions
+    about: 用法咨询、想法征集请发到 Discussions（不是 bug 才用 Issues）

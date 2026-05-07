@@ -6,6 +6,7 @@
 > - [README.md](./README.md)：项目概览、快速开始
 > - [CLAUDE.md](./CLAUDE.md)：仓库结构 + 各 workspace 开发命令
 > - [CHANGELOG.md](./CHANGELOG.md)：版本变更记录
+> - [RELEASING.md](./RELEASING.md)：发版执行手册（Release Manager 视角）
 
 ---
 
@@ -173,6 +174,9 @@ git checkout -b hotfix/<scope>-<事项>
 ## 5. 提交规范
 
 ### 5.1 Commit message 格式
+
+> CI 已接入 [commitlint](https://commitlint.js.org)（[`.commitlintrc.json`](./.commitlintrc.json) + [`.github/workflows/commitlint.yml`](./.github/workflows/commitlint.yml)）。
+> PR 上所有 commit 都会被校验，type 不在白名单时合并按钮会被卡。
 
 ```
 type(scope): subject
