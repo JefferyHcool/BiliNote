@@ -4,9 +4,12 @@ import { getTaskStatus } from '~/logic/api'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
 
+type ViewMode = 'markdown' | 'mindmap' | 'chat'
+
 const activeTaskId = ref<string>('')
 const activeTask = computed<TaskRecord | undefined>(() => tasks.value?.find(t => t.taskId === activeTaskId.value))
 const errorMsg = ref('')
+const viewMode = ref<ViewMode>('markdown')
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -84,11 +87,40 @@ onUnmounted(() => {
         {{ activeTask.videoUrl }}
       </div>
       <TaskProgress :status="activeTask.status" :message="activeTask.message" />
-      <div class="flex-1 overflow-auto">
+
+      <div v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown" class="flex gap-1 text-xs">
+        <button
+          class="px-2 py-1 rounded"
+          :class="viewMode === 'markdown' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          @click="viewMode = 'markdown'"
+        >Markdown</button>
+        <button
+          class="px-2 py-1 rounded"
+          :class="viewMode === 'mindmap' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          @click="viewMode = 'mindmap'"
+        >思维导图</button>
+        <button
+          class="px-2 py-1 rounded"
+          :class="viewMode === 'chat' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+          @click="viewMode = 'chat'"
+        >AI 问答</button>
+      </div>
+
+      <div class="flex-1 overflow-auto min-h-0">
         <MarkdownView
-          v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown"
+          v-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown && viewMode === 'markdown'"
           :markdown="activeTask.result.markdown"
           :title="activeTask.result.audio_meta?.title"
+        />
+        <MindMap
+          v-else-if="activeTask.status === 'SUCCESS' && activeTask.result?.markdown && viewMode === 'mindmap'"
+          :markdown="activeTask.result.markdown"
+          class="h-full"
+        />
+        <ChatPanel
+          v-else-if="activeTask.status === 'SUCCESS' && viewMode === 'chat'"
+          :task-id="activeTask.taskId"
+          class="h-full"
         />
       </div>
     </section>

@@ -70,6 +70,8 @@
     "webextension-polyfill": "^0.12.0"
   },
   "dependencies": {
-    "markdown-it": "^14.1.0"
+    "markdown-it": "^14.1.0",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12"
   }
 }

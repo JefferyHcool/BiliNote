@@ -132,6 +132,36 @@ export async function downloadTranscriberModel(modelSize: WhisperModelSize, tran
   })
 }
 
+// ---- RAG Chat ----
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export async function indexChatTask(taskId: string): Promise<void> {
+  await request('/api/chat/index', {
+    method: 'POST',
+    body: JSON.stringify({ task_id: taskId }),
+  })
+}
+
+export async function getChatStatus(taskId: string): Promise<{ status: 'idle' | 'indexing' | 'indexed' | 'failed', indexed: boolean }> {
+  return request(`/api/chat/status?task_id=${encodeURIComponent(taskId)}`)
+}
+
+export async function askChat(payload: {
+  task_id: string
+  question: string
+  history: ChatMessage[]
+  provider_id: string
+  model_name: string
+}): Promise<unknown> {
+  return request('/api/chat/ask', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 // ---- Monitor ----
 export async function getDeployStatus(): Promise<DeployStatus> {
   return request<DeployStatus>('/api/deploy_status')
