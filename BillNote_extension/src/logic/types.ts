@@ -40,6 +40,9 @@ export interface GenerateRequest {
   format?: string[]
   style?: string
   extras?: string
+  video_understanding?: boolean
+  video_interval?: number
+  grid_size?: [number, number]
   // 客户端在浏览器里直接抓到的字幕，跳过后端的 download_subtitles + 音频转写
   prefetched_transcript?: {
     language: string
@@ -117,6 +120,13 @@ export interface Settings {
   link: boolean
   style: NoteStyle
   extras: string
+  // 多模态视频理解：抽帧拼图喂给视觉模型，提升画面相关问题的回答质量
+  // 要求所选 model 是视觉模型（如 gpt-4o / gemini / claude-opus 系列），文字模型会忽略图片
+  video_understanding: boolean
+  // 抽帧间隔（秒），范围 1-30，默认 6
+  video_interval: number
+  // 拼图网格 [rows, cols]，每张拼图最多 rows*cols 帧。默认 [2,2]
+  grid_size: [number, number]
 }
 
 export interface ProviderUpdatePayload {

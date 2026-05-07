@@ -80,6 +80,9 @@ async function start() {
       link: formats.includes('link'),
       style: settings.value.style || undefined,
       extras: settings.value.extras || undefined,
+      video_understanding: settings.value.video_understanding || undefined,
+      video_interval: settings.value.video_understanding ? settings.value.video_interval : undefined,
+      grid_size: settings.value.video_understanding ? settings.value.grid_size : undefined,
       prefetched_transcript: prefetched ?? undefined,
     })
     activeTaskId.value = task_id
@@ -225,6 +228,41 @@ onUnmounted(() => {
             placeholder="例如：重点关注游戏开发部分；保留所有专业术语原文"
           />
         </label>
+        <label class="flex items-center gap-2 mt-2">
+          <input v-model="settings.video_understanding" type="checkbox">
+          <span class="text-gray-600">启用视频理解（抽帧拼图喂视觉模型）</span>
+        </label>
+        <div v-if="settings.video_understanding" class="grid grid-cols-3 gap-2 mt-2">
+          <label class="flex flex-col gap-1">
+            <span class="text-gray-600">抽帧间隔(秒)</span>
+            <input
+              v-model.number="settings.video_interval"
+              type="number" min="1" max="30"
+              class="border rounded px-1 py-0.5"
+            >
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-gray-600">拼图行</span>
+            <input
+              :value="settings.grid_size?.[0] ?? 2"
+              type="number" min="1" max="10"
+              class="border rounded px-1 py-0.5"
+              @input="settings.grid_size = [Number(($event.target as HTMLInputElement).value) || 2, settings.grid_size?.[1] ?? 2]"
+            >
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-gray-600">拼图列</span>
+            <input
+              :value="settings.grid_size?.[1] ?? 2"
+              type="number" min="1" max="10"
+              class="border rounded px-1 py-0.5"
+              @input="settings.grid_size = [settings.grid_size?.[0] ?? 2, Number(($event.target as HTMLInputElement).value) || 2]"
+            >
+          </label>
+        </div>
+        <p v-if="settings.video_understanding" class="text-amber-700 mt-1">
+          ⚠ 需要选择视觉模型（GPT-4o / Gemini / Claude 等），文字模型会忽略图片
+        </p>
       </details>
 
       <div class="text-xs text-gray-600">

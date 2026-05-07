@@ -87,6 +87,9 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
         link: formats.includes('link'),
         style: settings.style || undefined,
         extras: settings.extras || undefined,
+        video_understanding: settings.video_understanding || undefined,
+        video_interval: settings.video_understanding ? settings.video_interval : undefined,
+        grid_size: settings.video_understanding ? settings.grid_size : undefined,
         prefetched_transcript: prefetched ?? undefined,
       }),
     })

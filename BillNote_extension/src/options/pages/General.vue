@@ -165,5 +165,39 @@ onMounted(async () => {
         />
       </label>
     </section>
+
+    <section class="section-card">
+      <h2 class="font-semibold">视频理解（多模态）</h2>
+      <p class="text-xs text-gray-500">
+        启用后会按抽帧间隔截取视频帧拼成网格图，连同字幕一起喂给视觉模型，提升画面相关问题的回答质量。
+        <strong class="text-amber-700">需要选择视觉模型</strong>（GPT-4o / Gemini / Claude 等），文字模型会忽略图片。
+      </p>
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="settings.video_understanding" type="checkbox">
+        启用视频理解
+      </label>
+      <div v-if="settings.video_understanding" class="grid grid-cols-3 gap-3 text-sm">
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600">抽帧间隔(秒, 1-30)</span>
+          <input v-model.number="settings.video_interval" type="number" min="1" max="30" class="input">
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600">拼图行 (1-10)</span>
+          <input
+            :value="settings.grid_size?.[0] ?? 2"
+            type="number" min="1" max="10" class="input"
+            @input="settings.grid_size = [Number(($event.target as HTMLInputElement).value) || 2, settings.grid_size?.[1] ?? 2]"
+          >
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600">拼图列 (1-10)</span>
+          <input
+            :value="settings.grid_size?.[1] ?? 2"
+            type="number" min="1" max="10" class="input"
+            @input="settings.grid_size = [settings.grid_size?.[0] ?? 2, Number(($event.target as HTMLInputElement).value) || 2]"
+          >
+        </label>
+      </div>
+    </section>
   </div>
 </template>
