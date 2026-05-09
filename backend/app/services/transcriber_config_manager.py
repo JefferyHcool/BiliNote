@@ -25,7 +25,12 @@ class TranscriberConfigManager:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def get_config(self) -> Dict[str, Any]:
-        """获取当前转写器配置，fallback 到环境变量默认值。"""
+        """获取当前转写器配置，fallback 到环境变量默认值。
+
+        whisper 默认 size 从 'medium' (~1.5GB) 改为 'tiny' (~75MB)：
+        新装用户没主动设置时不应该被首次下载卡住。想要更高精度可在「音频转写配置」
+        页主动切换。
+        """
         data = self._read()
         return {
             "transcriber_type": data.get(
@@ -34,7 +39,7 @@ class TranscriberConfigManager:
             ),
             "whisper_model_size": data.get(
                 "whisper_model_size",
-                os.getenv("WHISPER_MODEL_SIZE", "medium"),
+                os.getenv("WHISPER_MODEL_SIZE", "tiny"),
             ),
         }
 
