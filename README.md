@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.1.4</h1>
+<h1 align="center" > BiliNote v2.2.0</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -52,6 +52,16 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.2.0 新增
+
+- **浏览器插件**笔记选项与 web 端完整对齐：style 9 个预设下拉、format 4 个 checkbox、extras 文本框、多模态视频理解开关
+- **桌面客户端**首启 4 步引导（连通自检 → 供应商/模型 → 转写引擎 → Cookie 提示）
+- **桌面客户端**右下角后端运行状态指示，点开看日志、一键重启
+- **桌面客户端**启动期主动检测中文 / 空格 / 不可写安装路径，弹横幅告警
+- Whisper 默认 size 从 medium（~1.5GB）改为 tiny（~75MB）；切大模型时显式 confirm
+- 修：whisper 半成品模型目录死循环；`/deploy_status` 在没装 torch 的部署 500
+- 详见 [CHANGELOG.md](./CHANGELOG.md)
 
 ### v2.1.4 修订
 
