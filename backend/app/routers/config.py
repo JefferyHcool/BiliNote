@@ -87,10 +87,13 @@ _downloading: dict[str, str] = {}  # model_size -> status ("downloading" | "done
 
 
 def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> bool:
-    """检查指定 whisper 模型是否已下载到本地。"""
+    """检查指定 whisper 模型是否已完整下载到本地。
+
+    只看目录会把"上次下载中断剩下的空目录"误判为已下载；以 model.bin 落盘为准。
+    """
     model_dir = get_model_dir(subdir)
-    model_path = os.path.join(model_dir, f"whisper-{model_size}")
-    return Path(model_path).exists()
+    model_path = Path(os.path.join(model_dir, f"whisper-{model_size}"))
+    return (model_path / "model.bin").exists()
 
 
 @router.get("/transcriber_models_status")
@@ -227,30 +230,49 @@ async def sys_check():
 
 @router.get("/deploy_status")
 async def deploy_status():
-    """返回部署监控所需的所有状态信息"""
-    import torch
+    """返回部署监控所需的所有状态信息。
+
+    每一项都做容错：torch 没装 / Whisper 配置读取失败 / FFmpeg 不可用 都不应让整个
+    endpoint 500 把监控页打死。
+    """
     import os
-    
-    # CUDA 状态
-    cuda_available = torch.cuda.is_available()
-    cuda_info = {
-        "available": cuda_available,
-        "version": torch.version.cuda if cuda_available else None,
-        "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
-    }
-    
-    # Whisper 模型状态（从配置文件读取，与前端设置同步）
-    transcriber_cfg = transcriber_config_manager.get_config()
-    model_size = transcriber_cfg["whisper_model_size"]
-    transcriber_type = transcriber_cfg["transcriber_type"]
-    
+
+    # CUDA 状态：torch 是 fast-whisper 路径才需要的依赖；轻量部署可能没装
+    cuda_info = {"available": False, "version": None, "gpu_name": None, "torch_installed": False}
+    try:
+        import torch
+        cuda_info["torch_installed"] = True
+        cuda_available = torch.cuda.is_available()
+        cuda_info["available"] = cuda_available
+        if cuda_available:
+            cuda_info["version"] = torch.version.cuda
+            try:
+                cuda_info["gpu_name"] = torch.cuda.get_device_name(0)
+            except Exception as e:
+                logger.warning(f"读取 GPU 名称失败: {e}")
+    except ImportError:
+        # torch 未安装：保持 available=False；插件 / web 监控页能识别
+        pass
+    except Exception as e:
+        logger.warning(f"CUDA 状态检测失败: {e}")
+
+    # Whisper 配置（任何失败回落到空，监控页不应被这个打死）
+    model_size = None
+    transcriber_type = None
+    try:
+        transcriber_cfg = transcriber_config_manager.get_config()
+        model_size = transcriber_cfg.get("whisper_model_size")
+        transcriber_type = transcriber_cfg.get("transcriber_type")
+    except Exception as e:
+        logger.warning(f"读取转写器配置失败: {e}")
+
     # FFmpeg 状态
     try:
         ensure_ffmpeg_or_raise()
         ffmpeg_ok = True
-    except:
+    except Exception:
         ffmpeg_ok = False
-    
+
     return R.success(data={
         "backend": {"status": "running", "port": int(os.getenv("BACKEND_PORT", 8483))},
         "cuda": cuda_info,
