@@ -3,8 +3,15 @@ import { onMounted, ref } from 'vue'
 import { getProviders, ping } from '~/logic/api'
 import { settings, settingsReady } from '~/logic/storage'
 import { getModelsByProvider } from '~/logic/api'
-import type { Model, Provider } from '~/logic/types'
+import { NOTE_FORMATS, NOTE_STYLES, type Model, type NoteFormat, type Provider } from '~/logic/types'
 import { watch } from 'vue'
+
+function toggleFormat(value: NoteFormat, checked: boolean) {
+  const cur = settings.value.formats || []
+  settings.value.formats = checked
+    ? Array.from(new Set([...cur, value]))
+    : cur.filter(v => v !== value)
+}
 
 const providers = ref<Provider[]>([])
 const models = ref<Model[]>([])
@@ -128,15 +135,35 @@ onMounted(async () => {
         </label>
         <label class="flex flex-col gap-1">
           <span class="text-gray-600">笔记风格</span>
-          <input v-model="settings.style" class="input" placeholder="留空使用默认">
-        </label>
-        <label class="flex items-center gap-2">
-          <input v-model="settings.screenshot" type="checkbox"> 自动插入截图
-        </label>
-        <label class="flex items-center gap-2">
-          <input v-model="settings.link" type="checkbox"> 插入原片跳转链接
+          <select v-model="settings.style" class="input">
+            <option v-for="s in NOTE_STYLES" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
         </label>
       </div>
+
+      <div class="flex flex-col gap-1 text-sm">
+        <span class="text-gray-600">输出形式（与 web 端 NoteForm 对齐）</span>
+        <div class="flex flex-wrap gap-x-4 gap-y-2">
+          <label v-for="f in NOTE_FORMATS" :key="f.value" class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="(settings.formats || []).includes(f.value)"
+              @change="toggleFormat(f.value, ($event.target as HTMLInputElement).checked)"
+            >
+            {{ f.label }}
+          </label>
+        </div>
+      </div>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="text-gray-600">额外提示词（追加到 prompt 末尾）</span>
+        <textarea
+          v-model="settings.extras"
+          class="input resize-y"
+          rows="3"
+          placeholder="例如：重点关注游戏开发部分；保留所有专业术语原文"
+        />
+      </label>
     </section>
   </div>
 </template>

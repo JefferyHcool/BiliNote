@@ -78,14 +78,45 @@ export interface TaskRecord {
   result?: NoteResult
 }
 
+// 与 backend/app/gpt/prompt_builder.py note_styles 一一对齐
+export type NoteStyle =
+  | 'minimal' | 'detailed' | 'academic' | 'tutorial'
+  | 'xiaohongshu' | 'life_journal' | 'task_oriented'
+  | 'business' | 'meeting_minutes'
+
+// 与 backend/app/gpt/prompt_builder.py note_formats 一一对齐
+export type NoteFormat = 'toc' | 'link' | 'screenshot' | 'summary'
+
+export const NOTE_STYLES: Array<{ value: NoteStyle, label: string }> = [
+  { value: 'minimal', label: '精简' },
+  { value: 'detailed', label: '详细' },
+  { value: 'tutorial', label: '教程' },
+  { value: 'academic', label: '学术' },
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'life_journal', label: '生活向' },
+  { value: 'task_oriented', label: '任务导向' },
+  { value: 'business', label: '商业风格' },
+  { value: 'meeting_minutes', label: '会议纪要' },
+]
+
+export const NOTE_FORMATS: Array<{ value: NoteFormat, label: string }> = [
+  { value: 'toc', label: '目录' },
+  { value: 'summary', label: 'AI 总结' },
+  { value: 'screenshot', label: '原片截图' },
+  { value: 'link', label: '原片跳转' },
+]
+
 export interface Settings {
   backendUrl: string
   providerId: string
   modelName: string
   quality: Quality
+  // 输出 format 的 toggle 集合（screenshot / link 与下方两个布尔保持联动）
+  formats: NoteFormat[]
   screenshot: boolean
   link: boolean
-  style: string
+  style: NoteStyle
+  extras: string
 }
 
 export interface ProviderUpdatePayload {

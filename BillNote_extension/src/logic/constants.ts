@@ -7,9 +7,11 @@ export const DEFAULT_SETTINGS: Settings = {
   providerId: '',
   modelName: '',
   quality: 'medium',
+  formats: ['toc', 'summary'],
   screenshot: false,
   link: false,
-  style: '',
+  style: 'minimal',
+  extras: '',
 }
 
 export const MAX_TASKS = 30
