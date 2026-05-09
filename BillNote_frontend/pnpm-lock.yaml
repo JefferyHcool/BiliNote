@@ -53,6 +53,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.3
         version: 4.2.2(vite@6.4.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0)(yaml@2.8.3))
+      '@tauri-apps/api':
+        specifier: ^2.10.1
+        version: 2.10.1
       '@tauri-apps/plugin-shell':
         specifier: ~2.2.2
         version: 2.2.2
