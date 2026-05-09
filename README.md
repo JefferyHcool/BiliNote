@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.2.0</h1>
+<h1 align="center" > BiliNote v2.2.1</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -52,6 +52,10 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.2.1 修订
+
+- 修复 v2.2.0 ghcr.io 镜像构建失败（pnpm@latest 拉到 11，与 Node 20 不兼容；pin 到 pnpm 9.15.0）
 
 ### v2.2.0 新增
 

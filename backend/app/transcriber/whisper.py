@@ -50,20 +50,12 @@ class WhisperTranscriber(Transcriber):
 
         model_dir = get_model_dir("whisper")
         model_path = os.path.join(model_dir, f"whisper-{model_size}")
-        # 仅看目录存在不够：一次失败的 / 中断的下载会留下空 / 半成品目录，
-        # 后面 WhisperModel 加载时会以 'Unable to open file model.bin' 抛错。
-        # 必须以 model.bin 这个核心权重文件落盘为准。
-        model_bin = Path(model_path) / "model.bin"
-        if not model_bin.exists():
-            if Path(model_path).exists():
-                logger.warning(
-                    f"检测到 {model_path} 目录存在但缺少 model.bin（可能上次下载中断），将重新拉取"
-                )
-            else:
-                logger.info(f"模型 whisper-{model_size} 不存在，开始下载...")
+        if not Path(model_path).exists():
+            logger.info(f"模型 whisper-{model_size} 不存在，开始下载...")
             repo_id = MODEL_MAP[model_size]
             model_path = snapshot_download(
                 repo_id,
+
                 local_dir=model_path,
             )
             logger.info("模型下载完成")

@@ -2,7 +2,8 @@
 # Tailwind v4 / Vite 6 需要 Node 20+，alpine + pnpm 会按 lockfile 拉 musl native binary。
 FROM node:20-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm pin 到 9.x：lockfile 是 v9 生成；pnpm 11 要求 Node 22+ 与 node:20 不兼容
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 

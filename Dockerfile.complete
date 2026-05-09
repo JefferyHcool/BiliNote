@@ -30,7 +30,11 @@ COPY ./backend /tmp/backend
 # 升到 node:20-alpine。alpine 走 musl，pnpm 会按 lockfile 拉 *-linux-x64-musl native binary。
 FROM node:20-alpine AS frontend-builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm 版本 pin 到 9 系列：
+# - lockfile (BillNote_frontend/pnpm-lock.yaml) 是 lockfileVersion '9.0'，由 pnpm 9 生成
+# - pnpm 11+ 要求 Node 22+，与 node:20 不兼容（ERR_UNKNOWN_BUILTIN_MODULE）
+# - 不用 @latest 避免上游 pnpm 升级悄悄破坏 CI
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /tmp/frontend
 
