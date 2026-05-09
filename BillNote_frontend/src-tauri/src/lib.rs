@@ -3,6 +3,8 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use std::env;
 use std::collections::HashMap;
+use std::path::Path;
+use serde::Serialize;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +21,21 @@ pub fn run() {
 
             let exe_path = env::current_exe().expect("无法获取当前可执行文件路径");
             let sidecar_dir = exe_path.parent().expect("无法获取可执行文件的父目录");
+
+            // 安装路径诊断：PyInstaller sidecar 在含非 ASCII / 空格的路径下经常炸（README 已警告但缺主动防御）
+            // 命中时把诊断信息 emit 给前端，由顶端横幅展示，不阻断启动
+            let diag = analyze_install_path(&exe_path);
+            if diag.path_has_non_ascii || diag.path_has_space || !diag.parent_writable {
+                let app_handle = app.handle().clone();
+                // 等前端首屏挂载好 listener；setup 阶段 window 已存在但 React 还没 render
+                // 用独立线程 + 标准 sleep，不引入 tokio 依赖
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.emit("backend-warning", &diag);
+                    }
+                });
+            }
 
             // 收集所有系统环境变量
             let mut all_env_vars = HashMap::new();
@@ -96,7 +113,8 @@ pub fn run() {
             get_system_env_vars,
             find_executable_path,
             run_command_with_env,
-            test_ffmpeg_access
+            test_ffmpeg_access,
+            get_install_path_diagnostics
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -266,6 +284,54 @@ async fn run_command_with_env(
 #[tauri::command]
 async fn test_ffmpeg_access() -> Result<String, String> {
     run_command_with_env("ffmpeg".to_string(), vec!["-version".to_string()]).await
+}
+
+// 安装路径诊断：PyInstaller 在含非 ASCII / 空格的路径下加载 _internal/* 经常炸；
+// 父目录不可写时模型 / 配置 / 日志也无法落盘
+#[derive(Serialize, Clone)]
+struct InstallPathDiagnostics {
+    exe_path: String,
+    path_has_non_ascii: bool,
+    path_has_space: bool,
+    parent_writable: bool,
+    platform: String,
+}
+
+fn analyze_install_path(exe_path: &Path) -> InstallPathDiagnostics {
+    let path_str = exe_path.to_string_lossy().to_string();
+    // 不在 ASCII 范围内的字符（中文 / 日文 / 西里尔等都会命中 PyInstaller 路径解析坑）
+    let has_non_ascii = path_str.chars().any(|c| !c.is_ascii());
+    // 空格本身在 Windows shell 引号场景偶尔出问题，且 macOS path 里也偶尔触发 sidecar 启动失败
+    let has_space = path_str.contains(' ');
+    // 父目录可写：PyInstaller 解压 _internal/、写日志、写配置都需要这个
+    let parent = exe_path.parent();
+    let parent_writable = parent
+        .and_then(|p| {
+            let probe = p.join(".bilinote_write_probe");
+            match std::fs::write(&probe, b"x") {
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&probe);
+                    Some(true)
+                }
+                Err(_) => Some(false),
+            }
+        })
+        .unwrap_or(false);
+
+    InstallPathDiagnostics {
+        exe_path: path_str,
+        path_has_non_ascii: has_non_ascii,
+        path_has_space: has_space,
+        parent_writable,
+        platform: std::env::consts::OS.to_string(),
+    }
+}
+
+// Tauri 命令：让前端按需重新查询诊断结果（比如用户卸载到新目录后重启）
+#[tauri::command]
+fn get_install_path_diagnostics() -> InstallPathDiagnostics {
+    let exe_path = env::current_exe().unwrap_or_default();
+    analyze_install_path(&exe_path)
 }
 
 // 可选：添加一个函数来动态更新 sidecar 的环境变量

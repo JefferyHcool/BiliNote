@@ -5,6 +5,7 @@ import { useTaskPolling } from '@/hooks/useTaskPolling.ts'
 import { useCheckBackend } from '@/hooks/useCheckBackend.ts'
 import { systemCheck } from '@/services/system.ts'
 import BackendInitDialog from '@/components/BackendInitDialog'
+import StartupBanner from '@/components/SystemDiagnostic/StartupBanner'
 import Index from '@/pages/Index.tsx'
 import { HomePage } from './pages/HomePage/Home.tsx'
 
@@ -34,6 +35,7 @@ function App() {
   if (!initialized) {
     return (
       <>
+        <StartupBanner />
         <BackendInitDialog open={loading} />
       </>
     )
@@ -42,6 +44,7 @@ function App() {
   // 后端已初始化，渲染主应用
   return (
     <>
+      <StartupBanner />
       <BrowserRouter>
         <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中…</div>}>
           <Routes>
