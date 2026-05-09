@@ -45,10 +45,12 @@ jobs:
           fi
 
       # 设置 pnpm
+      # 不能用 'latest'：pnpm 11+ 要求 Node 22+，与下方 Node 20 不兼容（ERR_UNKNOWN_BUILTIN_MODULE）。
+      # lockfile 是 pnpm 9 生成；统一 pin 到 9.15.0
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 'latest'
+          version: '9.15.0'
 
       # 设置 Node 环境
       - name: Set up Node.js
