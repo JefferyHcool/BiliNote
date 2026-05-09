@@ -11,7 +11,17 @@ import Index from '@/pages/Index.tsx'
 import { HomePage } from './pages/HomePage/Home.tsx'
 
 // 非首屏页面使用 React.lazy 按需加载
+const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const SettingPage = lazy(() => import('./pages/SettingPage/index.tsx'))
+
+// 桌面端首启引导守卫：未完成 onboarding 时强制跳到 /onboarding
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  // 仅在 Tauri 桌面端拦截；纯 web 端不打扰用户
+  if (!isTauri) return <>{children}</>
+  if (localStorage.getItem('bilinote-onboarded') !== '1') return <Navigate to="/onboarding" replace />
+  return <>{children}</>
+}
 const Model = lazy(() => import('@/pages/SettingPage/Model.tsx'))
 const ProviderForm = lazy(() => import('@/components/Form/modelForm/Form.tsx'))
 const AboutPage = lazy(() => import('@/pages/SettingPage/about.tsx'))
@@ -50,7 +60,8 @@ function App() {
       <BrowserRouter>
         <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中…</div>}>
           <Routes>
-            <Route path="/" element={<Index />}>
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/" element={<OnboardingGuard><Index /></OnboardingGuard>}>
               <Route index element={<HomePage />} />
               <Route path="settings" element={<SettingPage />}>
                 <Route index element={<Navigate to="model" replace />} />
