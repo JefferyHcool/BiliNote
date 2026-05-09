@@ -73,6 +73,28 @@ export default function Transcriber() {
   }, [modelStatuses, mlxModelStatuses, fetchModelsStatus])
 
   const handleSave = async () => {
+    // 切到本地 whisper 引擎且选了未下载的模型时，提前 confirm，避免用户保存后到首次任务才发现要下 GB 级模型
+    if (isWhisperType(selectedType)) {
+      const pool = selectedType === 'mlx-whisper' ? mlxModelStatuses : modelStatuses
+      const target = pool.find(m => m.model_size === selectedModelSize)
+      if (target && !target.downloaded && !target.downloading) {
+        const sizeHint: Record<string, string> = {
+          'tiny': '~75MB',
+          'base': '~150MB',
+          'small': '~500MB',
+          'medium': '~1.5GB',
+          'large-v3': '~3GB',
+          'large-v3-turbo': '~1.6GB',
+        }
+        const ok = window.confirm(
+          `选择 ${selectedType} / ${selectedModelSize} 后，首次转写时会下载该模型（${sizeHint[selectedModelSize] || '体积未知'}）。\n` +
+          `网络较差时容易中断；推荐改用 Groq / 必剪 / 快手 等在线引擎。\n\n` +
+          '继续保存吗？',
+        )
+        if (!ok) return
+      }
+    }
+
     setSaving(true)
     try {
       const payload: { transcriber_type: string; whisper_model_size?: string } = {
