@@ -6,6 +6,7 @@ import { useCheckBackend } from '@/hooks/useCheckBackend.ts'
 import { systemCheck } from '@/services/system.ts'
 import BackendInitDialog from '@/components/BackendInitDialog'
 import StartupBanner from '@/components/SystemDiagnostic/StartupBanner'
+import BackendHealthIndicator from '@/components/BackendHealth/BackendHealthIndicator'
 import Index from '@/pages/Index.tsx'
 import { HomePage } from './pages/HomePage/Home.tsx'
 
@@ -45,6 +46,7 @@ function App() {
   return (
     <>
       <StartupBanner />
+      <BackendHealthIndicator />
       <BrowserRouter>
         <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中…</div>}>
           <Routes>
