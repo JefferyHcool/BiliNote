@@ -321,31 +321,15 @@ class NoteGenerator:
 
         NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        print(f"写入状态文件: {status_file} 当前状态: {status}")
         data = {"status": status.value if isinstance(status, TaskStatus) else status}
         if message:
             data["message"] = message
 
         try:
-            # First create a temporary file
-            temp_file = status_file.with_suffix('.tmp')
-
-            # Write to temporary file
-            with temp_file.open('w', encoding='utf-8') as f:
+            with status_file.open('w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # Atomic rename operation
-            temp_file.replace(status_file)
-
-            print(f"状态文件写入成功: {status_file}")
         except Exception as e:
             logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
-            # Try to write error to file directly as fallback
-            try:
-                with status_file.open('w', encoding='utf-8') as f:
-                    f.write(f"Error writing status: {str(e)}")
-            except:
-                logger.error(f"写入错误  {e}")
 
     def _handle_exception(self, task_id, exc):
         logger.error(f"任务异常 (task_id={task_id})", exc_info=True)

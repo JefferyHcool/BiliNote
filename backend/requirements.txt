@@ -125,5 +125,5 @@ webencodings==0.5.1
 websockets==15.0.1
 yarl==1.19.0
 youtube-transcript-api>=1.0.0
-yt-dlp==2025.3.31
+yt-dlp==2026.3.17
 zopfli==0.2.3.post1
