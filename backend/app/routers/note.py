@@ -70,6 +70,7 @@ class VideoRequest(BaseModel):
 
 NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
 UPLOAD_DIR = "uploads"
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 def save_note_to_file(task_id: str, note):
@@ -168,13 +169,22 @@ def delete_task(data: RecordRequest):
 @router.post("/upload")
 async def upload(file: UploadFile = File(...)):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_location = os.path.join(UPLOAD_DIR, file.filename)
 
-    with open(file_location, "wb+") as f:
-        f.write(await file.read())
+    safe_filename = Path(file.filename or "upload").name.replace("\\", "_")
+    if not safe_filename or safe_filename in {".", ".."}:
+        safe_filename = f"{uuid.uuid4().hex}.upload"
+
+    upload_dir = Path(UPLOAD_DIR)
+    file_location = upload_dir / safe_filename
+    if file_location.exists():
+        file_location = upload_dir / f"{file_location.stem}_{uuid.uuid4().hex[:8]}{file_location.suffix}"
+
+    with file_location.open("wb") as f:
+        while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+            f.write(chunk)
 
     # 假设你静态目录挂载了 /uploads
-    return R.success({"url": f"/uploads/{file.filename}"})
+    return R.success({"url": f"/uploads/{file_location.name}"})
 
 
 @router.post("/generate_note")

@@ -42,6 +42,8 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiBaseUrl,
           changeOrigin: true,
+          timeout: 0,
+          proxyTimeout: 0,
           rewrite: path => path.replace(/^\/api/, '/api'),
         },
         '/static': {

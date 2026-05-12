@@ -51,11 +51,28 @@ def _init_transcriber(key: TranscriberType, cls, *args, **kwargs):
     return _transcribers[key]
 
 # 各类型获取方法
+def _get_whisper_cpu_threads(default: int = 1) -> int:
+    raw = os.environ.get("WHISPER_CPU_THREADS")
+    if not raw:
+        return default
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning(f'WHISPER_CPU_THREADS="{raw}" 不是有效整数，使用默认值 {default}')
+        return default
+
+
 def get_groq_transcriber():
     return _init_transcriber(TranscriberType.GROQ, GroqTranscriber)
 
-def get_whisper_transcriber(model_size="base", device="cuda"):
-    return _init_transcriber(TranscriberType.FAST_WHISPER, WhisperTranscriber, model_size=model_size, device=device)
+def get_whisper_transcriber(model_size="base", device="cuda", cpu_threads: int = 1):
+    return _init_transcriber(
+        TranscriberType.FAST_WHISPER,
+        WhisperTranscriber,
+        model_size=model_size,
+        device=device,
+        cpu_threads=cpu_threads,
+    )
 
 def get_bcut_transcriber():
     return _init_transcriber(TranscriberType.BCUT, BcutTranscriber)
@@ -91,9 +108,10 @@ def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="
         transcriber_enum = TranscriberType.FAST_WHISPER
 
     whisper_model_size = os.environ.get("WHISPER_MODEL_SIZE", model_size)
+    whisper_cpu_threads = _get_whisper_cpu_threads(1)
 
     if transcriber_enum == TranscriberType.FAST_WHISPER:
-        return get_whisper_transcriber(whisper_model_size, device=device)
+        return get_whisper_transcriber(whisper_model_size, device=device, cpu_threads=whisper_cpu_threads)
 
     elif transcriber_enum == TranscriberType.MLX_WHISPER:
         if not MLX_WHISPER_AVAILABLE:

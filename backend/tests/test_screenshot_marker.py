@@ -15,9 +15,20 @@ extract_screenshot_timestamps = screenshot_marker.extract_screenshot_timestamps
 
 class TestScreenshotMarker(unittest.TestCase):
     def test_extract_accepts_star_bracket_format(self):
-        markdown = "A\n*Screenshot-[01:02]\nB"
+        markdown = "A\n*Screenshot-[01:02]*\nB"
         matches = extract_screenshot_timestamps(markdown)
-        self.assertEqual(matches, [("*Screenshot-[01:02]", 62)])
+        self.assertEqual(matches, [("*Screenshot-[01:02]*", 62)])
+
+    def test_extract_accepts_hour_format(self):
+        markdown = "*Screenshot-[01:02:03]* and Screenshot-02:03:04"
+        matches = extract_screenshot_timestamps(markdown)
+        self.assertEqual(
+            matches,
+            [
+                ("*Screenshot-[01:02:03]*", 3723),
+                ("Screenshot-02:03:04", 7384),
+            ],
+        )
 
     def test_extract_accepts_legacy_formats(self):
         markdown = "*Screenshot-03:04 and Screenshot-[05:06]"

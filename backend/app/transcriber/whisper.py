@@ -39,6 +39,7 @@ class WhisperTranscriber(Transcriber):
             compute_type: str = None,
             cpu_threads: int = 1,
     ):
+        self.cpu_threads = max(1, int(cpu_threads or 1))
         if device == 'cpu' or device is None:
             self.device = 'cpu'
         else:
@@ -64,7 +65,12 @@ class WhisperTranscriber(Transcriber):
             model_size_or_path=model_path,
             device=self.device,
             compute_type=self.compute_type,
+            cpu_threads=self.cpu_threads,
             download_root=model_dir
+        )
+        logger.info(
+            f"WhisperModel 初始化完成: model={model_size}, device={self.device}, "
+            f"compute_type={self.compute_type}, cpu_threads={self.cpu_threads}"
         )
     @staticmethod
     def is_torch_installed() -> bool:
@@ -125,4 +131,3 @@ class WhisperTranscriber(Transcriber):
         transcription_finished.send({
             "file_path": video_path,
         })
-

@@ -119,6 +119,10 @@ class NoteGenerator:
         """
         if grid_size is None:
             grid_size = []
+        if _format is None:
+            _format = []
+        screenshot = screenshot or "screenshot" in _format
+        link = link or "link" in _format
 
         try:
             logger.info(f"开始生成笔记 (task_id={task_id})")
@@ -393,12 +397,40 @@ class NoteGenerator:
         task_id = audio_cache_file.stem.split("_")[0]
         self._update_status(task_id, status_phase)
 
+        # 判断是否需要下载/准备视频
+        need_video = screenshot or video_understanding
+        if screenshot and not grid_size:
+            grid_size = [2, 2]
+
+        frame_interval = video_interval if video_interval and video_interval > 0 else 6
+
+        def prepare_video() -> None:
+            logger.info("开始下载视频")
+            video_path_str = downloader.download_video(video_url)
+            self.video_path = Path(video_path_str)
+            logger.info(f"视频下载完成：{self.video_path}")
+
+            if grid_size:
+                self.video_img_urls = VideoReader(
+                    video_path=str(self.video_path),
+                    grid_size=tuple(grid_size),
+                    frame_interval=frame_interval,
+                    unit_width=960,
+                    unit_height=540,
+                    save_quality=80,
+                ).run()
+            else:
+                logger.info("未指定 grid_size，跳过缩略图生成")
+
         # 已有缓存，尝试加载
         if audio_cache_file.exists():
             logger.info(f"检测到音频缓存 ({audio_cache_file})，直接读取")
             try:
                 data = json.loads(audio_cache_file.read_text(encoding="utf-8"))
-                return AudioDownloadResult(**data)
+                audio = AudioDownloadResult(**data)
+                if need_video:
+                    prepare_video()
+                return audio
             except Exception as e:
                 logger.warning(f"读取音频缓存失败，将重新下载：{e}")
 
@@ -422,30 +454,9 @@ class NoteGenerator:
             except Exception as exc:
                 logger.warning(f"元信息提取失败，将尝试完整下载: {exc}")
 
-        # 判断是否需要下载视频
-        need_video = screenshot or video_understanding
-        if screenshot and not grid_size:
-            grid_size = [2, 2]
-
-        frame_interval = video_interval if video_interval and video_interval > 0 else 6
         if need_video:
             try:
-                logger.info("开始下载视频")
-                video_path_str = downloader.download_video(video_url)
-                self.video_path = Path(video_path_str)
-                logger.info(f"视频下载完成：{self.video_path}")
-
-                if grid_size:
-                    self.video_img_urls = VideoReader(
-                        video_path=str(self.video_path),
-                        grid_size=tuple(grid_size),
-                        frame_interval=frame_interval,
-                        unit_width=960,
-                        unit_height=540,
-                        save_quality=80,
-                    ).run()
-                else:
-                    logger.info("未指定 grid_size，跳过缩略图生成")
+                prepare_video()
             except Exception as exc:
                 logger.error(f"视频下载失败：{exc}")
                 self._handle_exception(task_id, exc)
@@ -668,8 +679,7 @@ class NoteGenerator:
                 markdown = markdown.replace(marker, f"![]({img_url})", 1)
             except Exception as exc:
                 logger.error(f"生成截图失败 (timestamp={ts})：{exc}")
-                # self._handle_exception(task_id, exc)
-                return None
+                continue
         return markdown
 
     @staticmethod

@@ -111,11 +111,20 @@ export const useTaskStore = create<TaskStore>()(
             tasks: state.tasks.map(task => {
               if (task.id !== id) return task
 
-              if (task.status === 'SUCCESS' && data.status === 'SUCCESS') return task
+              if (task.status === 'SUCCESS' && data.status === 'SUCCESS' && !data.markdown) return task
 
               // 如果是 markdown 字符串，封装为版本
               if (typeof data.markdown === 'string') {
                 const prev = task.markdown
+                const currentContent = Array.isArray(prev) ? prev[0]?.content : prev
+                if (currentContent === data.markdown) {
+                  return {
+                    ...task,
+                    ...data,
+                    markdown: prev,
+                  }
+                }
+
                 const newVersion: Markdown = {
                   ver_id: `${task.id}-${uuidv4()}`,
                   content: data.markdown,
