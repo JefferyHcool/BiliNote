@@ -4,6 +4,7 @@ from app.models.gpt_model import GPTSource
 import os
 import hashlib
 import json
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,23 @@ from datetime import timedelta
 from typing import List
 
 
+DEFAULT_CONTEXT_WINDOW = 32768
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
+DEFAULT_CONTEXT_SAFETY_RATIO = 0.9
+DEFAULT_IMAGE_TOKEN_ESTIMATE = 1500
+DEFAULT_RUNTIME_DIR = ".runtime"
+MODEL_CONTEXT_CACHE_FILENAME = "model_context_cache.json"
+CONTEXT_WINDOW_PATTERNS = (
+    r"Input length\s*\(\s*\d+\s*\)\s*exceeds.*?maximum context length\s*\(\s*(\d+)\s*\)",
+    r"model'?s maximum context length\s*(?:is)?\s*\(?\s*(\d+)\s*\)?",
+    r"maximum context length\s*(?:is|:)?\s*\(?\s*(\d+)\s*\)?",
+    r"max(?:imum)? context length\s*(?:is|:)?\s*(\d+)",
+    r"max_model_len[^0-9]*(\d+)",
+    r"context[_ ]window[^0-9]*(\d+)",
+    r"context[_ ]length[^0-9]*(\d+)",
+)
+
+
 class UniversalGPT(GPT):
     def __init__(self, client, model: str, temperature: float = 0.7):
         self.client = client
@@ -23,15 +41,104 @@ class UniversalGPT(GPT):
         self.temperature = temperature
         self.screenshot = False
         self.link = False
-        self.max_request_bytes = int(os.getenv("OPENAI_MAX_REQUEST_BYTES", str(45 * 1024 * 1024)))
         self.checkpoint_dir = Path(os.getenv("NOTE_OUTPUT_DIR", "note_results"))
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self.runtime_dir = Path(os.getenv("BILINOTE_RUNTIME_DIR", DEFAULT_RUNTIME_DIR))
+        self.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.context_window = self._resolve_context_window()
+        self.max_output_tokens = self._read_positive_int_env(
+            "OPENAI_MAX_OUTPUT_TOKENS",
+            DEFAULT_MAX_OUTPUT_TOKENS
+        )
+        self.context_safety_ratio = self._read_float_env(
+            "OPENAI_CONTEXT_SAFETY_RATIO",
+            DEFAULT_CONTEXT_SAFETY_RATIO
+        )
+        self.image_token_estimate = self._read_positive_int_env(
+            "OPENAI_IMAGE_TOKEN_ESTIMATE",
+            DEFAULT_IMAGE_TOKEN_ESTIMATE
+        )
+        self.max_request_tokens = self._calculate_max_request_tokens()
+        # Backward-compatible alias for code that may still inspect this attribute.
+        self.max_request_bytes = self.max_request_tokens
         # 初始化时缓存重试配置，避免每次请求重复读取环境变量
         self._max_retry_attempts = max(1, int(os.getenv("OPENAI_RETRY_ATTEMPTS", "3")))
         self._retry_base_backoff = float(os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "1.5"))
 
     def _format_time(self, seconds: float) -> str:
         return str(timedelta(seconds=int(seconds)))[2:]
+
+    @staticmethod
+    def _read_positive_int_env(name: str, default: int | None = None) -> int | None:
+        raw = os.getenv(name)
+        if raw is None or str(raw).strip() == "":
+            return default
+        try:
+            value = int(str(raw).strip())
+            return value if value > 0 else default
+        except ValueError:
+            return default
+
+    @staticmethod
+    def _read_float_env(name: str, default: float) -> float:
+        raw = os.getenv(name)
+        if raw is None or str(raw).strip() == "":
+            return default
+        try:
+            value = float(str(raw).strip())
+            return value if value > 0 else default
+        except ValueError:
+            return default
+
+    def _get_client_base_url(self) -> str:
+        for attr in ("base_url", "_base_url"):
+            value = getattr(self.client, attr, None)
+            if value:
+                return str(value).rstrip("/")
+        return ""
+
+    def _model_context_cache_key(self) -> str:
+        base_url = self._get_client_base_url()
+        return f"{base_url}:{self.model}" if base_url else self.model
+
+    def _context_cache_path(self) -> Path:
+        return self.runtime_dir / MODEL_CONTEXT_CACHE_FILENAME
+
+    def _load_context_cache(self) -> dict:
+        path = self._context_cache_path()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _get_cached_context_window(self) -> int | None:
+        cache = self._load_context_cache()
+        entry = cache.get(self._model_context_cache_key()) or cache.get(self.model)
+        if not isinstance(entry, dict):
+            return None
+        value = entry.get("context_window")
+        return value if isinstance(value, int) and value > 0 else None
+
+    def _resolve_context_window(self) -> int:
+        explicit = (
+            self._read_positive_int_env("OPENAI_CONTEXT_WINDOW")
+            or self._read_positive_int_env("OPENAI_MAX_CONTEXT_TOKENS")
+        )
+        if explicit:
+            return explicit
+        # Minimal fix boundary: we intentionally do not query provider model
+        # metadata here yet. Unknown large-context models should be configured
+        # with OPENAI_CONTEXT_WINDOW until a provider-specific discovery layer is
+        # added.
+        return self._get_cached_context_window() or DEFAULT_CONTEXT_WINDOW
+
+    def _calculate_max_request_tokens(self) -> int:
+        available = max(1024, self.context_window - self.max_output_tokens)
+        ratio = min(max(self.context_safety_ratio, 0.1), 1.0)
+        return max(1024, int(available * ratio))
 
     def _build_segment_text(self, segments: List[TranscriptSegment]) -> str:
         return "\n".join(
@@ -83,9 +190,105 @@ class UniversalGPT(GPT):
     def list_models(self):
         return self.client.models.list()
 
+    def _estimate_text_tokens(self, text: str) -> int:
+        if not text:
+            return 0
+        non_ascii = sum(1 for ch in text if ord(ch) > 127)
+        ascii_chars = len(text) - non_ascii
+        return non_ascii + ((ascii_chars + 3) // 4)
+
+    def _estimate_single_image_tokens(self, image_part: dict) -> int:
+        return self.image_token_estimate
+
+    def _estimate_image_tokens(self, value) -> int:
+        if isinstance(value, dict):
+            if value.get("type") == "image_url":
+                return self._estimate_single_image_tokens(value)
+            return sum(self._estimate_image_tokens(item) for item in value.values())
+        if isinstance(value, list):
+            return sum(self._estimate_image_tokens(item) for item in value)
+        return 0
+
+    def _scrub_image_payloads_for_token_estimate(self, value):
+        if isinstance(value, dict):
+            if value.get("type") == "image_url":
+                scrubbed = dict(value)
+                image_url = scrubbed.get("image_url")
+                if isinstance(image_url, dict):
+                    scrubbed["image_url"] = {**image_url, "url": "<image>"}
+                else:
+                    scrubbed["image_url"] = "<image>"
+                return scrubbed
+            return {
+                key: self._scrub_image_payloads_for_token_estimate(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [self._scrub_image_payloads_for_token_estimate(item) for item in value]
+        return value
+
+    def _estimate_messages_tokens(self, messages: list) -> int:
+        text_messages = self._scrub_image_payloads_for_token_estimate(messages)
+        raw = json.dumps(text_messages, ensure_ascii=False)
+        image_tokens = self._estimate_image_tokens(messages)
+        return self._estimate_text_tokens(raw) + image_tokens + 256
+
     def _estimate_messages_bytes(self, messages: list) -> int:
-        import json
-        return len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
+        return self._estimate_messages_tokens(messages)
+
+    @staticmethod
+    def _extract_context_window_from_error(raw: str) -> int | None:
+        for pattern in CONTEXT_WINDOW_PATTERNS:
+            match = re.search(pattern, raw, flags=re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            value = int(match.group(1))
+            if value > 0:
+                return value
+        return None
+
+    def _save_learned_context_window(self, context_window: int, raw_error: str) -> None:
+        try:
+            cache = self._load_context_cache()
+            cache[self._model_context_cache_key()] = {
+                "context_window": context_window,
+                "model": self.model,
+                "base_url": self._get_client_base_url(),
+                "learned_from": "error",
+                "last_error": raw_error[:1000],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            path = self._context_cache_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(".tmp")
+            tmp_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp_path.replace(path)
+        except Exception:
+            return
+
+    def _learn_context_window_from_error(self, exc: Exception) -> int | None:
+        status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+        raw = str(exc)
+        raw_lower = raw.lower()
+        looks_like_context_error = (
+            status in {400, 413}
+            or "context length" in raw_lower
+            or "max_model_len" in raw_lower
+            or "input length" in raw_lower
+            or "token limit" in raw_lower
+        )
+        if not looks_like_context_error:
+            return None
+
+        context_window = self._extract_context_window_from_error(raw)
+        if not context_window:
+            return None
+
+        self._save_learned_context_window(context_window, raw)
+        self.context_window = context_window
+        self.max_request_tokens = self._calculate_max_request_tokens()
+        self.max_request_bytes = self.max_request_tokens
+        return context_window
 
     def _build_merge_messages(self, partials: list) -> list:
         merge_text = MERGE_PROMPT + "\n\n" + "\n\n---\n\n".join(partials)
@@ -103,7 +306,9 @@ class UniversalGPT(GPT):
         payload = {
             "model": self.model,
             "temperature": self.temperature,
-            "max_request_bytes": self.max_request_bytes,
+            "max_request_tokens": self.max_request_tokens,
+            "context_window": self.context_window,
+            "max_output_tokens": self.max_output_tokens,
             "title": source.title,
             "tags": source.tags,
             "format": source._format,
@@ -195,6 +400,10 @@ class UniversalGPT(GPT):
                     temperature=self.temperature
                 )
             except Exception as exc:
+                # Learning updates future chunk budgets only. The current
+                # summarize() call has already built its chunks, so this retry
+                # loop intentionally does not attempt to re-split in place.
+                self._learn_context_window_from_error(exc)
                 last_exc = exc
                 if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):
                     raise
@@ -211,8 +420,8 @@ class UniversalGPT(GPT):
 
         merge_chunker = RequestChunker(
             lambda *_args, **_kwargs: [],
-            self.max_request_bytes,
-            self._estimate_messages_bytes
+            self.max_request_tokens,
+            self._estimate_messages_tokens
         )
 
         current_partials = list(partials)
@@ -251,7 +460,7 @@ class UniversalGPT(GPT):
         def message_builder(segments, image_urls, **kwargs):
             return self.create_messages(segments, video_img_urls=image_urls, **kwargs)
 
-        chunker = RequestChunker(message_builder, self.max_request_bytes, self._estimate_messages_bytes)
+        chunker = RequestChunker(message_builder, self.max_request_tokens, self._estimate_messages_tokens)
 
         try:
             chunks = chunker.chunk(
