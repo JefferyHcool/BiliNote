@@ -1,6 +1,65 @@
 import re
 
 
+_TIME_RE = r"(\d{1,2}:\d{2}(?::\d{2})?)"
+_HEADING_TIME_RE = re.compile(
+    rf"^(##|###)\s+(.+?)\s*(\*?Content-\[{_TIME_RE}\]\*?|\({_TIME_RE}\)\*?)\s*$",
+    re.MULTILINE,
+)
+_TOC_HEADING_RE = re.compile(r"^##\s*目录\s*$", re.MULTILINE)
+_NEXT_H2_RE = re.compile(r"^##\s+(?!目录\s*$).+", re.MULTILINE)
+_TOC_TIME_RE = re.compile(r"Content-\[\d{1,2}:\d{2}|\(\d{1,2}:\d{2}")
+
+
+def normalize_toc_timestamps(markdown: str | None) -> str | None:
+    """
+    补齐目录里的视频时间点。
+
+    有些模型会给正文标题加时间点，但目录保持纯文本。这里从后续 ##/###
+    标题反推目录，保证展示端和导出的 markdown 都能看到章节时间。
+    """
+    if not markdown:
+        return markdown
+
+    toc_match = _TOC_HEADING_RE.search(markdown)
+    if not toc_match:
+        return markdown
+
+    next_heading = _NEXT_H2_RE.search(markdown, toc_match.end())
+    if not next_heading:
+        return markdown
+
+    toc_body = markdown[toc_match.end():next_heading.start()]
+    if _TOC_TIME_RE.search(toc_body):
+        return markdown
+
+    entries = []
+    for match in _HEADING_TIME_RE.finditer(markdown, next_heading.start()):
+        level = match.group(1)
+        title = match.group(2).strip().rstrip("*").strip()
+        marker = match.group(3)
+        content_time = match.group(4)
+        paren_time = match.group(5)
+        time_text = content_time or paren_time
+
+        if not title or "AI 总结" in title or title == "目录":
+            continue
+
+        if "Content-" in marker:
+            time_marker = f"*Content-[{time_text}]"
+        else:
+            time_marker = f"({time_text})"
+
+        indent = "  " if level == "###" else ""
+        entries.append(f"{indent}- {title} {time_marker}")
+
+    if not entries:
+        return markdown
+
+    new_toc_body = "\n" + "\n".join(entries) + "\n\n"
+    return markdown[:toc_match.end()] + new_toc_body + markdown[next_heading.start():]
+
+
 def prepend_source_link(markdown: str | None, source_url: str) -> str | None:
     """
     在笔记开头添加来源链接；若首个非空行已包含来源链接，则更新该行并避免重复。
@@ -63,4 +122,3 @@ def replace_content_markers(markdown: str, video_id: str, platform: str = 'bilib
         return f"[原片 @ {mm}:{ss}]({url})"
 
     return re.sub(pattern, replacer, markdown)
-

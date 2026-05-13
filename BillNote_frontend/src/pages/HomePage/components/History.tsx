@@ -1,34 +1,34 @@
+import { useEffect } from 'react'
 import NoteHistory from '@/pages/HomePage/components/NoteHistory.tsx'
 import { useTaskStore } from '@/store/taskStore'
 import { Clock } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
-import { get_task_status } from '@/services/note.ts'
+import { syncNotes } from '@/services/note.ts'
 
 const History = () => {
-  const tasks = useTaskStore(state => state.tasks)
+  useEffect(() => {
+    syncNotes()
+
+    // 定时同步：每 15 秒拉一次后端新任务
+    const timer = setInterval(syncNotes, 15000)
+
+    // 页面重新获得焦点时也同步（从其他标签页切回来）
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncNotes()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
   const currentTaskId = useTaskStore(state => state.currentTaskId)
   const setCurrentTask = useTaskStore(state => state.setCurrentTask)
-  const updateTaskContent = useTaskStore(state => state.updateTaskContent)
 
-  const handleSelect = async (taskId: string) => {
+  const handleSelect = (taskId: string) => {
     setCurrentTask(taskId)
-    const task = tasks.find(t => t.id === taskId)
-    if (task?.status !== 'SUCCESS') return
-
-    try {
-      const res = await get_task_status(taskId)
-      if (res?.status !== 'SUCCESS' || !res.result) return
-
-      const { markdown, transcript, audio_meta } = res.result
-      updateTaskContent(taskId, {
-        status: 'SUCCESS',
-        markdown,
-        transcript,
-        audioMeta: audio_meta,
-      })
-    } catch (e) {
-      console.error('刷新历史笔记失败：', e)
-    }
+    // 内容加载由 MarkdownViewer 的 effect 负责（空壳任务自动拉取）
   }
 
   return (

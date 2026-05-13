@@ -27,9 +27,12 @@ interface NoteHeaderProps {
   onCopy: () => void
   onDownload: () => void
   createAt?: string | Date
+  showTranscribe: boolean
   setShowTranscribe: (show: boolean) => void
   showChat?: false | 'half' | 'full'
   setShowChat?: (mode: false | 'half' | 'full') => void
+  viewMode: 'map' | 'preview'
+  setViewMode: (mode: 'map' | 'preview') => void
 }
 
 export function MarkdownHeader({
@@ -67,9 +70,7 @@ export function MarkdownHeader({
 
   const styleName = noteStyles.find(v => v.value === style)?.label || style
 
-  const reversedMarkdown: VersionNote[] = Array.isArray(currentTask?.markdown)
-    ? [...currentTask!.markdown].reverse()
-    : []
+  const versions: VersionNote[] = Array.isArray(currentTask?.markdown) ? currentTask.markdown : []
 
   const formatDate = (date: string | Date | undefined) => {
     if (!date) return ''
@@ -95,14 +96,14 @@ export function MarkdownHeader({
             <SelectTrigger className="h-8 w-[160px] text-sm">
               <div className="flex items-center">
                 {(() => {
-                  const idx = currentTask?.markdown.findIndex(v => v.ver_id === currentVerId)
+                  const idx = versions.findIndex(v => v.ver_id === currentVerId)
                   return idx !== -1 ? `版本（${currentVerId.slice(-6)}）` : ''
                 })()}
               </div>
             </SelectTrigger>
 
             <SelectContent>
-              {(currentTask?.markdown || []).map((v, idx) => {
+              {versions.map((v) => {
                 const shortId = v.ver_id.slice(-6)
                 return (
                   <SelectItem key={v.ver_id} value={v.ver_id}>

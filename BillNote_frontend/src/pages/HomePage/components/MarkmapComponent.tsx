@@ -428,7 +428,9 @@ export default function MarkmapEditor({
   useEffect(() => {
     const mm = mmRef.current
     if (!mm) return
-    const { root } = transformer.transform(value)
+    // 过滤掉图片语法，避免思维导图节点中插入图片
+    const stripped = value.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    const { root } = transformer.transform(stripped)
     mm.setData(root).then(() => mm.fit())
   }, [value])
 

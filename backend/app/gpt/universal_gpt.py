@@ -1,6 +1,7 @@
 from app.gpt.base import GPT
 from app.gpt.prompt_builder import generate_base_prompt
 from app.models.gpt_model import GPTSource
+import logging
 import os
 import hashlib
 import json
@@ -8,6 +9,8 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from app.gpt.prompt import BASE_PROMPT, AI_SUM, SCREENSHOT, LINK, MERGE_PROMPT
 from app.gpt.utils import fix_markdown
@@ -521,3 +524,44 @@ class UniversalGPT(GPT):
         if checkpoint_key:
             self._clear_checkpoint(checkpoint_key)
         return merged
+
+    def analyze_video_frames(self, image_urls: List[str], batch_size: int = 8) -> str:
+        """分批分析视频帧截图，返回合并后的视觉描述文本。
+
+        每批发送 batch_size 张图片，收集各批次描述后拼接为连贯的画面摘要。
+        这样即使有几百张截图也不会超出上下文限制。
+        """
+        if not image_urls:
+            return ""
+
+        total = len(image_urls)
+        total_batches = (total + batch_size - 1) // batch_size
+        descriptions = []
+
+        for batch_idx in range(total_batches):
+            start = batch_idx * batch_size
+            batch = image_urls[start:start + batch_size]
+            prompt = (
+                f"请用中文简洁描述这组视频截图（第 {batch_idx + 1}/{total_batches} 组）中"
+                f"的主要内容：场景、人物动作、重要文字或信息。不需要逐帧描述，概括即可。"
+            )
+            content: list = [{"type": "text", "text": prompt}]
+            for url in batch:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": url, "detail": "auto"},
+                })
+            messages = [{"role": "user", "content": content}]
+            try:
+                response = self._chat_completion_create(messages)
+                desc = response.choices[0].message.content.strip()
+                descriptions.append(desc)
+                logger.info(f"视频帧分析进度：{batch_idx + 1}/{total_batches}")
+            except Exception as exc:
+                logger.warning(f"视频帧分析批次 {batch_idx + 1}/{total_batches} 失败，已跳过：{exc}")
+
+        if not descriptions:
+            return ""
+
+        lines = [f"第{i + 1}段：{desc}" for i, desc in enumerate(descriptions)]
+        return "\n".join(lines)

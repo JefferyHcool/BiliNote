@@ -167,7 +167,7 @@ const NoteForm = () => {
   }, [])
   useEffect(() => {
     if (!currentTask) return
-    const { formData } = currentTask
+    const formData = currentTask.formData ?? {}
 
     console.log('currentTask.formData.platform:', formData.platform)
 

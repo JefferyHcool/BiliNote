@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
 
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
+export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED'
 
 export interface AudioMeta {
   cover_url: string
@@ -45,21 +45,23 @@ export interface Task {
   status: TaskStatus
   audioMeta: AudioMeta
   createdAt: string
-  formData: {
-    video_url: string
-    link: undefined | boolean
-    screenshot: undefined | boolean
-    platform: string
-    quality: string
-    model_name: string
-    provider_id: string
+  formData?: {
+    video_url?: string
+    link?: boolean
+    screenshot?: boolean
+    platform?: string
+    quality?: string
+    model_name?: string
+    provider_id?: string
+    style?: string
+    [key: string]: any
   }
 }
 
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (taskId: string, platform: string, formData?: any) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
@@ -116,11 +118,16 @@ export const useTaskStore = create<TaskStore>()(
               // 如果是 markdown 字符串，封装为版本
               if (typeof data.markdown === 'string') {
                 const prev = task.markdown
+                const nextFormData = {
+                  ...task.formData,
+                  ...data.formData,
+                }
                 const currentContent = Array.isArray(prev) ? prev[0]?.content : prev
                 if (currentContent === data.markdown) {
                   return {
                     ...task,
                     ...data,
+                    formData: nextFormData,
                     markdown: prev,
                   }
                 }
@@ -128,8 +135,8 @@ export const useTaskStore = create<TaskStore>()(
                 const newVersion: Markdown = {
                   ver_id: `${task.id}-${uuidv4()}`,
                   content: data.markdown,
-                  style: task.formData.style || '',
-                  model_name: task.formData.model_name || '',
+                  style: nextFormData?.style || '',
+                  model_name: nextFormData?.model_name || '',
                   created_at: new Date().toISOString(),
                 }
 
@@ -143,8 +150,8 @@ export const useTaskStore = create<TaskStore>()(
                         ? [{
                           ver_id: `${task.id}-${uuidv4()}`,
                           content: prev,
-                          style: task.formData.style || '',
-                          model_name: task.formData.model_name || '',
+                          style: nextFormData?.style || '',
+                          model_name: nextFormData?.model_name || '',
                           created_at: new Date().toISOString(),
                         }]
                         : []),
@@ -154,6 +161,7 @@ export const useTaskStore = create<TaskStore>()(
                 return {
                   ...task,
                   ...data,
+                  formData: nextFormData,
                   markdown: updatedMarkdown,
                 }
               }
@@ -199,20 +207,22 @@ export const useTaskStore = create<TaskStore>()(
 
       removeTask: async id => {
         const task = get().tasks.find(t => t.id === id)
-
-        // 更新 Zustand 状态
+        if (task) {
+          try {
+            await delete_task({
+              task_id: task.id,
+              video_id: task.audioMeta.video_id,
+              platform: task.audioMeta.platform,
+            })
+          } catch {
+            // delete_task 内部已 toast.error，这里只需阻止后续删除
+            return
+          }
+        }
         set(state => ({
-          tasks: state.tasks.filter(task => task.id !== id),
+          tasks: state.tasks.filter(t => t.id !== id),
           currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
         }))
-
-        // 调用后端删除接口（如果找到了任务）
-        if (task) {
-          await delete_task({
-            video_id: task.audioMeta.video_id,
-            platform: task.platform,
-          })
-        }
       },
 
       clearTasks: () => set({ tasks: [], currentTaskId: null }),

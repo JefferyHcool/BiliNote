@@ -31,7 +31,7 @@ from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
-from app.utils.note_helper import replace_content_markers, prepend_source_link
+from app.utils.note_helper import normalize_toc_timestamps, replace_content_markers, prepend_source_link
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.status_code import StatusCode
 from app.utils.video_helper import generate_screenshot
@@ -57,6 +57,34 @@ IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "/static/screenshots")
 # 日志配置
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+_TERMINAL_STATUSES = {TaskStatus.SUCCESS.value, TaskStatus.FAILED.value}
+
+
+def cleanup_stale_tasks() -> int:
+    """将遗留的非终态任务标记为 FAILED（用于服务重启时清理孤儿任务）。
+
+    返回清理数量。
+    """
+    cleaned = 0
+    for path in NOTE_OUTPUT_DIR.glob("*.status.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("status") not in _TERMINAL_STATUSES:
+                path.write_text(
+                    json.dumps(
+                        {"status": TaskStatus.FAILED.value, "message": "服务重启，任务已中断"},
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                cleaned += 1
+                logger.info(f"已清理孤儿任务状态文件：{path.name}")
+        except Exception as exc:
+            logger.warning(f"清理任务状态文件失败 ({path.name})：{exc}")
+    if cleaned:
+        logger.info(f"启动清理完成，共清理 {cleaned} 个孤儿任务")
+    return cleaned
 
 
 class NoteGenerator:
@@ -203,7 +231,20 @@ class NoteGenerator:
                     task_id=task_id,
                 )
 
-            # 3. GPT 总结
+            # 3a. 视频理解：分批分析帧截图，把视觉描述转成文本再交给总结步骤
+            summarize_img_urls = self.video_img_urls
+            summarize_extras = extras
+            if video_understanding and self.video_img_urls:
+                self._update_status(task_id, TaskStatus.ANALYZING_VIDEO)
+                logger.info(f"开始渐进式视频帧分析，共 {len(self.video_img_urls)} 张截图")
+                visual_summary = gpt.analyze_video_frames(self.video_img_urls)
+                if visual_summary:
+                    visual_block = f"\n\n[视频画面分析]\n{visual_summary}"
+                    summarize_extras = f"{extras}{visual_block}" if extras else visual_block.strip()
+                    summarize_img_urls = []
+                    logger.info("视频帧分析完成，将以文本形式传入总结步骤")
+
+            # 3b. GPT 总结
             markdown = self._summarize_text(
                 audio_meta=audio_meta,
                 transcript=transcript,
@@ -213,8 +254,8 @@ class NoteGenerator:
                 screenshot=screenshot,
                 formats=_format or [],
                 style=style,
-                extras=extras,
-                video_img_urls=self.video_img_urls,
+                extras=summarize_extras,
+                video_img_urls=summarize_img_urls,
             )
 
             # 4. 截图 & 链接替换
@@ -623,6 +664,7 @@ class NoteGenerator:
             markdown = gpt.summarize(source)
             markdown_cache_file.write_text(markdown, encoding="utf-8")
             logger.info(f"GPT 总结并缓存成功 ({markdown_cache_file})")
+            self._update_status(task_id, TaskStatus.SUCCESS)
             return markdown
         except Exception as exc:
             logger.error(f"GPT 总结失败：{exc}")
@@ -647,6 +689,9 @@ class NoteGenerator:
         :param platform: 平台标识，用于链接替换
         :return: 处理后的 Markdown 字符串
         """
+        if "toc" in formats:
+            markdown = normalize_toc_timestamps(markdown)
+
         if "screenshot" in formats and video_path:
             try:
                 markdown = self._insert_screenshots(markdown, video_path)

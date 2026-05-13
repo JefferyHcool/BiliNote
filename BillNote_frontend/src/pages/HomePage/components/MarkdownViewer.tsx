@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
 import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
@@ -17,7 +17,8 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
-import { useTaskStore } from '@/store/taskStore'
+import { useTaskStore, type Markdown } from '@/store/taskStore'
+import { get_task_status } from '@/services/note.ts'
 import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
@@ -42,6 +43,7 @@ const steps = [
   { label: '解析链接', key: 'PARSING' },
   { label: '下载音频', key: 'DOWNLOADING' },
   { label: '转写文字', key: 'TRANSCRIBING' },
+  { label: '视频分析', key: 'ANALYZING_VIDEO' },
   { label: '总结内容', key: 'SUMMARIZING' },
   { label: '保存完成', key: 'SUCCESS' },
 ]
@@ -274,6 +276,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [modelName, setModelName] = useState<string>('')
   const [style, setStyle] = useState<string>('')
   const [createTime, setCreateTime] = useState<string>('')
+  const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null)
   // 确保baseURL没有尾部斜杠
   const baseURL = (String(import.meta.env.VITE_API_BASE_URL || '').replace('/api','') || '').replace(/\/$/, '')
   const getCurrentTask = useTaskStore.getState().getCurrentTask
@@ -289,18 +292,109 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   // 缓存 ReactMarkdown components，仅在 baseURL 变化时重建
   const markdownComponents = useMemo(() => createMarkdownComponents(baseURL), [baseURL])
 
+  // 切换任务时立即清空内容，避免旧笔记内容残留到下一次 paint（卡顿感来源）
+  useLayoutEffect(() => {
+    setSelectedContent('')
+    setCurrentVerId('')
+    setLoadingTaskId(null)
+  }, [currentTask?.id])
+
+  // 空壳任务（从其他浏览器同步来的）点击时自动拉取 markdown。
+  // 这里先不拉 transcript，避免长视频转录写入 IndexedDB 造成点击卡顿。
+  const updateTaskContent = useTaskStore(state => state.updateTaskContent)
+  useEffect(() => {
+    if (!currentTask) return
+    const hasContent = Array.isArray(currentTask.markdown)
+      ? currentTask.markdown.length > 0
+      : !!currentTask.markdown
+    if (currentTask.status !== 'SUCCESS' || hasContent) return
+
+    let cancelled = false
+    const taskId = currentTask.id
+    setLoadingTaskId(taskId)
+    get_task_status(taskId, { includeTranscript: false }).then((res: any) => {
+      if (cancelled) return
+      const result = res?.result
+      if (result?.markdown) {
+        const audioMeta = result.audio_meta ?? currentTask.audioMeta
+        const gp = result.generation_params ?? {}
+        // 旧笔记没有 generation_params 时，回退到 raw_info.webpage_url
+        const fallbackUrl =
+          audioMeta?.raw_info?.webpage_url ||
+          audioMeta?.raw_info?.original_url ||
+          ''
+        // 后端有多版本时直接用数组，否则传字符串让 store 做去重封装
+        const markdownPayload: string | Markdown[] =
+          Array.isArray(result.markdown_versions) && result.markdown_versions.length > 0
+            ? (result.markdown_versions as Markdown[])
+            : result.markdown
+        updateTaskContent(taskId, {
+          markdown: markdownPayload,
+          audioMeta,
+          formData: {
+            ...currentTask.formData,
+            video_url:       currentTask.formData?.video_url       || gp.video_url       || fallbackUrl,
+            platform:        currentTask.formData?.platform        || gp.platform        || audioMeta?.platform || '',
+            model_name:      currentTask.formData?.model_name      || gp.model_name      || '',
+            provider_id:     currentTask.formData?.provider_id     || gp.provider_id     || '',
+            style:           currentTask.formData?.style           || gp.style           || '',
+            quality:         currentTask.formData?.quality         || gp.quality         || '',
+            extras:          currentTask.formData?.extras          || gp.extras          || '',
+            link:            currentTask.formData?.link            ?? gp.link            ?? false,
+            screenshot:      currentTask.formData?.screenshot      ?? gp.screenshot      ?? false,
+            video_understanding: currentTask.formData?.video_understanding ?? gp.video_understanding ?? false,
+            video_interval:  currentTask.formData?.video_interval  ?? gp.video_interval  ?? 6,
+            grid_size:       currentTask.formData?.grid_size       ?? gp.grid_size       ?? [2, 2],
+          },
+        })
+      }
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) {
+        setLoadingTaskId(current => (current === taskId ? null : current))
+      }
+    })
+    return () => { cancelled = true }
+  }, [currentTask?.id, currentTask?.status, updateTaskContent])
+
+  // 转录内容体积很大，只在用户打开“原文参照”时再懒加载。
+  useEffect(() => {
+    if (!showTranscribe || !currentTask) return
+    const hasTranscript =
+      !!currentTask.transcript?.full_text ||
+      (currentTask.transcript?.segments?.length ?? 0) > 0
+    if (hasTranscript) return
+
+    let cancelled = false
+    const taskId = currentTask.id
+    get_task_status(taskId).then((res: any) => {
+      if (cancelled) return
+      const transcript = res?.result?.transcript
+      if (transcript) {
+        updateTaskContent(taskId, { transcript })
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [
+    showTranscribe,
+    currentTask?.id,
+    currentTask?.transcript?.full_text,
+    currentTask?.transcript?.segments?.length,
+    updateTaskContent,
+  ])
+
   // 多版本内容处理
   useEffect(() => {
     if (!currentTask) return
 
     if (!isMultiVersion) {
       setCurrentVerId('') // 清空旧版本 ID
-      setModelName(currentTask.formData.model_name)
-      setStyle(currentTask.formData.style)
+      setModelName(currentTask.formData?.model_name ?? '')
+      setStyle(currentTask.formData?.style ?? '')
       setCreateTime(currentTask.createdAt)
-      setSelectedContent(currentTask?.markdown)
+      setSelectedContent(typeof currentTask.markdown === 'string' ? currentTask.markdown : '')
     } else {
-      const latestVersion = [...currentTask.markdown].sort(
+      const versions = currentTask.markdown as Markdown[]
+      const latestVersion = [...versions].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )[0]
 
@@ -308,18 +402,19 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         setCurrentVerId(latestVersion.ver_id)
       }
     }
-  }, [currentTask?.id, taskStatus])
+  }, [currentTask?.id, currentTask?.markdown, taskStatus, isMultiVersion])
   useEffect(() => {
     if (!currentTask || !isMultiVersion) return
 
-    const currentVer = currentTask.markdown.find(v => v.ver_id === currentVerId)
+    const versions = currentTask.markdown as Markdown[]
+    const currentVer = versions.find((v: Markdown) => v.ver_id === currentVerId)
     if (currentVer) {
       setModelName(currentVer.model_name)
       setStyle(currentVer.style)
       setCreateTime(currentVer.created_at || '')
       setSelectedContent(currentVer.content)
     }
-  }, [currentVerId, currentTask?.id])
+  }, [currentVerId, currentTask?.id, currentTask?.markdown, isMultiVersion])
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
@@ -402,7 +497,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
           <p className="text-lg font-bold text-red-500">笔记生成失败</p>
           <p className="mt-2 mb-2 text-xs text-red-400">请检查后台或稍后再试</p>
 
-          <Button onClick={() => retryTask(currentTask.id)} size="lg">
+          <Button onClick={() => currentTask && retryTask(currentTask.id)} size="lg">
             重试
           </Button>
         </div>
@@ -413,13 +508,13 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
       <MarkdownHeader
-        currentTask={currentTask}
+        currentTask={currentTask ?? undefined}
         isMultiVersion={isMultiVersion}
         currentVerId={currentVerId}
         setCurrentVerId={setCurrentVerId}
         modelName={modelName}
         style={style}
-        noteStyles={noteStyles}
+        noteStyles={noteStyles as unknown as { value: string; label: string }[]}
         onCopy={handleCopy}
         onDownload={handleDownload}
         createAt={createTime}
@@ -465,7 +560,9 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                     rehypePlugins={rehypePlugins}
                     components={markdownComponents}
                   >
-                    {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
+                    {selectedContent
+                      .replace(/^>\s*来源链接：[^\n]*\n*/m, '')
+                      .replace(/^(\s*[-*+]\s+)#{1,6}\s+/gm, '$1')}
                   </ReactMarkdown>
                 </div>
               </ScrollArea>
@@ -483,6 +580,14 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
               </>
               )}
             </>
+          ) : loadingTaskId === currentTask?.id ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <div className="w-[300px] flex-col justify-items-center text-center">
+                <Loading className="mb-4 h-10 w-10" />
+                <p className="mb-2 text-neutral-600">正在加载笔记内容</p>
+                <p className="text-xs text-neutral-500">长视频首次打开可能需要几秒钟</p>
+              </div>
+            </div>
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <div className="w-[300px] flex-col justify-items-center">

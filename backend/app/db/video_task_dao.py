@@ -59,3 +59,17 @@ def delete_task_by_video(video_id: str, platform: str):
         logger.error(f"Failed to delete task by video: {e}")
     finally:
         db.close()
+
+
+def delete_task_by_task_id(task_id: str):
+    db = next(get_db())
+    try:
+        tasks = db.query(VideoTask).filter_by(task_id=task_id).all()
+        for task in tasks:
+            db.delete(task)
+        db.commit()
+        logger.info(f"Task(s) deleted for task_id: {task_id}")
+    except Exception as e:
+        logger.error(f"Failed to delete task by task_id: {e}")
+    finally:
+        db.close()

@@ -16,6 +16,7 @@ from app.exceptions.exception_handlers import register_exception_handlers
 from app.utils.logger import get_logger
 from app import create_app
 from app.services.transcriber_config_manager import TranscriberConfigManager
+from app.services.note import cleanup_stale_tasks
 from events import register_handler
 from ffmpeg_helper import ensure_ffmpeg_or_raise
 
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     _cfg = TranscriberConfigManager().get_config()
     logger.info(f"当前转写器配置: type={_cfg['transcriber_type']}, model_size={_cfg['whisper_model_size']}")
     seed_default_providers()
+    cleanup_stale_tasks()
     yield
 
 app = create_app(lifespan=lifespan)
