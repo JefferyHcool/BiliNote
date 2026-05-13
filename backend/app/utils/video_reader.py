@@ -49,7 +49,7 @@ class VideoReader:
         return f"{mm:02d}_{ss:02d}"
 
     def extract_time_from_filename(self, filename: str) -> float:
-        match = re.search(r"frame_(\d{2})_(\d{2})\.jpg", filename)
+        match = re.search(r"frame_(\d+)_(\d{2})\.jpg", filename)
         if match:
             mm, ss = map(int, match.groups())
             return mm * 60 + ss
@@ -67,12 +67,14 @@ class VideoReader:
         except subprocess.CalledProcessError:
             return None
 
-    def extract_frames(self, max_frames=1000) -> list[str]:
+    def extract_frames(self, max_frames: int | None = None) -> list[str]:
 
         try:
             os.makedirs(self.frame_dir, exist_ok=True)
             duration = float(ffmpeg.probe(self.video_path)["format"]["duration"])
-            timestamps = [i for i in range(0, int(duration), self.frame_interval)][:max_frames]
+            timestamps = list(range(0, int(duration), self.frame_interval))
+            if max_frames is not None:
+                timestamps = timestamps[:max_frames]
 
             # 并行提取帧
             max_workers = min(os.cpu_count() or 4, 8, len(timestamps))

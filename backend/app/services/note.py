@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import re
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Any
@@ -33,9 +35,11 @@ from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
 from app.utils.note_helper import normalize_toc_timestamps, replace_content_markers, prepend_source_link
 from app.utils.screenshot_marker import extract_screenshot_timestamps
+from app.utils.path_helper import get_app_dir
 from app.utils.status_code import StatusCode
 from app.utils.video_helper import generate_screenshot
 from app.utils.video_reader import VideoReader
+from app.services.task_cancellation import check_cancelled, TaskCancelledError
 
 # ------------------ 环境变量与全局配置 ------------------
 
@@ -59,6 +63,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 _TERMINAL_STATUSES = {TaskStatus.SUCCESS.value, TaskStatus.FAILED.value}
+
+
+def _safe_path_part(value: Optional[str]) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value or "unknown").strip("_") or "unknown"
 
 
 def cleanup_stale_tasks() -> int:
@@ -153,6 +161,7 @@ class NoteGenerator:
         link = link or "link" in _format
 
         try:
+            check_cancelled(task_id)
             logger.info(f"开始生成笔记 (task_id={task_id})")
             self._update_status(task_id, TaskStatus.PARSING)
 
@@ -217,9 +226,12 @@ class NoteGenerator:
                 video_understanding=video_understanding,
                 video_interval=video_interval,
                 grid_size=grid_size,
+                provider_id=provider_id,
+                model_name=model_name,
                 skip_download=not need_full_download,
             )
 
+            check_cancelled(task_id)
             # 3. 如果前面没拿到字幕，走转写流程
             if transcript is None:
                 transcript = self._get_transcript(
@@ -232,6 +244,7 @@ class NoteGenerator:
                 )
 
             # 3a. 视频理解：分批分析帧截图，把视觉描述转成文本再交给总结步骤
+            check_cancelled(task_id)
             summarize_img_urls = self.video_img_urls
             summarize_extras = extras
             if video_understanding and self.video_img_urls:
@@ -245,6 +258,8 @@ class NoteGenerator:
                     logger.info("视频帧分析完成，将以文本形式传入总结步骤")
 
             # 3b. GPT 总结
+            check_cancelled(task_id)
+            self._update_status(task_id, TaskStatus.SUMMARIZING)
             markdown = self._summarize_text(
                 audio_meta=audio_meta,
                 transcript=transcript,
@@ -279,6 +294,9 @@ class NoteGenerator:
             logger.info(f"笔记生成成功 (task_id={task_id})")
             return NoteResult(markdown=markdown, transcript=transcript, audio_meta=audio_meta)
 
+        except TaskCancelledError:
+            logger.info(f"笔记生成已取消 (task_id={task_id})")
+            raise
         except Exception as exc:
             logger.error(f"生成笔记流程异常 (task_id={task_id})：{exc}", exc_info=True)
             self._update_status(task_id, TaskStatus.FAILED, message=str(exc))
@@ -415,6 +433,8 @@ class NoteGenerator:
         video_understanding: bool,
         video_interval: int,
         grid_size: List[int],
+        provider_id: Optional[str] = None,
+        model_name: Optional[str] = None,
         skip_download: bool = False,
     ) -> AudioDownloadResult | None:
         """
@@ -433,6 +453,8 @@ class NoteGenerator:
         :param video_understanding: 是否需要生成缩略图
         :param video_interval: 视频截帧间隔
         :param grid_size: 缩略图网格尺寸
+        :param provider_id: 模型供应商 ID，用于隔离视频帧目录
+        :param model_name: 模型名称，用于隔离视频帧目录
         :return: AudioDownloadResult 对象
         """
         task_id = audio_cache_file.stem.split("_")[0]
@@ -452,6 +474,11 @@ class NoteGenerator:
             logger.info(f"视频下载完成：{self.video_path}")
 
             if grid_size:
+                model_dir = _safe_path_part(f"{provider_id or 'unknown'}_{model_name or 'unknown'}")
+                runtime_root = get_app_dir(f"runtime_frames/{model_dir}/{_safe_path_part(task_id)}")
+                frame_dir = os.path.join(runtime_root, "output_frames")
+                grid_dir = os.path.join(runtime_root, "grid_output")
+                logger.info(f"视频帧目录: {runtime_root}")
                 self.video_img_urls = VideoReader(
                     video_path=str(self.video_path),
                     grid_size=tuple(grid_size),
@@ -459,7 +486,11 @@ class NoteGenerator:
                     unit_width=960,
                     unit_height=540,
                     save_quality=80,
+                    frame_dir=frame_dir,
+                    grid_dir=grid_dir,
                 ).run()
+                if os.getenv("KEEP_VIDEO_FRAMES", "").lower() not in {"1", "true", "yes"}:
+                    shutil.rmtree(runtime_root, ignore_errors=True)
             else:
                 logger.info("未指定 grid_size，跳过缩略图生成")
 

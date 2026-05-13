@@ -17,6 +17,8 @@ from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
 from app.services.task_serial_executor import task_serial_executor
+from app.services import task_cancellation
+from app.services.task_cancellation import TaskCancelledError
 from app.utils.note_helper import normalize_toc_timestamps
 from app.utils.response import ResponseWrapper as R
 from app.utils.url_parser import extract_video_id
@@ -280,11 +282,22 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
             grid_size=grid_size,
         )
 
-    logger.info(f"任务进入执行队列 (task_id={task_id})")
-    note = task_serial_executor.run(_execute_note_task)
+    model_queue_key = f"{provider_id}:{model_name}"
+    logger.info(f"任务进入执行队列 (task_id={task_id}, queue_key={model_queue_key})")
+    try:
+        note = task_serial_executor.run(model_queue_key, _execute_note_task)
+    except TaskCancelledError:
+        task_cancellation.clear(task_id)
+        logger.info(f"任务 {task_id} 已被取消，停止执行")
+        return
+    except Exception as e:
+        logger.error(f"任务 {task_id} 执行异常: {e}")
+        NoteGenerator()._update_status(task_id, TaskStatus.FAILED, message=str(e))
+        return
     logger.info(f"Note generated: {task_id}")
     if not note or not note.markdown:
         logger.warning(f"任务 {task_id} 执行失败，跳过保存")
+        NoteGenerator()._update_status(task_id, TaskStatus.FAILED, message="笔记内容为空，生成失败")
         return
     note.generation_params = {
         "video_url": video_url,
@@ -314,6 +327,7 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
 def delete_task(data: RecordRequest):
     try:
         task_id = data.task_id
+        task_cancellation.cancel(task_id)
         deleted = _delete_note_result_files(task_id)
         delete_task_by_task_id(task_id)
         try:
