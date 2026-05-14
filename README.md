@@ -23,13 +23,10 @@
 ## ✨ 项目简介
 
 BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、YouTube、抖音等视频链接，自动提取内容并生成结构清晰、重点明确的 Markdown 格式笔记。支持插入截图、原片跳转、AI 问答等功能。
-
+## 在线使用
+可以通过访问 [这里](https://www.bilinote.app/) 进行使用。
 ## 📝 使用文档
 详细文档可以查看[这里](https://docs.bilinote.app/)
-
-## 体验地址
-可以通过访问 [这里](https://www.bilinote.app/) 进行体验，速度略慢，不支持长视频。
-
 ## 📦 桌面版下载
 本项目提供了 Windows 和 macOS 桌面客户端，可在 [Releases](https://github.com/JefferyHcool/BiliNote/releases) 页面下载最新版本。
 
