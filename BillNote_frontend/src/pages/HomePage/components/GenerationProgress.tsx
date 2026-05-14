@@ -129,7 +129,7 @@ const GenerationProgress: FC<GenerationProgressProps> = ({ taskStatus, taskProgr
       </div>
 
       {/* 各阶段耗时小结（仅有已完成阶段时显示） */}
-      {taskProgress?.phase_durations && Object.keys(taskProgress.phase_durations).length > 1 && (
+      {taskProgress?.phase_durations && Object.keys(taskProgress.phase_durations).filter(k => PHASES.some(p => p.key === k)).length > 1 && (
         <div className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
           <p className="mb-1.5 text-xs font-medium text-gray-500">已完成阶段</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
