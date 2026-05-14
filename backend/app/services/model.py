@@ -100,23 +100,46 @@ class ModelService:
             logger.error(f"[{provider_id}] 获取模型失败: {e}")
             return []
     @staticmethod
-    def connect_test(id: str) -> bool:
+    def connect_test(id: str, model: str | None = None) -> bool:
+        """连通性测试：发一条最小化 chat completion。
 
+        model 优先级：
+          1. 调用方显式传入（前端可在「模型选择」UI 里挑一个再测）
+          2. DB 中该 provider 已保存的第一个模型
+          3. 都没有 → 抛错让用户先加一个模型
+        """
         provider = ProviderService.get_provider_by_id(id)
-
-        if provider:
-            if not provider.get('api_key'):
-                raise ProviderError(code=ProviderErrorEnum.NOT_FOUND.code, message=ProviderErrorEnum.NOT_FOUND.message)
-            result =  OpenAICompatibleProvider.test_connection(
-                api_key=provider.get('api_key'),
-                base_url=provider.get('base_url')
+        if not provider:
+            raise ProviderError(
+                code=ProviderErrorEnum.NOT_FOUND.code,
+                message=ProviderErrorEnum.NOT_FOUND.message,
             )
-            if result:
-                return True
-            else:
-                raise ProviderError(code=ProviderErrorEnum.WRONG_PARAMETER.code,message=ProviderErrorEnum.WRONG_PARAMETER.message)
+        if not provider.get('api_key'):
+            raise ProviderError(
+                code=ProviderErrorEnum.NOT_FOUND.code,
+                message=ProviderErrorEnum.NOT_FOUND.message,
+            )
 
-        raise ProviderError(code=ProviderErrorEnum.NOT_FOUND.code, message=ProviderErrorEnum.NOT_FOUND.message)
+        if not model:
+            saved_models = ModelService.get_enabled_models_by_provider(provider["id"])
+            if not saved_models:
+                raise ProviderError(
+                    code=ProviderErrorEnum.WRONG_PARAMETER.code,
+                    message="请先为该供应商添加至少一个模型再测试连通性",
+                )
+            model = saved_models[0]["model_name"]
+
+        ok = OpenAICompatibleProvider.test_connection(
+            api_key=provider.get('api_key'),
+            base_url=provider.get('base_url'),
+            model=model,
+        )
+        if ok:
+            return True
+        raise ProviderError(
+            code=ProviderErrorEnum.WRONG_PARAMETER.code,
+            message=ProviderErrorEnum.WRONG_PARAMETER.message,
+        )
 
 
 

@@ -10,6 +10,7 @@ from app.utils.path_helper import get_model_dir
 from events import transcription_finished
 from pathlib import Path
 import os
+import shutil
 from tqdm import tqdm
 from modelscope import snapshot_download
 
@@ -50,22 +51,41 @@ class WhisperTranscriber(Transcriber):
 
         model_dir = get_model_dir("whisper")
         model_path = os.path.join(model_dir, f"whisper-{model_size}")
-        if not Path(model_path).exists():
-            logger.info(f"模型 whisper-{model_size} 不存在，开始下载...")
-            repo_id = MODEL_MAP[model_size]
-            model_path = snapshot_download(
-                repo_id,
+        repo_id = MODEL_MAP[model_size]
 
-                local_dir=model_path,
-            )
+        # 第一步：目录 / model.bin 不在 → 下载。
+        # 关键判据用 model.bin 而不是目录存在：首次下载若被打断（网络中断 / 磁盘满 /
+        # 容器被 kill）会留下半成品目录，只看目录存在会跳过下载。
+        model_bin = Path(model_path) / "model.bin"
+        if not model_bin.exists():
+            if Path(model_path).exists():
+                logger.warning(f"模型目录 {model_path} 存在但 model.bin 缺失（上次下载未完成），重新下载")
+            else:
+                logger.info(f"模型 whisper-{model_size} 不存在，开始下载...")
+            model_path = snapshot_download(repo_id, local_dir=model_path)
             logger.info("模型下载完成")
 
-        self.model = WhisperModel(
-            model_size_or_path=model_path,
-            device=self.device,
-            compute_type=self.compute_type,
-            download_root=model_dir
-        )
+        # 第二步：加载。model.bin 可能存在但【内容截断】（下载到一半被 kill），
+        # 此时 WhisperModel() 会抛 "File model.bin is incomplete: failed to read a buffer..."。
+        # 捕获后删掉损坏目录、重新下载、再试一次——自愈，避免 500 死循环。
+        try:
+            self.model = WhisperModel(
+                model_size_or_path=model_path,
+                device=self.device,
+                compute_type=self.compute_type,
+                download_root=model_dir,
+            )
+        except Exception as e:
+            logger.warning(f"加载 whisper-{model_size} 失败（疑似模型文件损坏 / 截断）：{e}；删除后重新下载")
+            shutil.rmtree(model_path, ignore_errors=True)
+            model_path = snapshot_download(repo_id, local_dir=model_path)
+            logger.info("模型重新下载完成，重试加载")
+            self.model = WhisperModel(
+                model_size_or_path=model_path,
+                device=self.device,
+                compute_type=self.compute_type,
+                download_root=model_dir,
+            )
     @staticmethod
     def is_torch_installed() -> bool:
         try:

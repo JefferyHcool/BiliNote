@@ -20,6 +20,8 @@ class ProviderRequest(BaseModel):
 
 class TestRequest(BaseModel):
     id: str
+    # 可选：指定用哪个 model 跑连通性测试；不传则用该 provider 在 DB 里的第一个模型
+    model: Optional[str] = None
 class ProviderUpdateRequest(BaseModel):
     id: str
     name: Optional[str] = None
@@ -91,5 +93,5 @@ def update_provider(data: ProviderUpdateRequest):
 
 @router.post('/connect_test')
 def gpt_connect_test(data: TestRequest):
-    ModelService().connect_test(data.id)
+    ModelService().connect_test(data.id, model=data.model)
     return R.success(msg='连接成功')

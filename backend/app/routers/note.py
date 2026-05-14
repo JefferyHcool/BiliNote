@@ -180,6 +180,24 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
+        # 就绪门禁：本地转写引擎（fast-whisper / mlx-whisper）必须等模型下载完才能跑视频，
+        # 否则任务会卡在首次下载（慢 / OOM / 截断），用户只看到一个静默失败的任务。
+        # 客户端已抓好字幕（prefetched_transcript）则不需要转写，跳过检查。
+        if not data.prefetched_transcript:
+            from app.services.transcriber_config_manager import TranscriberConfigManager
+            readiness = TranscriberConfigManager().is_model_ready()
+            if not readiness["ready"]:
+                logger.warning(f"拒绝 generate_note：{readiness['reason']}")
+                return R.error(
+                    msg=readiness["reason"],
+                    code=300102,
+                    data={
+                        "reason": "transcriber_model_not_ready",
+                        "transcriber_type": readiness["transcriber_type"],
+                        "model_size": readiness["model_size"],
+                        "downloading": readiness["downloading"],
+                    },
+                )
 
         video_id = extract_video_id(data.video_url, data.platform)
         # if not video_id:

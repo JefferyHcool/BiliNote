@@ -80,6 +80,36 @@ def update_transcriber_config(data: TranscriberConfigRequest):
     return R.success(data=config)
 
 
+# ---- 全局代理配置（作用于 LLM API + 转写 API + yt-dlp 下载）----
+
+class ProxyConfigRequest(BaseModel):
+    enabled: bool
+    url: Optional[str] = None
+
+
+@router.get("/proxy_config")
+def get_proxy_config():
+    from app.services.proxy_config_manager import ProxyConfigManager
+    mgr = ProxyConfigManager()
+    cfg = mgr.get_config()
+    # effective 给前端展示「当前实际生效的代理」——可能来自配置，也可能来自 env 兜底
+    return R.success(data={
+        **cfg,
+        "effective": mgr.get_proxy_url() or "",
+    })
+
+
+@router.post("/proxy_config")
+def update_proxy_config(data: ProxyConfigRequest):
+    from app.services.proxy_config_manager import ProxyConfigManager
+    mgr = ProxyConfigManager()
+    cfg = mgr.update_config(enabled=data.enabled, url=data.url)
+    return R.success(data={
+        **cfg,
+        "effective": mgr.get_proxy_url() or "",
+    })
+
+
 # ---- Whisper 模型下载状态 & 下载触发 ----
 
 # 用于跟踪正在进行的下载任务
@@ -87,10 +117,33 @@ _downloading: dict[str, str] = {}  # model_size -> status ("downloading" | "done
 
 
 def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> bool:
-    """检查指定 whisper 模型是否已下载到本地。"""
+    """检查指定 whisper 模型是否已下载完整到本地。
+
+    必须 model.bin 落盘才算完成，仅有空目录或半成品不能算「已下载」——
+    否则监控页会显示绿勾但加载时报「Unable to open file 'model.bin'」。
+    """
     model_dir = get_model_dir(subdir)
     model_path = os.path.join(model_dir, f"whisper-{model_size}")
-    return Path(model_path).exists()
+    return (Path(model_path) / "model.bin").exists()
+
+
+def _check_mlx_whisper_model_exists(model_size: str) -> bool:
+    """检查 mlx-whisper 模型是否已下载完整到本地。
+
+    与 fast-whisper 的目录布局不同：mlx 模型按 HuggingFace repo_id
+    （如 mlx-community/whisper-tiny-mlx）落盘，且没有 model.bin，
+    用 config.json 作为「下载完成」的判据，和 mlx_whisper_transcriber.py 保持一致。
+    """
+    try:
+        from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
+    except Exception:
+        return False
+    repo_id = MLX_MODEL_MAP.get(model_size)
+    if not repo_id:
+        return False
+    model_dir = get_model_dir("mlx-whisper")
+    model_path = os.path.join(model_dir, repo_id)
+    return (Path(model_path) / "config.json").exists()
 
 
 @router.get("/transcriber_models_status")
@@ -113,11 +166,9 @@ def get_transcriber_models_status():
         from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
         for size in WHISPER_MODEL_SIZES:
             mlx_key = f"mlx-{size}"
-            model_dir = get_model_dir("mlx-whisper")
             repo_id = MLX_MODEL_MAP.get(size)
-            # 模型在本地按 repo_id（如 mlx-community/whisper-small-mlx）落盘
-            model_path = os.path.join(model_dir, repo_id) if repo_id else None
-            downloaded = bool(model_path and Path(model_path).exists())
+            # 用 config.json 判定，和 _check_mlx_whisper_model_exists / 加载逻辑保持一致
+            downloaded = _check_mlx_whisper_model_exists(size)
             mlx_statuses.append({
                 "model_size": size,
                 "downloaded": downloaded,
@@ -146,7 +197,8 @@ def _do_download_whisper(model_size: str):
         _downloading[model_size] = "downloading"
         model_dir = get_model_dir("whisper")
         model_path = os.path.join(model_dir, f"whisper-{model_size}")
-        if Path(model_path).exists():
+        # 用 model.bin 判定而非目录存在：半成品目录不能算「已下载」
+        if (Path(model_path) / "model.bin").exists():
             _downloading[model_size] = "done"
             return
         repo_id = MODEL_MAP.get(model_size)
@@ -179,7 +231,8 @@ def _do_download_mlx_whisper(model_size: str):
 
         model_dir = get_model_dir("mlx-whisper")
         model_path = os.path.join(model_dir, repo_id)
-        if Path(model_path).exists():
+        # 用 config.json 判定而非目录存在：半成品目录不能算「已下载」
+        if (Path(model_path) / "config.json").exists():
             _downloading[key] = "done"
             return
         logger.info(f"开始下载 mlx-whisper 模型: {model_size} ← {repo_id}")
@@ -214,46 +267,119 @@ def download_transcriber_model(data: ModelDownloadRequest, background_tasks: Bac
 
 @router.get("/sys_health")
 async def sys_health():
+    """结构化健康状态——任何子项异常都不应让整个 endpoint 5xx。
+
+    每个字段：'ok' | 'missing' | 'error'。
+    前端 useCheckBackend 用 /sys_check 做存活判定（不依赖外部依赖），
+    /sys_health 用来在设置页区分「后端没起」vs「后端起了但 ffmpeg 缺」vs「DB 写不进去」等更细的状态。
+    """
+    ffmpeg_status = "ok"
     try:
         ensure_ffmpeg_or_raise()
-        return R.success()
-    except EnvironmentError:
-        return R.error(msg="系统未安装 ffmpeg 请先进行安装")
+    except Exception:
+        ffmpeg_status = "missing"
+
+    db_status = "ok"
+    try:
+        from app.db.engine import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "error"
+
+    # 当前转写器配置 + 模型是否已下载（用 model.bin 落盘判定，与 transcriber 加载逻辑一致）
+    whisper_info: dict = {"size": None, "type": None, "downloaded": False, "checked": False}
+    try:
+        cfg = transcriber_config_manager.get_config()
+        size = cfg["whisper_model_size"]
+        ttype = cfg["transcriber_type"]
+        whisper_info["size"] = size
+        whisper_info["type"] = ttype
+        # 只有本地引擎才有「下载」概念；groq / bcut / kuaishou 在线引擎跳过
+        if ttype == "fast-whisper":
+            whisper_info["downloaded"] = _check_whisper_model_exists(size, "whisper")
+            whisper_info["checked"] = True
+        elif ttype == "mlx-whisper":
+            whisper_info["downloaded"] = _check_mlx_whisper_model_exists(size)
+            whisper_info["checked"] = True
+    except Exception:
+        pass
+
+    return R.success(data={
+        "backend": "ok",
+        "ffmpeg": ffmpeg_status,
+        "db": db_status,
+        "whisper_model": whisper_info,
+    })
+
 
 @router.get("/sys_check")
 async def sys_check():
+    """轻量存活判定：后端进程能响应这个 endpoint 就算「起来了」，不查外部依赖。
+
+    给桌面端 useCheckBackend / Tauri ready-probe 用。
+    """
     return R.success()
 
 
 @router.get("/deploy_status")
 async def deploy_status():
-    """返回部署监控所需的所有状态信息"""
-    import torch
+    """返回部署监控所需的所有状态信息。
+
+    所有子项都用 try 包起来——监控页本身不应该被任何一个子项打死。
+    特别是 torch：它只在 fast-whisper 路径用得到，用 Groq / 必剪 / 快手在线
+    引擎的轻量部署完全可以不装，那种情况这个 endpoint 不应该 500。
+    """
     import os
-    
+
     # CUDA 状态
-    cuda_available = torch.cuda.is_available()
-    cuda_info = {
-        "available": cuda_available,
-        "version": torch.version.cuda if cuda_available else None,
-        "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
-    }
-    
-    # Whisper 模型状态（从配置文件读取，与前端设置同步）
-    transcriber_cfg = transcriber_config_manager.get_config()
-    model_size = transcriber_cfg["whisper_model_size"]
-    transcriber_type = transcriber_cfg["transcriber_type"]
-    
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+        cuda_info = {
+            "available": cuda_available,
+            "torch_installed": True,
+            "version": torch.version.cuda if cuda_available else None,
+            "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
+        }
+    except Exception:
+        cuda_info = {
+            "available": False,
+            "torch_installed": False,
+            "version": None,
+            "gpu_name": None,
+        }
+
+    # Whisper 模型 / 转写器配置 + 本地下载状态
+    try:
+        transcriber_cfg = transcriber_config_manager.get_config()
+        size = transcriber_cfg["whisper_model_size"]
+        ttype = transcriber_cfg["transcriber_type"]
+        if ttype == "fast-whisper":
+            downloaded = _check_whisper_model_exists(size, "whisper")
+        elif ttype == "mlx-whisper":
+            downloaded = _check_mlx_whisper_model_exists(size)
+        else:
+            downloaded = False  # 在线引擎无下载概念
+        whisper_info = {
+            "model_size": size,
+            "transcriber_type": ttype,
+            "downloaded": downloaded,
+        }
+    except Exception:
+        whisper_info = {"model_size": None, "transcriber_type": None, "downloaded": False}
+
     # FFmpeg 状态
     try:
         ensure_ffmpeg_or_raise()
         ffmpeg_ok = True
-    except:
+    except Exception:
         ffmpeg_ok = False
-    
+
     return R.success(data={
         "backend": {"status": "running", "port": int(os.getenv("BACKEND_PORT", 8483))},
         "cuda": cuda_info,
-        "whisper": {"model_size": model_size, "transcriber_type": transcriber_type},
+        "whisper": whisper_info,
         "ffmpeg": {"available": ffmpeg_ok},
     })
