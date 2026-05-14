@@ -15,14 +15,16 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.2.0", features = [] }
+# tauri-build / tauri crate 与 @tauri-apps/api 大版本必须对齐（CLI 在 build 前会校验）。
+# @tauri-apps/api 已升 2.10（commit bb9a70e），这里同步到 2.x 最新让 cargo 解析到匹配版本。
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.5.0", features = ["devtools"] }
-tauri-plugin-log = "2.0.0-rc"
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 
 [package.metadata.tauri.bundle.macOS]

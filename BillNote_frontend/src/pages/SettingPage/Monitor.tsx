@@ -174,7 +174,11 @@ export default function Monitor() {
                                 <AudioLines className="mr-2 inline h-5 w-5 text-purple-500" />
                                 Whisper 模型
                             </CardTitle>
-                            {status && <StatusBadge ok={true} label="已配置" />}
+                            {status && (() => {
+                                const isLocal = status.whisper.transcriber_type === 'fast-whisper' || status.whisper.transcriber_type === 'mlx-whisper'
+                                if (!isLocal) return <StatusBadge ok={true} label="在线引擎" />
+                                return <StatusBadge ok={status.whisper.downloaded} label={status.whisper.downloaded ? '已下载' : '未下载'} />
+                            })()}
                         </CardHeader>
                         <CardContent>
                             {loading && !status ? (
@@ -192,6 +196,14 @@ export default function Monitor() {
                                         <span className="text-muted-foreground">转写引擎:</span>
                                         <span className="font-mono">{status.whisper.transcriber_type}</span>
                                     </div>
+                                    {(status.whisper.transcriber_type === 'fast-whisper' || status.whisper.transcriber_type === 'mlx-whisper') && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">本地下载:</span>
+                                            <span className={status.whisper.downloaded ? 'font-medium text-green-600' : 'font-medium text-amber-600'}>
+                                                {status.whisper.downloaded ? '已就绪' : '未下载（首次转写会触发下载）'}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             ) : null}
                         </CardContent>

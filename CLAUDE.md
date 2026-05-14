@@ -13,6 +13,8 @@ BiliNote is an AI video note generation tool. It extracts content from video lin
 cd backend
 pip install -r requirements.txt
 python main.py                    # Starts on 0.0.0.0:8483
+pytest                            # Run tests in backend/tests/
+pytest tests/test_request_chunker.py::test_name   # Run a single test
 ```
 
 ### Frontend (React 19 + Vite + TypeScript)
@@ -43,6 +45,8 @@ pnpm install
 pnpm dev          # watch mode → ./extension/
 pnpm build        # production build → ./extension/
 pnpm typecheck
+pnpm test         # Vitest unit tests
+pnpm test:e2e     # Playwright e2e
 ```
 Load unpacked at `chrome://extensions/` → select `BillNote_extension/extension/`. Talks to the same backend at `http://localhost:8483` (configurable in the options page). CORS in `backend/main.py` already accepts `chrome-extension://` and `moz-extension://` via regex.
 
@@ -56,15 +60,15 @@ Load unpacked at `chrome://extensions/` → select `BillNote_extension/extension
   - `chat_service.py` + `chat_tools.py` + `vector_store.py` — RAG-based AI Q&A with Function Calling, indexing transcripts and video metadata
   - `cookie_manager.py` — per-platform cookie storage; injected into yt-dlp by downloaders (e.g. Bilibili)
   - `transcriber_config_manager.py` — persisted transcriber settings
-  - `worker_registry.py` — **optional** Nacos registration + heartbeat for distributed worker mode (no-op when `NACOS_SERVER_ADDR` unset)
-- `app/messaging/` — **optional** RabbitMQ producer/consumer publishing task progress/results to `bilinote.task.feedback` exchange. Silently degrades when `RABBITMQ_URL` is unset; always import-safe.
 - `app/downloaders/` — Platform adapters (bilibili, youtube, douyin, kuaishou, local) with shared `base.py` interface
 - `app/transcriber/` — Speech-to-text engines (fast-whisper, groq, bcut, kuaishou, mlx-whisper) with factory in `transcriber_provider.py`. YouTube path prefers existing subtitles and skips audio download when available.
 - `app/gpt/` — LLM integration with factory pattern (`gpt_factory.py`), prompt templates (`prompt.py`, `prompt_builder.py`), and `request_chunker.py` for long transcripts
 - `app/db/` — SQLite + SQLAlchemy: DAO pattern (`provider_dao.py`, `model_dao.py`, `video_task_dao.py`), models in `models/`
 - `app/utils/` — `response.py` (ResponseWrapper for consistent JSON), `video_helper.py` (screenshots via FFmpeg), `export.py` (PDF/DOCX), `ppt_generator.py`, `minio_client.py`
-- `app/i18n/` — backend localization
-- `events/` (root level) — Blinker signal system for post-processing (e.g., temp file cleanup after transcription)
+- `app/validators/video_url_validator.py` — URL → platform detection (mirrored client-side in the extension)
+- `app/exceptions/` — `BizException` + handlers wired in `main.py` via `register_exception_handlers`
+- `backend/events/` — Blinker signal system for post-processing (e.g., temp file cleanup after transcription); registered in `lifespan` startup
+- `backend/ffmpeg_helper.py` — `ensure_ffmpeg_or_raise` is called at startup; respects `FFMPEG_BIN_PATH`
 
 **Frontend** (`BillNote_frontend/src/`) — React 19 + Vite + Tailwind + shadcn/ui:
 - `pages/HomePage/` — Main note generation UI: `NoteForm.tsx` (input), `MarkdownViewer.tsx` (preview), `MarkmapComponent.tsx` (mind map)
@@ -94,8 +98,8 @@ Load unpacked at `chrome://extensions/` → select `BillNote_extension/extension
 - **Environment**: Root `.env` (copy from `.env.example`). LLM API keys are configured through the UI, not env vars.
 - **Database**: SQLite at `backend/app/db/bili_note.db`, auto-initialized on first run
 - **FFmpeg**: Required system dependency for video/audio processing
-- **Vite proxy**: Dev server proxies `/api` and `/static` to backend (configured in `vite.config.ts`, reads env from parent dir)
-- **Distributed mode (optional)**: Setting `NACOS_SERVER_ADDR` enables Nacos worker registration; setting `RABBITMQ_URL` enables MQ feedback. Both are no-ops when unset — single-node deployment works without either. Other knobs: `WORKER_ID`, `WORKER_SELF_URL`, `WORKER_MAX_CONCURRENT`, `TASK_MAX_WORKERS`.
+- **Vite proxy**: Dev server proxies `/api` and `/static` to backend (configured in `vite.config.ts`, reads env from parent dir; falls back to current dir when `DOCKER_BUILD` is set)
+- **CORS**: `backend/main.py` uses a regex (`CORS_ORIGIN_REGEX`) that allows localhost, `tauri.localhost`, and `chrome-extension://` / `moz-extension://` origins — required for the desktop app and the browser extension.
 
 ## Code Style
 

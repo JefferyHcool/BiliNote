@@ -2,6 +2,39 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.0] - 2026-05-14
+
+主线：一波部署与运行时韧性专项——Docker / 桌面端 / 在线引擎三端的"装不上、起不来、跑一半挂"问题集中清理，并新增全局代理与转写模型就绪门禁。
+
+### Added
+
+- **全局代理**：新增 `ProxyConfigManager`（`config/proxy.json` 持久化 + `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` 环境变量兜底）。一处配置同时作用于 LLM API、转写 API（Groq 等）、yt-dlp 视频下载、youtube-transcript-api 字幕拉取。前端「设置 → 下载配置」页新增代理卡片，会显示当前实际生效值（含 env 兜底来源提示）
+- **转写模型就绪门禁**：`/generate_note` 在排队前检查本地转写引擎（fast-whisper / mlx-whisper）的模型是否已下载完整，未就绪直接拦截并返回 `reason=transcriber_model_not_ready`，不再让任务静默卡在首次大文件下载；前端引导用户去「音频转写配置」页下载
+- **桌面端后端健康监控韧性**：Tauri 侧 spawn sidecar 后以 HTTP 探针轮询 `/api/sys_check` 判就绪并 emit `backend-ready`；`RunEvent::Exit` 钩子在 app 退出前 kill sidecar，杜绝孤儿进程占用 8483 端口；启动失败对话框展示原因 + 最近 stderr + 一键重启 / 复制日志
+- `/sys_health` 重构为结构化健康响应 `{backend, ffmpeg, db, whisper_model}`；部署监控页显示 Whisper 模型本地下载状态
+- 所有 Dockerfile 新增 `BASE_REGISTRY` build-arg，国内拉不到 docker.io 时可换 daocloud 等镜像源
+
+### Fixed
+
+- **whisper 模型损坏自愈**：`model.bin` 截断 / 损坏导致 `Unable to open file 'model.bin'` 死循环——加载失败时删除损坏目录、重新下载、重试一次；mlx-whisper 同样按 `config.json` 判定完整性
+- **空 API Key 天书报错**：空 key 会让 httpx 拼出非法 header `Bearer ` 并抛 `LocalProtocolError: Illegal header value b'Bearer '`。新增 `build_openai_client` 在入口校验，给出「xxx 的 API Key 未配置」的清晰提示
+- **新模型 temperature 不兼容**：OpenAI o1 / o3 / gpt-5 系列拒绝自定义 `temperature`，命中后就地去掉该参数重试，不消耗重试预算
+- **桌面端「后端加载中」死循环**：`useCheckBackend` 重写——60s 总超时取代 `while(true)` 无限轮询，订阅 Tauri `backend-ready` / `backend-terminated` / `backend-startup-timeout` 事件；裸 `fetch` 探测避免启动期 toast 叠堆
+- **CORS 漏配桌面端 origin**：补全 `tauri://localhost` / `https://tauri.localhost`，修桌面端 fetch 拿到 200 却被浏览器 CORS 拒绝读响应（表现为"连不上后端"但后端日志全 200）
+- `/api/api/sys_health` 双 `/api` 前缀导致健康检查 404
+- `docker-compose` 的 `restart: on-failure:3` 改为 `unless-stopped`，避免短暂崩溃后容器被永久打死；GPU compose 补齐 `healthcheck` / `restart` / `mem_limit`
+- `Dockerfile.complete` 的 supervisord 用 `%(ENV_*)s` 透传环境变量给 backend 子进程（此前只白名单 2 个，`docker run -e` 配的变量后端看不到）
+- `.env.example`：修正 `VITE_API_BASE_URL` 端口（8000→8483）、`WHISPER_MODEL_SIZE`（medium→tiny，首次启动不被 ~1.5GB 下载卡住）
+- Onboarding：第 1 步后端连通检测改为自动重试 + Tauri 事件触发 + 手动重检按钮；第 2 步撞预置供应商名时改为更新已存在供应商而非报错
+- 模型供应商列表卡片整行可点击切换（此前仅 icon 区域响应）
+- `connect_test` 改用真实 chat completion 探测而非 `/v1/models`（后者在 key 无 inference 权限 / 供应商不实现该端点时会误判）
+
+### Internal
+
+- `backend/main.py` lifespan 拆为 `[startup 1/5]…[startup 5/5]` 分段日志，启动期异常可一眼定位死在哪一步
+- `request.ts` 新增 `suppressToast` 配置位，预期内的失败（如 onboarding 撞名重试）不弹全局红 toast
+- `CLAUDE.md` 勘误：移除不存在的 `app/messaging/` / `app/i18n/` / `worker_registry.py` 描述，修正 `events/` 路径，补 `pytest` / 前端 `typecheck` 命令
+
 ## [2.2.3] - 2026-05-09
 
 ### Fixed

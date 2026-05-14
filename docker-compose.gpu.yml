@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile.gpu
       args:
+        # 国内拉不到 docker.io 时设置 BASE_REGISTRY；注意所选镜像需要支持 nvidia/cuda 命名空间
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
         APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
         PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
     env_file:
@@ -14,9 +16,20 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
     volumes:
+      # 同 docker-compose.yml：./backend 绑到 /app，DB / 转写器配置 / 截图 / 上传都持久化
       - ./backend:/app
     expose:
       - "${BACKEND_PORT}"  # 不再对外暴露，用于 nginx 内部通信
+    # 用 unless-stopped 避免短暂崩溃把容器永久打死后再也读不到 .env 修改
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/sys_health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s   # GPU 镜像首次加载 CUDA 比 CPU 慢，给久一点
+    # GPU 部署默认跑较大模型，把内存限制提到 8g 避免 host OOM
+    mem_limit: 8g
     deploy:
       resources:
         reservations:
@@ -30,10 +43,14 @@ services:
     build:
       context: .
       dockerfile: BillNote_frontend/Dockerfile
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
     env_file:
       - .env
     expose:
       - "80"  # 不暴露给宿主机，只供 nginx 访问
+    restart: unless-stopped
+    mem_limit: 512m
 
   nginx:
     container_name: bilinote-nginx
@@ -43,5 +60,9 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 256m

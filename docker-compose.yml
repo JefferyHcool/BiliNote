@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
+        # 国内拉不到 docker.io 时设置 BASE_REGISTRY=docker.m.daocloud.io（或其他可用镜像）
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
         APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
         PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
     env_file:
@@ -14,16 +16,25 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
     volumes:
+      # 把整个 backend/ 目录绑到 /app，意味着这些都持久化到宿主机、删容器不丢：
+      #   ./backend/bili_note.db                — SQLite 数据库（含 LLM 供应商配置、笔记历史）
+      #   ./backend/config/transcriber.json     — 转写器运行时配置
+      #   ./backend/static/screenshots/         — 视频截图
+      #   ./backend/uploads/                    — 上传的本地视频
       - ./backend:/app
     expose:
       - "${BACKEND_PORT}"  # 不再对外暴露，用于 nginx 内部通信
-    restart: on-failure:3
+    # 用 unless-stopped 而非 on-failure:N，避免任何短暂崩溃把容器永久打死后
+    # 再也接收不到用户修过的 .env。手动 docker-compose stop 仍可正常停下。
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/sys_health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+    # WHISPER_MODEL_SIZE 选 medium 及以上请把这里调到 8g+，
+    # 否则首次模型加载时容易被 host OOM-killer 干掉。
     mem_limit: 4g
 
   frontend:
@@ -31,11 +42,13 @@ services:
     build:
       context: .
       dockerfile: BillNote_frontend/Dockerfile
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
     env_file:
       - .env
     expose:
       - "80"  # 不暴露给宿主机，只供 nginx 访问
-    restart: on-failure:3
+    restart: unless-stopped
     mem_limit: 512m
 
   nginx:
@@ -50,5 +63,5 @@ services:
         condition: service_healthy
       frontend:
         condition: service_started
-    restart: on-failure:3
+    restart: unless-stopped
     mem_limit: 256m

@@ -185,15 +185,40 @@ class UniversalGPT(GPT):
         status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
         return status in {408, 409, 429, 500, 502, 503, 504, 524}
 
+    @staticmethod
+    def _is_temperature_unsupported_error(exc: Exception) -> bool:
+        """OpenAI o1/o3/gpt-5 系列等新模型不接受自定义 temperature，
+        只允许默认值 1，传 0.7 会报 `'temperature' does not support 0.7 ...`。"""
+        raw = str(exc).lower()
+        return "temperature" in raw and (
+            "does not support" in raw
+            or "unsupported_value" in raw
+            or "only the default" in raw
+        )
+
+    def _do_create(self, messages: list):
+        """单次调用。如果模型拒绝自定义 temperature，就地去掉该参数再试一次
+        （不消耗外层的重试次数预算），仍失败则把异常抛给外层重试逻辑。"""
+        try:
+            return self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+            )
+        except Exception as exc:
+            if self._is_temperature_unsupported_error(exc):
+                print(f"[universal_gpt] 模型 {self.model} 不支持自定义 temperature，改用默认值重试")
+                return self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                )
+            raise
+
     def _chat_completion_create(self, messages: list):
         last_exc = None
         for attempt in range(self._max_retry_attempts):
             try:
-                return self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=self.temperature
-                )
+                return self._do_create(messages)
             except Exception as exc:
                 last_exc = exc
                 if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):

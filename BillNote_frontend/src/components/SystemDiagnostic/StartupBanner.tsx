@@ -74,8 +74,17 @@ const StartupBanner = () => {
         })
       })
 
+      // 后端被「重启后端」按钮拉起来后 / Rust ready-probe 检测到新 sidecar 真的就绪后，
+      // 自动清掉 terminated 横幅。之前 dismissible:false + 没自动清逻辑 = banner 永远卡。
+      const offRestarted = await listen('backend-restarted', () => {
+        setBanner(b => (b?.severity === 'error' ? null : b))
+      })
+      const offReady = await listen('backend-ready', () => {
+        setBanner(b => (b?.severity === 'error' ? null : b))
+      })
+
       // backend-error 是 sidecar stderr，量大噪音多，这里不直接展示，留给 P2 的日志面板。
-      unlisteners = [offWarning, offTerminated]
+      unlisteners = [offWarning, offTerminated, offRestarted, offReady]
     })()
 
     return () => {

@@ -5,7 +5,7 @@ from app.decorators.timeit import timeit
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
-from openai import OpenAI
+from app.utils.openai_client import build_openai_client
 import ffmpeg
 import tempfile
 from dotenv import load_dotenv
@@ -30,12 +30,14 @@ class GroqTranscriber(Transcriber, ABC):
             print(f"压缩完成，临时路径：{file_path}")
         provider = ProviderService.get_provider_by_id('groq')
 
-
         if not provider:
             raise Exception("Groq 供应商未配置,请配置以后使用。")
-        client = OpenAI(
+        # build_openai_client 会校验 api_key 非空（空 key 会抛天书般的
+        # `Illegal header value b'Bearer '`），并自动注入全局代理
+        client = build_openai_client(
             api_key=provider.get('api_key'),
-            base_url=provider.get('base_url')
+            base_url=provider.get('base_url'),
+            key_label="Groq 转写引擎的 API Key",
         )
         filename = file_path
 

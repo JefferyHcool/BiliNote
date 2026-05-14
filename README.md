@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.2.3</h1>
+<h1 align="center" > BiliNote v2.3.0</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -49,6 +49,14 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.3.0 新增
+
+- 全局代理：一处配置同时作用于 AI 模型接口、转写接口（Groq 等）、YouTube 下载（设置 → 下载配置页），支持 `HTTP_PROXY` 环境变量兜底
+- 转写模型就绪门禁：本地引擎模型没下载好时拦截视频任务，引导先去下载，不再静默卡在首次下载
+- 桌面端后端健康监控韧性：退出自动清理 sidecar、启动失败展示原因 + 日志、不再无限「加载中」
+- whisper 模型损坏自愈：`model.bin` 截断时自动删除重下；空 API Key / 新模型 temperature 不兼容给出清晰提示
+- Docker 部署韧性：`BASE_REGISTRY` 可换国内镜像源、restart 策略修正、`.env.example` 端口与默认模型修正、新增部署 FAQ
 
 ### v2.2.3 修订
 
@@ -143,12 +151,73 @@ docker run -d -p 80:80 \
 也可以使用 docker-compose 本地构建：
 
 ```bash
-# 标准部署
-docker-compose up -d
+cp .env.example .env       # 第一次部署务必先创建 .env，否则 BACKEND_PORT/APP_PORT 等变量为空会启动失败
+docker-compose up --build -d
 
-# GPU 加速部署（需要 NVIDIA GPU）
-docker-compose -f docker-compose.gpu.yml up -d
+# GPU 加速部署（需要 NVIDIA GPU + NVIDIA Container Toolkit）
+docker-compose -f docker-compose.gpu.yml up --build -d
 ```
+
+#### Docker 部署常见问题（FAQ）
+
+社区反馈最集中的几个坑，遇到先按下面排查：
+
+**0. 国内拉不到 docker.io（build 阶段报 `dial tcp ... i/o timeout`）**
+
+`docker-compose build` 拉 `python:3.11-slim` / `node:20-alpine` / `nginx:1.25-alpine` 时连 `auth.docker.io` 超时。三种解法，按推荐顺序：
+
+- **方法 A：直接用预构建镜像（最省事）**——不要本地 build，跳到上面的 `docker pull ghcr.io/jefferyhcool/bilinote:latest` 路径，ghcr.io 在国内通常比 docker.io 顺。
+- **方法 B：配置 Docker daemon 镜像加速器**——编辑 `~/.docker/daemon.json`（Linux 在 `/etc/docker/daemon.json`），加：
+  ```json
+  {
+    "registry-mirrors": ["https://docker.m.daocloud.io"]
+  }
+  ```
+  然后重启 Docker Desktop / `sudo systemctl restart docker`。这是一劳永逸的做法。
+- **方法 C：临时切换 base image 镜像源**——本项目所有 Dockerfile 都暴露了 `BASE_REGISTRY` build-arg：
+  ```bash
+  BASE_REGISTRY=docker.m.daocloud.io docker-compose build
+  docker-compose up -d
+  ```
+  或永久写到 `.env`：`echo 'BASE_REGISTRY=docker.m.daocloud.io' >> .env`。
+
+注意：Chinese 公共 docker 镜像源时常被关停，2025-2026 之间可用的列表会变；如果 `docker.m.daocloud.io` 不通，搜一下"Docker 镜像加速 可用"找最新可用源即可。
+
+**1. 容器一直 restart / unhealthy**
+
+先看后端日志：
+```bash
+docker logs -f bilinote-backend
+```
+后端启动会按顺序打印 `[startup 1/5] ... [startup 5/5] 启动完成`。若日志卡在某一步或出现 `[startup FAILED]`，就是那一步的问题，常见：
+- **卡在 `[startup 3/5]`**：转写器配置读不到。检查 `.env` 里 `TRANSCRIBER_TYPE` 是否写错，`mlx-whisper` 只能在 Apple Silicon 用，Linux/Docker 请用 `fast-whisper` 或 `groq`。
+- **首次跑视频时容器被 kill**：whisper 模型下载触发 OOM。先把 `.env` 里 `WHISPER_MODEL_SIZE` 改成 `tiny`，跑通后再去前端「音频转写配置」里逐档升。
+
+**2. 改了 `.env` 没生效**
+
+区分两类变量：
+- `VITE_*` 是**构建时**变量（前端 bundle 里硬编码），改完必须 `docker-compose build frontend && docker-compose up -d`。只 `restart` 不会重新打包。
+- 其他后端变量（`TRANSCRIBER_TYPE`、`WHISPER_MODEL_SIZE`、`FFMPEG_BIN_PATH` 等）是**运行时**变量，改完 `docker-compose up -d` 即可。
+
+注意：**LLM API key 不要写 `.env`**，从前端「模型供应商」页面录入，会保存到 SQLite 数据库并持久化。
+
+**3. 数据存在哪？删容器会丢吗？**
+
+`docker-compose` 用的是 `./backend:/app` 绑挂，下面这些文件都在宿主机的 `./backend/` 目录里、删容器不会丢：
+- `./backend/bili_note.db` —— SQLite 库（含 LLM 供应商配置、笔记历史）
+- `./backend/config/transcriber.json` —— 转写器运行时配置
+- `./backend/static/screenshots/` —— 视频截图
+- `./backend/uploads/` —— 上传的本地视频
+
+要彻底重置就 `docker-compose down && rm backend/bili_note.db backend/config/transcriber.json`。
+
+**4. 前端打开是空白页 / 报 502**
+
+通常是 nginx 起来了但 backend 还没 healthy。`docker ps` 看 backend 容器 STATUS 是不是 `(healthy)`；若长期 `(unhealthy)`，按问题 1 排查后端日志。
+
+**5. 不要用 `restart: on-failure:N`**
+
+如果你 fork 后改过 compose 文件、把 restart 策略改成了 `on-failure:3`：任何 3 次连续崩溃都会让容器永远不再启动，之后改 `.env` 也没用。本项目自带的 compose 已经统一用 `unless-stopped`。
 
 ### 方式二：源码部署
 

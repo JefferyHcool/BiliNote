@@ -1,4 +1,6 @@
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+# BASE_REGISTRY 默认走 docker.io；国内可换 daocloud / 阿里云镜像（注意所选镜像需支持 nvidia/cuda 命名空间）
+ARG BASE_REGISTRY=docker.io
+FROM ${BASE_REGISTRY}/nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple

@@ -1,4 +1,8 @@
-FROM python:3.11-slim
+# BASE_REGISTRY 默认走 docker.io；国内拉不到 docker.io 时可换 daocloud / 阿里云 / 自建镜像源：
+#   docker-compose build --build-arg BASE_REGISTRY=docker.m.daocloud.io
+# 或写到 docker-compose.yml 的 build.args / 环境变量里
+ARG BASE_REGISTRY=docker.io
+FROM ${BASE_REGISTRY}/library/python:3.11-slim
 
 ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
 ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
