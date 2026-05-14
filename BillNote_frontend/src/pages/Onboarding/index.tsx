@@ -1,8 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { addProvider, addModel, getProviderList, testConnection } from '@/services/model'
+import { addProvider, addModel, testConnection, getProviderList, updateProviderById } from '@/services/model'
 import { getTranscriberConfig, updateTranscriberConfig } from '@/services/transcriber'
 import logo from '@/assets/icon.svg'
+
+// 后端 R.error / ProviderError 的形状是 { code, msg, data }，没有 .message。
+// 直接 ${e} 会渲染成 [object Object]，这里统一抽取可读文案。
+function errText(e: any): string {
+  if (!e) return '未知错误'
+  if (typeof e === 'string') return e
+  return e.msg || e.message || JSON.stringify(e)
+}
+
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
+// 后端连通性自检不走共享 axios（会弹 toast），用裸 fetch 避免启动期 toast 叠堆
+function getBackendBase(): string {
+  const fromEnv = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined
+  return ((fromEnv && fromEnv.length > 0) ? fromEnv : '/api').replace(/\/$/, '')
+}
+async function pingBackend(): Promise<boolean> {
+  try {
+    const res = await fetch(`${getBackendBase()}/sys_check`)
+    if (!res.ok) return false
+    const json = await res.json().catch(() => null)
+    return json?.code === 0
+  }
+  catch {
+    return false
+  }
+}
 
 // 桌面端首启 4 步引导。完成后写 localStorage('bilinote-onboarded') = '1'，路由守卫不再拦。
 //
@@ -52,24 +79,52 @@ const Onboarding = () => {
   }
 
   // step 1: ping 后端
+  // 关键点：旧实现 useEffect 只在 step===1 时 ping 一次。失败后 backendOk=false 永远卡死，
+  // 即便后端随后就绪了也不会刷新。现在改成：
+  //   - 手动重试按钮调用 doPing
+  //   - Tauri backend-ready / backend-restarted 事件触发 doPing
+  //   - 初次失败后 2s 自动再 ping 一次（覆盖 sidecar 慢热场景）
+  const doPing = useCallback(async () => {
+    setPinging(true)
+    const ok = await pingBackend()
+    setBackendOk(ok)
+    setPinging(false)
+    return ok
+  }, [])
+
   useEffect(() => {
     if (step !== 1) return
     let cancelled = false
+    let timerId: ReturnType<typeof setTimeout> | null = null
+    let offReady: (() => void) | null = null
+    let offRestarted: (() => void) | null = null
+
     ;(async () => {
-      setPinging(true)
-      try {
-        await getProviderList()
-        if (!cancelled) setBackendOk(true)
+      const ok = await doPing()
+      if (cancelled) return
+      if (!ok) {
+        // 后端可能正在解压/启动，2s 后再试一次
+        timerId = setTimeout(() => { if (!cancelled) doPing() }, 2000)
       }
-      catch {
-        if (!cancelled) setBackendOk(false)
-      }
-      finally {
-        if (!cancelled) setPinging(false)
+
+      // 桌面端订阅 Tauri 事件：后端真正就绪 / 重启完成时立刻再检查一次
+      if (isTauri) {
+        try {
+          const { listen } = await import('@tauri-apps/api/event')
+          offReady = await listen('backend-ready', () => { if (!cancelled) doPing() })
+          offRestarted = await listen('backend-restarted', () => { if (!cancelled) doPing() })
+        }
+        catch { /* 拿不到事件 API 不致命 */ }
       }
     })()
-    return () => { cancelled = true }
-  }, [step])
+
+    return () => {
+      cancelled = true
+      if (timerId) clearTimeout(timerId)
+      offReady?.()
+      offRestarted?.()
+    }
+  }, [step, doPing])
 
   async function saveProvider() {
     setError('')
@@ -79,31 +134,61 @@ const Onboarding = () => {
     if (!modelName.trim()) { setError('请填模型名'); return }
     setSavingProvider(true)
     try {
-      // 复用桌面 web 端的 add_provider；type 必须是 'custom'（backend 强制）
-      const res: any = await addProvider({
-        name: providerName.trim(),
-        api_key: apiKey.trim(),
-        base_url: baseUrl.trim(),
-        type: 'custom',
-        logo: 'custom',
-      })
-      const newId = (res?.data ?? res) as string | undefined
-      if (!newId) throw new Error('后端未返回 provider id')
-      setProviderId(newId)
+      const name = providerName.trim()
+      let pid: string | undefined
 
-      // 加一个默认 model
-      await addModel({ provider_id: newId, model_name: modelName.trim() })
+      // 后端 seed_default_providers() 会预置 OpenAI / DeepSeek / Qwen 等同名供应商，
+      // 直接 add_provider 撞名会报「供应商名称已存在」。所以：撞名时改为
+      // 「找到那个已存在的同名供应商 → 更新它的 key / base_url」而不是新建。
+      // 这些调用都带 silent:true —— 撞名是预期内的，不弹全局红 toast。
+      try {
+        const res: any = await addProvider({
+          name,
+          api_key: apiKey.trim(),
+          base_url: baseUrl.trim(),
+          type: 'custom',
+          logo: 'custom',
+        }, { silent: true })
+        pid = (res?.data ?? res) as string | undefined
+        if (!pid) throw new Error('后端未返回 provider id')
+      }
+      catch (addErr: any) {
+        const msg = errText(addErr)
+        if (!msg.includes('已存在')) throw addErr
+        // 撞名：复用已存在的同名供应商
+        const list: any[] = (await getProviderList({ silent: true })) || []
+        const existing = list.find(p => p?.name === name)
+        if (!existing?.id) throw new Error(`供应商「${name}」已存在但无法定位，请换个名字`)
+        pid = existing.id
+        await updateProviderById({
+          id: pid,
+          api_key: apiKey.trim(),
+          base_url: baseUrl.trim(),
+          enabled: 1,
+        }, { silent: true })
+      }
 
-      // 测试连通
-      try { await testConnection({ id: newId }) }
+      setProviderId(pid!)
+
+      // 加一个默认 model（同名 model 已存在时后端会报错，这里也容错）
+      try {
+        await addModel({ provider_id: pid!, model_name: modelName.trim() }, { silent: true })
+      }
+      catch (modelErr: any) {
+        const msg = errText(modelErr)
+        if (!msg.includes('已存在')) throw modelErr
+        // 模型已存在，直接继续
+      }
+
+      // 测试连通（失败不阻断流程，让用户自己决定继续）
+      try { await testConnection({ id: pid!, model: modelName.trim() }, { silent: true }) }
       catch (e: any) {
-        // 测试失败不阻断流程，让用户自己决定继续
-        console.warn('测试连接失败：', e?.message ?? e)
+        console.warn('测试连接失败：', errText(e))
       }
       next()
     }
     catch (e: any) {
-      setError(`保存失败：${e?.message ?? e}`)
+      setError(`保存失败：${errText(e)}`)
     }
     finally {
       setSavingProvider(false)
@@ -123,7 +208,7 @@ const Onboarding = () => {
       next()
     }
     catch (e: any) {
-      setError(`保存失败：${e?.message ?? e}`)
+      setError(`保存失败：${errText(e)}`)
     }
     finally {
       setSavingTranscriber(false)
@@ -171,6 +256,15 @@ const Onboarding = () => {
               </div>
             )}
             <div className="flex gap-2 justify-end">
+              {backendOk !== true && (
+                <button
+                  className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  disabled={pinging}
+                  onClick={doPing}
+                >
+                  {pinging ? '检测中…' : '重新检测'}
+                </button>
+              )}
               <button className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" disabled={!backendOk} onClick={next}>
                 下一步
               </button>

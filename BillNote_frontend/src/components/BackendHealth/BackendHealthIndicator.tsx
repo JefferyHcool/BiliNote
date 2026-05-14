@@ -10,12 +10,14 @@ import BackendLogPanel from './BackendLogPanel'
 type Health = 'green' | 'yellow' | 'red' | 'unknown'
 
 const HEALTH_POLL_MS = 5000
-const SYS_HEALTH_PATH = '/api/sys_health'
+// 路径不带 /api/，因为 backendBase() 已经把它包进 baseURL 了（同 axios 实例的语义）。
+// 之前写 '/api/sys_health' + base='http://host/api' = 双 /api → 一直 404。
+const SYS_HEALTH_PATH = '/sys_health'
 
 function backendBase(): string {
-  // 与 services/request.ts 用的一致
+  // 与 utils/request.ts 的 baseURL 计算保持一致：env 没设走 '/api' 兜底。
   const fromEnv = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined
-  return (fromEnv ?? '').replace(/\/$/, '')
+  return ((fromEnv && fromEnv.length > 0) ? fromEnv : '/api').replace(/\/$/, '')
 }
 
 const BackendHealthIndicator = () => {

@@ -39,6 +39,7 @@ import { Textarea } from '@/components/ui/textarea.tsx'
 import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
 import { fetchModels } from '@/services/model.ts'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 
 /* -------------------- 校验 Schema -------------------- */
 const formSchema = z
@@ -229,8 +230,25 @@ const NoteForm = () => {
     }
 
     // message.success('已提交任务')
-    const  data  = await generateNote(payload)
-    addPendingTask(data.task_id, values.platform, payload)
+    try {
+      const data = await generateNote(payload)
+      addPendingTask(data.task_id, values.platform, payload)
+    } catch (e: any) {
+      // 就绪门禁：本地转写模型还没下载好。后端返回 reason='transcriber_model_not_ready'，
+      // 引导用户去「设置 → 音频转写配置」下载，而不是留一个静默失败的任务。
+      if (e?.data?.reason === 'transcriber_model_not_ready') {
+        const downloading = e?.data?.downloading
+        toast.error(
+          downloading
+            ? '转写模型正在下载中，请稍候再提交'
+            : '转写模型尚未下载，请先去「音频转写配置」页下载',
+        )
+        if (!downloading) navigate('/settings/transcriber')
+        return
+      }
+      // 其余错误：axios 拦截器已经弹过 toast，这里只兜底不让 promise 变成未处理 rejection
+      console.error('提交任务失败：', e)
+    }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
     console.warn('表单校验失败：', errors)

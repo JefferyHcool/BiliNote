@@ -35,6 +35,9 @@ export function useBackendEvents(): BackendEvents {
   const [logs, setLogs] = useState<LogEntry[]>([])
   // 用 ref 持有最新 logs 数组，append 时不被闭包陷阱卡到旧值
   const logsRef = useRef<LogEntry[]>([])
+  // 主动重启期：Rust 在 kill 老 sidecar 前会 emit 'backend-restarting'。
+  // 期间到达的 'backend-terminated' 是我们自己造成的，不要污染状态。
+  const ignoreNextTerminatedRef = useRef(false)
 
   function append(entry: LogEntry) {
     const next = logsRef.current.concat(entry)
@@ -58,7 +61,23 @@ export function useBackendEvents(): BackendEvents {
       const offErr = await listen<string>('backend-error', event => {
         append({ level: 'error', text: stripQuotes(event.payload), ts: Date.now() })
       })
+      const offRestarting = await listen('backend-restarting', () => {
+        // 紧接着到达的 terminated 是我们主动 kill 老 sidecar 引发的，跳过 3s
+        ignoreNextTerminatedRef.current = true
+        setTimeout(() => { ignoreNextTerminatedRef.current = false }, 3000)
+        append({ level: 'info', text: '[Backend restarting]', ts: Date.now() })
+      })
       const offTerm = await listen<number | null>('backend-terminated', event => {
+        // 主动重启窗口内的 terminated 是预期副作用，仅记日志、不改状态
+        if (ignoreNextTerminatedRef.current) {
+          ignoreNextTerminatedRef.current = false
+          append({
+            level: 'info',
+            text: `[Backend terminated, restart in progress] code=${event.payload ?? 'unknown'}`,
+            ts: Date.now(),
+          })
+          return
+        }
         setStatus('terminated')
         setExitCode(event.payload ?? null)
         append({
@@ -73,7 +92,7 @@ export function useBackendEvents(): BackendEvents {
         append({ level: 'info', text: '[Backend restarted]', ts: Date.now() })
       })
 
-      unlisteners = [offMsg, offErr, offTerm, offRestart]
+      unlisteners = [offMsg, offErr, offRestarting, offTerm, offRestart]
     })()
 
     return () => {

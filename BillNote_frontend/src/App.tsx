@@ -33,7 +33,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 function App() {
   useTaskPolling(3000) // 每 3 秒轮询一次
-  const { loading, initialized } = useCheckBackend()
+  const { loading, initialized, failed, lastError, retry } = useCheckBackend()
 
   // 在后端初始化完成后执行系统检查
   useEffect(() => {
@@ -42,12 +42,17 @@ function App() {
     }
   }, [initialized])
 
-  // 如果后端还未初始化，显示初始化对话框
+  // 如果后端还未初始化，显示初始化对话框（loading 或 failed 都展示，由 dialog 内部决定渲染哪一态）
   if (!initialized) {
     return (
       <>
         <StartupBanner />
-        <BackendInitDialog open={loading} />
+        <BackendInitDialog
+          open={loading}
+          failed={failed}
+          lastError={lastError}
+          onRetry={retry}
+        />
       </>
     )
   }

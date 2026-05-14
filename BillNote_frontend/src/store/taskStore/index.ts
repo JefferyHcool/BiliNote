@@ -169,10 +169,25 @@ export const useTaskStore = create<TaskStore>()(
         if (!task) return
 
         const newFormData = payload || task.formData
-        await generateNote({
-          ...newFormData,
-          task_id: id,
-        })
+        try {
+          await generateNote({
+            ...newFormData,
+            task_id: id,
+          })
+        } catch (e: any) {
+          // 就绪门禁：转写模型未下载好。不要把任务标成 PENDING（会一直转），
+          // 给提示让用户先去下载。
+          if (e?.data?.reason === 'transcriber_model_not_ready') {
+            toast.error(
+              e?.data?.downloading
+                ? '转写模型正在下载中，请稍候再重试'
+                : '转写模型尚未下载，请先去「设置 → 音频转写配置」页下载',
+            )
+            return
+          }
+          console.error('重试任务失败：', e)
+          return
+        }
 
         set(state => ({
           tasks: state.tasks.map(t =>
