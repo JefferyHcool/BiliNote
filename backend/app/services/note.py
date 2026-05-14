@@ -3,7 +3,9 @@ import logging
 import os
 import re
 import shutil
+import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Any
 
@@ -63,6 +65,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 _TERMINAL_STATUSES = {TaskStatus.SUCCESS.value, TaskStatus.FAILED.value}
+
+# 每个阶段对应的完成进度百分比（进入该阶段时的估算值）
+_PHASE_PROGRESS: dict = {
+    TaskStatus.PARSING.value: 5,
+    TaskStatus.DOWNLOADING.value: 20,
+    TaskStatus.TRANSCRIBING.value: 55,
+    TaskStatus.ANALYZING_VIDEO.value: 72,
+    TaskStatus.SUMMARIZING.value: 90,
+    TaskStatus.SAVING.value: 97,
+    TaskStatus.SUCCESS.value: 100,
+    TaskStatus.FAILED.value: 0,
+}
 
 
 def _safe_path_part(value: Optional[str]) -> str:
@@ -373,7 +387,7 @@ class NoteGenerator:
 
     def _update_status(self, task_id: Optional[str], status: Union[str, TaskStatus], message: Optional[str] = None):
         """
-        创建或更新 {task_id}.status.json，记录当前任务状态
+        创建或更新 {task_id}.status.json，记录当前任务状态及各阶段耗时。
 
         :param task_id: 任务唯一 ID
         :param status: TaskStatus 枚举或自定义状态字符串
@@ -382,32 +396,64 @@ class NoteGenerator:
         if not task_id:
             return
 
+        now_wall = time.time()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        status_value = status.value if isinstance(status, TaskStatus) else status
+
         NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        print(f"写入状态文件: {status_file} 当前状态: {status}")
-        data = {"status": status.value if isinstance(status, TaskStatus) else status}
+
+        # 读取已有状态以保留计时信息
+        existing: dict = {}
+        if status_file.exists():
+            try:
+                existing = json.loads(status_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # started_at：仅在第一次调用时设置
+        started_at_iso: str = existing.get("started_at", now_iso)
+        try:
+            started_wall = datetime.fromisoformat(started_at_iso).timestamp()
+        except Exception:
+            started_wall = now_wall
+        elapsed = round(now_wall - started_wall, 1)
+
+        # 累积各阶段耗时
+        phase_durations: dict = dict(existing.get("phase_durations") or {})
+        prev_status: Optional[str] = existing.get("status")
+        prev_phase_started_iso: Optional[str] = existing.get("phase_started_at")
+        if prev_status and prev_status != status_value and prev_status not in _TERMINAL_STATUSES:
+            if prev_phase_started_iso:
+                try:
+                    prev_started = datetime.fromisoformat(prev_phase_started_iso).timestamp()
+                    phase_durations[prev_status] = round(now_wall - prev_started, 2)
+                except Exception:
+                    pass
+
+        data: dict = {
+            "status": status_value,
+            "started_at": started_at_iso,
+            "phase_started_at": now_iso,
+            "elapsed_time": elapsed,
+            "progress": _PHASE_PROGRESS.get(status_value, 0),
+            "phase_durations": phase_durations,
+        }
         if message:
             data["message"] = message
 
+        logger.info(f"任务状态更新: task_id={task_id} status={status_value} progress={data['progress']}% elapsed={elapsed}s")
+        temp_file = status_file.with_suffix('.tmp')
         try:
-            # First create a temporary file
-            temp_file = status_file.with_suffix('.tmp')
-
-            # Write to temporary file
             with temp_file.open('w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # Atomic rename operation
             temp_file.replace(status_file)
-
-            print(f"状态文件写入成功: {status_file}")
         except Exception as e:
             logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
-            # Try to write error to file directly as fallback
             try:
                 with status_file.open('w', encoding='utf-8') as f:
                     f.write(f"Error writing status: {str(e)}")
-            except:
+            except Exception:
                 logger.error(f"写入错误  {e}")
 
     def _handle_exception(self, task_id, exc):

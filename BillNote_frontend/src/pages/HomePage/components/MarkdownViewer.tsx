@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
 import Idle from '@/components/Lottie/Idle.tsx'
-import StepBar from '@/pages/HomePage/components/StepBar.tsx'
+import GenerationProgress from '@/pages/HomePage/components/GenerationProgress.tsx'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { atomDark as codeStyle } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Zoom from 'react-medium-image-zoom'
@@ -39,14 +39,6 @@ interface MarkdownViewerProps {
   status: 'idle' | 'loading' | 'success' | 'failed'
 }
 
-const steps = [
-  { label: '解析链接', key: 'PARSING' },
-  { label: '下载音频', key: 'DOWNLOADING' },
-  { label: '转写文字', key: 'TRANSCRIBING' },
-  { label: '视频分析', key: 'ANALYZING_VIDEO' },
-  { label: '总结内容', key: 'SUMMARIZING' },
-  { label: '保存完成', key: 'SUCCESS' },
-]
 
 const remarkPlugins = [gfm, remarkMath]
 const rehypePlugins = [rehypeKatex]
@@ -466,13 +458,13 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 text-neutral-500">
-        <StepBar steps={steps} currentStep={taskStatus} />
-        <Loading className="h-5 w-5" />
-        <div className="text-center text-sm">
-          <p className="text-lg font-bold">正在生成笔记，请稍候…</p>
-          <p className="mt-2 text-xs text-neutral-500">这可能需要几秒钟时间，取决于视频长度</p>
-        </div>
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-6 px-10">
+        <Loading className="h-8 w-8" />
+        <p className="text-lg font-bold text-neutral-700">正在生成笔记…</p>
+        <GenerationProgress
+          taskStatus={taskStatus}
+          taskProgress={currentTask?.taskProgress}
+        />
       </div>
     )
   }

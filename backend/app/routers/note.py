@@ -472,6 +472,15 @@ def get_task_status(task_id: str, include_transcript: bool = True):
         status = status_content.get("status")
         message = status_content.get("message", "")
 
+        # 提取计时信息（无论什么状态都透传）
+        timing = {
+            "progress": status_content.get("progress", 0),
+            "elapsed_time": status_content.get("elapsed_time", 0),
+            "phase_durations": status_content.get("phase_durations", {}),
+            "phase_started_at": status_content.get("phase_started_at"),
+            "started_at": status_content.get("started_at"),
+        }
+
         if status == TaskStatus.SUCCESS.value:
             # 成功状态的话，继续读取最终笔记内容
             if os.path.exists(result_path):
@@ -482,14 +491,15 @@ def get_task_status(task_id: str, include_transcript: bool = True):
                     "status": status,
                     "result": result_content,
                     "message": message,
-                    "task_id": task_id
+                    "task_id": task_id,
+                    **timing,
                 })
             else:
                 # 理论上不会出现，保险处理
                 return R.success({
                     "status": TaskStatus.PENDING.value,
                     "message": "任务完成，但结果文件未找到",
-                    "task_id": task_id
+                    "task_id": task_id,
                 })
 
         if status == TaskStatus.FAILED.value:
@@ -499,7 +509,8 @@ def get_task_status(task_id: str, include_transcript: bool = True):
         return R.success({
             "status": status,
             "message": message,
-            "task_id": task_id
+            "task_id": task_id,
+            **timing,
         })
 
     # 没有状态文件，但有结果

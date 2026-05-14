@@ -6,7 +6,25 @@ import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
 
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+export type TaskStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'PARSING'
+  | 'DOWNLOADING'
+  | 'TRANSCRIBING'
+  | 'ANALYZING_VIDEO'
+  | 'SUMMARIZING'
+  | 'SAVING'
+
+export interface TaskProgress {
+  progress: number
+  elapsed_time: number
+  phase_durations: Record<string, number>
+  phase_started_at?: string
+  started_at?: string
+}
 
 export interface AudioMeta {
   cover_url: string
@@ -45,6 +63,7 @@ export interface Task {
   status: TaskStatus
   audioMeta: AudioMeta
   createdAt: string
+  taskProgress?: TaskProgress
   formData?: {
     video_url?: string
     link?: boolean
