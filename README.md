@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.2.3</h1>
+<h1 align="center" > BiliNote v2.3.0</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -49,6 +49,14 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 基于 RAG 的笔记内容 AI 问答（支持 Function Calling）
 - 笔记顶部视频封面 Banner 展示
 - 工作区和生成历史面板支持折叠/展开
+
+### v2.3.0 新增
+
+- 全局代理：一处配置同时作用于 AI 模型接口、转写接口（Groq 等）、YouTube 下载（设置 → 下载配置页），支持 `HTTP_PROXY` 环境变量兜底
+- 转写模型就绪门禁：本地引擎模型没下载好时拦截视频任务，引导先去下载，不再静默卡在首次下载
+- 桌面端后端健康监控韧性：退出自动清理 sidecar、启动失败展示原因 + 日志、不再无限「加载中」
+- whisper 模型损坏自愈：`model.bin` 截断时自动删除重下；空 API Key / 新模型 temperature 不兼容给出清晰提示
+- Docker 部署韧性：`BASE_REGISTRY` 可换国内镜像源、restart 策略修正、`.env.example` 端口与默认模型修正、新增部署 FAQ
 
 ### v2.2.3 修订
 
