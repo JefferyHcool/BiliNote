@@ -216,20 +216,34 @@ const NoteForm = () => {
     }
   }
 
+  // 重新生成：直接绕过 Zod 校验，从存储的 formData 取 URL/平台，只允许修改其他参数
+  const handleRegenerate = async () => {
+    const task = getCurrentTask()
+    if (!task || !currentTaskId) return
+    const values = form.getValues()
+    const storedFormData = task.formData ?? {}
+    const provider_id =
+      modelList.find(m => m.model_name === values.model_name)?.provider_id ||
+      storedFormData.provider_id ||
+      ''
+    const payload: NoteFormValues = {
+      ...storedFormData,     // 保留 video_url / platform（即使 input 被禁用）
+      ...values,             // 覆盖可编辑字段（model、style、quality、extras 等）
+      video_url: storedFormData.video_url || values.video_url || '',
+      platform: storedFormData.platform || values.platform || 'bilibili',
+      provider_id,
+      task_id: currentTaskId,
+    }
+    retryTask(currentTaskId, payload)
+  }
+
   const onSubmit = async (values: NoteFormValues) => {
-    console.log('Not even go here')
     const payload: NoteFormValues = {
       ...values,
-      provider_id: modelList.find(m => m.model_name === values.model_name)!.provider_id,
-      task_id: currentTaskId || '',
+      provider_id: modelList.find(m => m.model_name === values.model_name)?.provider_id || '',
+      task_id: '',
     }
-    if (currentTaskId) {
-      retryTask(currentTaskId, payload)
-      return
-    }
-
-    // message.success('已提交任务')
-    const  data  = await generateNote(payload)
+    const data = await generateNote(payload)
     addPendingTask(data.task_id, values.platform, payload)
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
@@ -247,7 +261,8 @@ const NoteForm = () => {
     return (
       <div className="flex gap-2">
         <Button
-          type="submit"
+          type={editing ? 'button' : 'submit'}
+          onClick={editing ? handleRegenerate : undefined}
           className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
           disabled={generating}
         >
@@ -290,7 +305,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger aria-label="选择视频平台" className="w-32">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -394,7 +409,7 @@ const NoteForm = () => {
                      defaultValue={field.value}
                    >
                      <FormControl>
-                       <SelectTrigger className="w-full min-w-0 truncate">
+                       <SelectTrigger aria-label="选择模型" className="w-full min-w-0 truncate">
                          <SelectValue />
                        </SelectTrigger>
                      </FormControl>
@@ -434,7 +449,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-full min-w-0 truncate">
+                      <SelectTrigger aria-label="选择笔记风格" className="w-full min-w-0 truncate">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -462,6 +477,7 @@ const NoteForm = () => {
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
                     <Checkbox
+                      aria-label="启用视频理解"
                       checked={videoUnderstandingEnabled}
                       onCheckedChange={v => form.setValue('video_understanding', v)}
                     />
@@ -479,7 +495,12 @@ const NoteForm = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>采样间隔（秒）</FormLabel>
-                    <Input disabled={!videoUnderstandingEnabled} type="number" {...field} />
+                    <Input
+                      aria-label="视频理解采样间隔"
+                      disabled={!videoUnderstandingEnabled}
+                      type="number"
+                      {...field}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -493,6 +514,7 @@ const NoteForm = () => {
                     <FormLabel>拼图尺寸（列 × 行）</FormLabel>
                     <div className="flex items-center space-x-2">
                       <Input
+                        aria-label="视频理解拼图列数"
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[0] || 3}
@@ -501,6 +523,7 @@ const NoteForm = () => {
                       />
                       <span>x</span>
                       <Input
+                        aria-label="视频理解拼图行数"
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[1] || 3}

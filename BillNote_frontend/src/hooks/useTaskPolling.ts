@@ -37,11 +37,14 @@ export const useTaskPolling = (interval = 3000) => {
           }
 
           if (status === 'SUCCESS') {
-            const { markdown, transcript, audio_meta } = res.result
+            const { markdown, transcript, audio_meta, markdown_versions } = res.result
             toast.success('笔记生成成功')
             updateTaskContent(task.id, {
               status,
-              markdown,
+              // 优先用多版本数组，无则回退到字符串
+              markdown: Array.isArray(markdown_versions) && markdown_versions.length > 0
+                ? markdown_versions
+                : markdown,
               transcript,
               audioMeta: audio_meta,
               taskProgress: { ...taskProgress, progress: 100 },
