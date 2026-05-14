@@ -58,9 +58,16 @@ class MLXWhisperTranscriber(Transcriber):
         # 设置模型路径
         model_dir = get_model_dir("mlx-whisper")
         self.model_path = os.path.join(model_dir, self.model_name)
-        # 检查并下载模型
-        if not Path(self.model_path).exists():
-            logger.info(f"模型 {self.model_name} 不存在，开始下载...")
+        # 用 config.json 而非目录存在作为「下载完成」的判据，
+        # 同 fast-whisper 的 model.bin：避免半成品目录把后续下载吞掉
+        config_file = Path(self.model_path) / "config.json"
+        if not config_file.exists():
+            if Path(self.model_path).exists():
+                logger.warning(
+                    f"MLX 模型目录 {self.model_path} 存在但 config.json 缺失（上次下载未完成），重新下载"
+                )
+            else:
+                logger.info(f"模型 {self.model_name} 不存在，开始下载...")
             snapshot_download(
                 self.model_name,
                 local_dir=self.model_path,

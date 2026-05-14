@@ -1,6 +1,6 @@
 from typing import List
 from app.gpt.base import GPT
-from openai import OpenAI
+from app.utils.openai_client import build_openai_client
 from app.gpt.prompt import BASE_PROMPT, AI_SUM, SCREENSHOT
 from app.gpt.utils import fix_markdown
 from app.models.gpt_model import GPTSource
@@ -15,7 +15,7 @@ class DeepSeekGPT(GPT):
         self.base_url = getenv("DEEP_SEEK_API_BASE_URL")
         self.model=getenv('DEEP_SEEK_MODEL')
         print(self.model)
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.client = build_openai_client(self.api_key, self.base_url, key_label="DeepSeek 的 API Key")
         self.screenshot = False
 
     def _format_time(self, seconds: float) -> str:

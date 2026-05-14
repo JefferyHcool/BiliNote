@@ -8,6 +8,7 @@ from typing import Optional, List
 from youtube_transcript_api import YouTubeTranscriptApi
 
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
+from app.services.proxy_config_manager import ProxyConfigManager
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,7 +18,21 @@ class YouTubeSubtitleFetcher:
     """通过 youtube-transcript-api 获取 YouTube 字幕。"""
 
     def __init__(self):
-        self._api = YouTubeTranscriptApi()
+        # 配了全局代理就给 youtube-transcript-api 套一个带 proxies 的 requests.Session，
+        # 否则国内拉字幕同样会超时。代理未配置时退回默认无代理客户端。
+        proxy = ProxyConfigManager().get_proxy_url()
+        if proxy:
+            try:
+                import requests
+                session = requests.Session()
+                session.proxies = {"http": proxy, "https": proxy}
+                self._api = YouTubeTranscriptApi(http_client=session)
+                logger.info(f"YouTube 字幕走代理: {proxy}")
+            except Exception as e:
+                logger.warning(f"为 youtube-transcript-api 注入代理失败，回退无代理: {e}")
+                self._api = YouTubeTranscriptApi()
+        else:
+            self._api = YouTubeTranscriptApi()
 
     def fetch_subtitles(
         self,

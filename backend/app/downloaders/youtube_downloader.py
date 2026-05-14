@@ -9,10 +9,20 @@ from app.downloaders.base import Downloader, DownloadQuality
 from app.downloaders.youtube_subtitle import YouTubeSubtitleFetcher
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult
+from app.services.proxy_config_manager import ProxyConfigManager
 from app.utils.path_helper import get_data_dir
 from app.utils.url_parser import extract_video_id
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_proxy(ydl_opts: dict) -> dict:
+    """YouTube 在国内需要代理。配置了全局代理就塞进 yt-dlp opts。"""
+    proxy = ProxyConfigManager().get_proxy_url()
+    if proxy:
+        ydl_opts['proxy'] = proxy
+        logger.info(f"yt-dlp 走代理: {proxy}")
+    return ydl_opts
 
 
 class YoutubeDownloader(Downloader, ABC):
@@ -46,6 +56,7 @@ class YoutubeDownloader(Downloader, ABC):
         if skip_download:
             ydl_opts['skip_download'] = True
 
+        _apply_proxy(ydl_opts)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=not skip_download)
             video_id = info.get("id")
@@ -91,6 +102,7 @@ class YoutubeDownloader(Downloader, ABC):
             'merge_output_format': 'mp4',  # 确保合并成 mp4
         }
 
+        _apply_proxy(ydl_opts)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
             video_id = info.get("id")
