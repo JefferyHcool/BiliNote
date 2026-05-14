@@ -234,7 +234,7 @@ class ExportUtils:
 
 if __name__ == '__main__':
 
-    ExportUtils().export("pdf",title='测试',content='''# 视频笔记：Facial Recognition Forces My Coworkers to Do Their Dishes
+    ExportUtils().export("pdf",title='测试',content=r'''# 视频笔记：Facial Recognition Forces My Coworkers to Do Their Dishes
 
 ## 简介
 该视频展示了团队如何利用面部识别技术来监控和激励同事清洗餐具。通过结合硬件和软件，团队开发了一个“Dish Watcher”系统，旨在识别并提醒那些未清洁餐具的人。
