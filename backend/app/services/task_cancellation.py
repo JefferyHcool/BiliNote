@@ -1,21 +1,25 @@
-import threading
+import os
 
-_lock = threading.Lock()
-_cancelled: set[str] = set()
+from app.utils.path_helper import get_app_dir
+
+_cancel_dir = get_app_dir("runtime_locks")
 
 
 class TaskCancelledError(Exception):
     pass
 
 
+def _cancel_path(task_id: str) -> str:
+    return os.path.join(_cancel_dir, f"{task_id}.cancel")
+
+
 def cancel(task_id: str) -> None:
-    with _lock:
-        _cancelled.add(task_id)
+    os.makedirs(_cancel_dir, exist_ok=True)
+    open(_cancel_path(task_id), "w").close()
 
 
 def is_cancelled(task_id: str) -> bool:
-    with _lock:
-        return task_id in _cancelled
+    return os.path.exists(_cancel_path(task_id))
 
 
 def check_cancelled(task_id: str) -> None:
@@ -24,5 +28,7 @@ def check_cancelled(task_id: str) -> None:
 
 
 def clear(task_id: str) -> None:
-    with _lock:
-        _cancelled.discard(task_id)
+    try:
+        os.unlink(_cancel_path(task_id))
+    except FileNotFoundError:
+        pass

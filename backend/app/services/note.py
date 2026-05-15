@@ -35,7 +35,10 @@ from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
-from app.utils.note_helper import normalize_toc_timestamps, replace_content_markers, prepend_source_link
+from app.utils.note_helper import (
+    normalize_toc_timestamps, replace_content_markers, prepend_source_link,
+    strip_content_markers, strip_screenshot_markers,
+)
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.path_helper import get_app_dir
 from app.utils.status_code import StatusCode
@@ -123,7 +126,8 @@ class NoteGenerator:
         self.transcriber_type: str = config_manager.get_transcriber_type()
         self.transcriber: Transcriber = self._init_transcriber()
         self.video_path: Optional[Path] = None
-        self.video_img_urls=[]
+        self.video_img_urls: list = []
+        self.video_grids: list = []
         logger.info("NoteGenerator 初始化完成")
 
 
@@ -257,23 +261,50 @@ class NoteGenerator:
                     task_id=task_id,
                 )
 
-            # 3a. 视频理解：分批分析帧截图，把视觉描述转成文本再交给总结步骤
+            # 3a. 视频理解：分批分析帧截图，把视觉描述注入字幕段落
             check_cancelled(task_id)
             summarize_img_urls = self.video_img_urls
             summarize_extras = extras
+            enriched_segments = None  # will replace transcript.segments when set
             if video_understanding and self.video_img_urls:
                 self._update_status(task_id, TaskStatus.ANALYZING_VIDEO)
-                logger.info(f"开始渐进式视频帧分析，共 {len(self.video_img_urls)} 张截图")
-                visual_summary = gpt.analyze_video_frames(self.video_img_urls)
-                if visual_summary:
-                    visual_block = f"\n\n[视频画面分析]\n{visual_summary}"
-                    summarize_extras = f"{extras}{visual_block}" if extras else visual_block.strip()
+
+                def _on_video_batch(done: int, total: int) -> None:
+                    check_cancelled(task_id)
+                    pct = 72 + int(17 * done / total)
+                    self._update_progress(task_id, pct)
+
+                if self.video_grids:
+                    # V3 structured path: time-aware analysis → enrich transcript segments
+                    logger.info(f"开始结构化视觉分析，共 {len(self.video_grids)} 张网格图")
+                    visual_results = gpt.analyze_video_frame_grids(
+                        self.video_grids,
+                        on_batch_complete=_on_video_batch,
+                        task_id=task_id,
+                    )
+                    enriched_segments = gpt.enrich_segments_with_visuals(
+                        transcript.segments, visual_results
+                    )
                     summarize_img_urls = []
+                    logger.info(f"结构化视觉分析完成，字幕段落从 {len(transcript.segments)} 增至 {len(enriched_segments)}")
+                else:
+                    # Legacy path (screenshot mode): pass images to summarize
+                    logger.info(f"开始渐进式视频帧分析，共 {len(self.video_img_urls)} 张截图")
+                    visual_summary = gpt.analyze_video_frames(
+                        self.video_img_urls, on_batch_complete=_on_video_batch, task_id=task_id
+                    )
+                    if visual_summary:
+                        visual_block = f"\n\n[视频画面分析]\n{visual_summary}"
+                        summarize_extras = f"{extras}{visual_block}" if extras else visual_block.strip()
+                        if 'screenshot' not in (_format or []):
+                            summarize_img_urls = []
                     logger.info("视频帧分析完成，将以文本形式传入总结步骤")
 
             # 3b. GPT 总结
             check_cancelled(task_id)
             self._update_status(task_id, TaskStatus.SUMMARIZING)
+            if enriched_segments is not None:
+                transcript.segments = enriched_segments
             markdown = self._summarize_text(
                 audio_meta=audio_meta,
                 transcript=transcript,
@@ -296,6 +327,12 @@ class NoteGenerator:
                     audio_meta=audio_meta,
                     platform=platform,
                 )
+
+            # 4b. 清理模型自发写出的裸 marker（兜底，prompt 层不够可靠）
+            if not link:
+                markdown = strip_content_markers(markdown)
+            if not screenshot:
+                markdown = strip_screenshot_markers(markdown)
 
             markdown = prepend_source_link(markdown, str(video_url))
 
@@ -411,7 +448,28 @@ class NoteGenerator:
             except Exception:
                 pass
 
-        # started_at：仅在第一次调用时设置
+        # PENDING 状态：重置计时（无论是新建还是重试，都清空旧计时数据）
+        if status_value == TaskStatus.PENDING.value:
+            data: dict = {
+                "status": status_value,
+                "phase_started_at": now_iso,
+                "progress": 0,
+                "elapsed_time": 0,
+                "phase_durations": {},
+            }
+            if message:
+                data["message"] = message
+            logger.info(f"任务状态更新: task_id={task_id} status={status_value} progress=0%")
+            temp_file = status_file.with_suffix('.tmp')
+            try:
+                with temp_file.open('w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                temp_file.replace(status_file)
+            except Exception as e:
+                logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
+            return
+
+        # 非 PENDING 状态：started_at 仅在第一个真实处理阶段设置（排除排队等待时间）
         started_at_iso: str = existing.get("started_at", now_iso)
         try:
             started_wall = datetime.fromisoformat(started_at_iso).timestamp()
@@ -419,11 +477,14 @@ class NoteGenerator:
             started_wall = now_wall
         elapsed = round(now_wall - started_wall, 1)
 
-        # 累积各阶段耗时
+        # 累积各阶段耗时（跳过 PENDING，不记录排队时长）
         phase_durations: dict = dict(existing.get("phase_durations") or {})
         prev_status: Optional[str] = existing.get("status")
         prev_phase_started_iso: Optional[str] = existing.get("phase_started_at")
-        if prev_status and prev_status != status_value and prev_status not in _TERMINAL_STATUSES:
+        if (prev_status
+                and prev_status != status_value
+                and prev_status not in _TERMINAL_STATUSES
+                and prev_status != TaskStatus.PENDING.value):
             if prev_phase_started_iso:
                 try:
                     prev_started = datetime.fromisoformat(prev_phase_started_iso).timestamp()
@@ -455,6 +516,23 @@ class NoteGenerator:
                     f.write(f"Error writing status: {str(e)}")
             except Exception:
                 logger.error(f"写入错误  {e}")
+
+    def _update_progress(self, task_id: Optional[str], progress: int) -> None:
+        """仅更新 progress 字段，不改变阶段或计时信息。用于长阶段内的细粒度进度推送。"""
+        if not task_id:
+            return
+        status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
+        if not status_file.exists():
+            return
+        try:
+            existing = json.loads(status_file.read_text(encoding="utf-8"))
+            existing["progress"] = progress
+            temp_file = status_file.with_suffix('.tmp')
+            with temp_file.open('w', encoding='utf-8') as f:
+                json.dump(existing, f, ensure_ascii=False, indent=2)
+            temp_file.replace(status_file)
+        except Exception as e:
+            logger.warning(f"更新进度失败 (task_id={task_id})：{e}")
 
     def _handle_exception(self, task_id, exc):
         logger.error(f"任务异常 (task_id={task_id})", exc_info=True)
@@ -508,7 +586,7 @@ class NoteGenerator:
 
         # 判断是否需要下载/准备视频
         need_video = screenshot or video_understanding
-        if screenshot and not grid_size:
+        if need_video and not grid_size:
             grid_size = [2, 2]
 
         frame_interval = video_interval if video_interval and video_interval > 0 else 6
@@ -525,7 +603,7 @@ class NoteGenerator:
                 frame_dir = os.path.join(runtime_root, "output_frames")
                 grid_dir = os.path.join(runtime_root, "grid_output")
                 logger.info(f"视频帧目录: {runtime_root}")
-                self.video_img_urls = VideoReader(
+                reader = VideoReader(
                     video_path=str(self.video_path),
                     grid_size=tuple(grid_size),
                     frame_interval=frame_interval,
@@ -534,7 +612,14 @@ class NoteGenerator:
                     save_quality=80,
                     frame_dir=frame_dir,
                     grid_dir=grid_dir,
-                ).run()
+                )
+                if video_understanding:
+                    result = reader.run_with_metadata()
+                    self.video_img_urls = result["image_urls"]
+                    self.video_grids = result["grids"]
+                else:
+                    self.video_img_urls = reader.run()
+                    self.video_grids = []
                 if os.getenv("KEEP_VIDEO_FRAMES", "").lower() not in {"1", "true", "yes"}:
                     shutil.rmtree(runtime_root, ignore_errors=True)
             else:

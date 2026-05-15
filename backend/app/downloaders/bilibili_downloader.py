@@ -46,7 +46,8 @@ class BilibiliDownloader(Downloader, ABC):
         video_url: str,
         output_dir: Union[str, None] = None,
         quality: DownloadQuality = "fast",
-        need_video:Optional[bool]=False
+        need_video: Optional[bool] = False,
+        skip_download: bool = False,
     ) -> AudioDownloadResult:
         if output_dir is None:
             output_dir = get_data_dir()
@@ -60,26 +61,30 @@ class BilibiliDownloader(Downloader, ABC):
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_path,
             'http_headers': {'Referer': 'https://www.bilibili.com'},
-            'postprocessors': [
+            'noplaylist': True,
+            'quiet': False,
+        }
+        if skip_download:
+            ydl_opts['skip_download'] = True
+        else:
+            ydl_opts['postprocessors'] = [
                 {
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '64',
                 }
-            ],
-            'noplaylist': True,
-            'quiet': False,
-        }
+            ]
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
+            info = ydl.extract_info(video_url, download=not skip_download)
             video_id = info.get("id")
             title = info.get("title")
             duration = info.get("duration", 0)
             cover_url = info.get("thumbnail")
-            audio_path = os.path.join(output_dir, f"{video_id}.mp3")
+            ext = info.get("ext", "m4a")
+            audio_path = os.path.join(output_dir, f"{video_id}.{ext if skip_download else 'mp3'}")
 
         return AudioDownloadResult(
             file_path=audio_path,

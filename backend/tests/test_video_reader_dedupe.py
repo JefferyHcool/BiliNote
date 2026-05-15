@@ -9,8 +9,12 @@ from unittest.mock import patch
 
 
 def _install_stubs():
+    _backend_root = pathlib.Path(__file__).resolve().parents[1]
     app_mod = types.ModuleType("app")
+    app_mod.__path__ = [str(_backend_root / "app")]
     utils_pkg = types.ModuleType("app.utils")
+    # Give __path__ so Python treats this as a package and allows submodule imports.
+    utils_pkg.__path__ = [str(_backend_root / "app" / "utils")]
 
     logger_mod = types.ModuleType("app.utils.logger")
 

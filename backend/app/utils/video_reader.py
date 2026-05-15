@@ -9,8 +9,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.utils.logger import get_logger
 from app.utils.path_helper import get_app_dir
+from app.utils.time_utils import format_timestamp
 
 logger = get_logger(__name__)
+
+
 class VideoReader:
     def __init__(self,
                  video_path: str,
@@ -32,7 +35,7 @@ class VideoReader:
         self.save_quality = save_quality
         self.frame_dir = frame_dir or get_app_dir("output_frames")
         self.grid_dir = grid_dir or get_app_dir("grid_output")
-        print(f"视频路径：{video_path}",self.frame_dir,self.grid_dir)
+        print(f"视频路径：{video_path}", self.frame_dir, self.grid_dir)
         self.font_path = font_path
 
     @staticmethod
@@ -44,6 +47,7 @@ class VideoReader:
         return hasher.hexdigest()
 
     def format_time(self, seconds: float) -> str:
+        """Internal filename format: MM_SS (total minutes, no hour wrap)."""
         mm = int(seconds // 60)
         ss = int(seconds % 60)
         return f"{mm:02d}_{ss:02d}"
@@ -68,7 +72,6 @@ class VideoReader:
             return None
 
     def extract_frames(self, max_frames: int | None = None) -> list[str]:
-
         try:
             os.makedirs(self.frame_dir, exist_ok=True)
             duration = float(ffmpeg.probe(self.video_path)["format"]["duration"])
@@ -76,7 +79,6 @@ class VideoReader:
             if max_frames is not None:
                 timestamps = timestamps[:max_frames]
 
-            # 并行提取帧
             max_workers = min(os.cpu_count() or 4, 8, len(timestamps))
             frame_results: dict[int, str | None] = {}
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -85,7 +87,6 @@ class VideoReader:
                     ts = futures[future]
                     frame_results[ts] = future.result()
 
-            # 按时间戳顺序整理结果，并进行去重
             image_paths = []
             last_hash = None
             for ts in timestamps:
@@ -120,8 +121,8 @@ class VideoReader:
 
         for path in image_paths:
             img = Image.open(path).convert("RGB").resize((self.unit_width, self.unit_height), Image.Resampling.LANCZOS)
-            timestamp = re.search(r"frame_(\d{2})_(\d{2})\.jpg", os.path.basename(path))
-            time_text = f"{timestamp.group(1)}:{timestamp.group(2)}" if timestamp else ""
+            ts = self.extract_time_from_filename(os.path.basename(path))
+            time_text = format_timestamp(ts) if ts != float('inf') else ""
             draw = ImageDraw.Draw(img)
             draw.text((10, 10), time_text, fill="yellow", font=font, stroke_width=1, stroke_fill="black")
             images.append(img)
@@ -146,40 +147,127 @@ class VideoReader:
                 base64_images.append(f"data:image/jpeg;base64,{encoded_string}")
         return base64_images
 
-    def run(self)->list[str]:
+    def _build_cells(self, image_paths: list[str]) -> list[dict]:
+        """Build cell metadata from the actual frame paths that entered a grid."""
+        cells = []
+        for path in image_paths:
+            ts = self.extract_time_from_filename(os.path.basename(path))
+            if ts != float('inf'):
+                ts_int = int(ts)
+                cells.append({"ts": ts_int, "label": format_timestamp(ts_int)})
+        return cells
+
+    def _prepare_directories(self) -> None:
+        os.makedirs(self.frame_dir, exist_ok=True)
+        os.makedirs(self.grid_dir, exist_ok=True)
+        for file in os.listdir(self.frame_dir):
+            if file.startswith("frame_"):
+                os.remove(os.path.join(self.frame_dir, file))
+        for file in os.listdir(self.grid_dir):
+            if file.startswith("grid_"):
+                os.remove(os.path.join(self.grid_dir, file))
+
+    def _should_include_group(self, group: list[str], idx: int, total: int) -> bool:
+        min_size = self.grid_size[0] * self.grid_size[1]
+        if len(group) >= min_size:
+            return True
+        if idx == total and len(group) > 0:
+            logger.info(f"最后一组仅 {len(group)} 帧，以留白填充生成网格")
+            return True
+        logger.warning(f"⚠️ 跳过第 {idx} 组，图片不足 {min_size} 张")
+        return False
+
+    def _build_grids(self) -> tuple[list[str], list[dict]]:
+        """
+        Core: extract frames → group → concat.
+        Returns (grid_paths, grid_metadata_list).
+        grid_metadata_list items:
+            {grid_index, path, grid_size, interval, start_ts, end_ts, cells}
+        """
+        self._prepare_directories()
+        self.extract_frames()
+        logger.info("开始拼接网格图...")
+
+        grid_paths: list[str] = []
+        grid_metas: list[dict] = []
+        groups = self.group_images()
+        total = len(groups)
+
+        for idx, group in enumerate(groups, start=1):
+            if not self._should_include_group(group, idx, total):
+                continue
+
+            out_path = self.concat_images(group, f"grid_{idx}")
+            grid_paths.append(out_path)
+
+            cells = self._build_cells(group)
+            if cells:
+                start_ts = cells[0]["ts"]
+                end_ts = cells[-1]["ts"] + self.frame_interval
+            else:
+                start_ts = end_ts = 0
+
+            grid_metas.append({
+                "grid_index": idx,
+                "path": out_path,
+                "grid_size": list(self.grid_size),
+                "interval": self.frame_interval,
+                "start_ts": start_ts,
+                "end_ts": end_ts,
+                "cells": cells,
+            })
+
+        return grid_paths, grid_metas
+
+    def run(self) -> list[str]:
         logger.info("开始提取视频帧...")
         try:
-            # 确保目录存在
-            print(self.frame_dir,self.grid_dir)
-            os.makedirs(self.frame_dir, exist_ok=True)
-            os.makedirs(self.grid_dir, exist_ok=True)
-            #清空帧文件夹
-            for file in os.listdir(self.frame_dir):
-                if file.startswith("frame_"):
-                    os.remove(os.path.join(self.frame_dir, file))
-            print(self.frame_dir,self.grid_dir)
-            #清空网格文件夹
-            for file in os.listdir(self.grid_dir):
-                if file.startswith("grid_"):
-                    os.remove(os.path.join(self.grid_dir, file))
-            print(self.frame_dir,self.grid_dir)
-            self.extract_frames()
-            print("2#3",self.frame_dir,self.grid_dir)
-            logger.info("开始拼接网格图...")
-            image_paths = []
-            groups = self.group_images()
-            for idx, group in enumerate(groups, start=1):
-                if len(group) < self.grid_size[0] * self.grid_size[1]:
-                    logger.warning(f"⚠️ 跳过第 {idx} 组，图片不足 {self.grid_size[0] * self.grid_size[1]} 张")
-                    continue
-                out_path = self.concat_images(group, f"grid_{idx}")
-                image_paths.append(out_path)
-
+            grid_paths, _ = self._build_grids()
             logger.info("📤 开始编码图像...")
-            urls = self.encode_images_to_base64(image_paths)
-            return urls
+            return self.encode_images_to_base64(grid_paths)
         except Exception as e:
             logger.error(f"发生错误：{str(e)}")
             raise ValueError("视频处理失败")
 
+    def run_with_metadata(self) -> dict:
+        """
+        Like run() but also returns structured grid metadata for time-aware visual analysis.
 
+        Returns:
+            {
+                "image_urls": [...],          # same as run()
+                "grids": [
+                    {
+                        "grid_index": 1,
+                        "image_url": "data:image/jpeg;base64,...",
+                        "grid_size": [3, 3],
+                        "interval": 6,
+                        "start_ts": 0,
+                        "end_ts": 54,
+                        "cells": [{"ts": 0, "label": "00:00"}, ...]
+                    }
+                ]
+            }
+        """
+        logger.info("开始提取视频帧（含 metadata）...")
+        try:
+            grid_paths, grid_metas = self._build_grids()
+            logger.info("📤 开始编码图像...")
+            urls = self.encode_images_to_base64(grid_paths)
+
+            grids = []
+            for i, meta in enumerate(grid_metas):
+                grids.append({
+                    "grid_index": meta["grid_index"],
+                    "image_url": urls[i],
+                    "grid_size": meta["grid_size"],
+                    "interval": meta["interval"],
+                    "start_ts": meta["start_ts"],
+                    "end_ts": meta["end_ts"],
+                    "cells": meta["cells"],
+                })
+
+            return {"image_urls": urls, "grids": grids}
+        except Exception as e:
+            logger.error(f"发生错误：{str(e)}")
+            raise ValueError("视频处理失败")

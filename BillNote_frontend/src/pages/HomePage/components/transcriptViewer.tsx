@@ -1,7 +1,7 @@
 "use client"
 
 import { useTaskStore } from "@/store/taskStore"
-import { useEffect, useState, useRef } from "react"
+import { useState, useRef } from "react"
 import { Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {ScrollArea} from "@/components/ui/scroll-area.tsx";
@@ -10,7 +10,7 @@ interface Segment {
   start: number
   end: number
   text: string
-
+  speaker?: string
 }
 
 interface Task {
@@ -20,15 +20,11 @@ interface Task {
 }
 
 const TranscriptViewer = () => {
-  const getCurrentTask = useTaskStore((state) => state.getCurrentTask)
-  const currentTaskId = useTaskStore((state) => state.currentTaskId)
-  const [task, setTask] = useState<Task | null>(null)
+  const task = useTaskStore(state =>
+      state.tasks.find(t => t.id === state.currentTaskId) ?? null
+  )
   const [activeSegment, setActiveSegment] = useState<number | null>(null)
   const segmentRefs = useRef<(HTMLDivElement | null)[]>([])
-
-  useEffect(() => {
-    setTask(getCurrentTask())
-  }, [currentTaskId, getCurrentTask])
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)

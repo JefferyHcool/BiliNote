@@ -18,11 +18,8 @@ const PHASES = [
 
 function parseIsoMs(iso?: string): number | null {
   if (!iso) return null
-  try {
-    return new Date(iso).getTime()
-  } catch {
-    return null
-  }
+  const ms = new Date(iso).getTime()
+  return isNaN(ms) ? null : ms
 }
 
 function fmtSecs(s: number): string {
@@ -70,6 +67,11 @@ const GenerationProgress: FC<GenerationProgressProps> = ({ taskStatus, taskProgr
           />
         </div>
       </div>
+
+      {/* 排队中提示 */}
+      {currentIndex === -1 && (
+        <p className="text-center text-xs text-gray-400">任务排队中，等待执行…</p>
+      )}
 
       {/* 阶段列表 */}
       <div className="space-y-2">

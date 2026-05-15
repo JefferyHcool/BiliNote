@@ -1,14 +1,20 @@
 import re
 
 
-_TIME_RE = r"(\d{1,2}:\d{2}(?::\d{2})?)"
+_TIME_RE = r"(\d+:\d{2}(?::\d{2})?)"
+_STRIP_CONTENT_RE = re.compile(
+    r"\*?Content-(?:\[\d+:\d{2}(?::\d{2})?\]|\d+:\d{2}(?::\d{2})?)\*?"
+)
+_STRIP_SCREENSHOT_RE = re.compile(
+    r"\*?Screenshot-(?:\[\d+:\d{2}(?::\d{2})?\]|\d+:\d{2}(?::\d{2})?)\*?"
+)
 _HEADING_TIME_RE = re.compile(
     rf"^(##|###)\s+(.+?)\s*(\*?Content-\[{_TIME_RE}\]\*?|\({_TIME_RE}\)\*?)\s*$",
     re.MULTILINE,
 )
 _TOC_HEADING_RE = re.compile(r"^##\s*目录\s*$", re.MULTILINE)
 _NEXT_H2_RE = re.compile(r"^##\s+(?!目录\s*$).+", re.MULTILINE)
-_TOC_TIME_RE = re.compile(r"Content-\[\d{1,2}:\d{2}|\(\d{1,2}:\d{2}")
+_TOC_TIME_RE = re.compile(r"Content-\[\d+:\d{2}|\(\d+:\d{2}")
 
 
 def normalize_toc_timestamps(markdown: str | None) -> str | None:
@@ -90,35 +96,42 @@ def prepend_source_link(markdown: str | None, source_url: str) -> str | None:
     return header
 
 
+def strip_content_markers(markdown: str) -> str:
+    """Remove *Content-[mm:ss]* markers when link=False (兜底清理，防止裸标记污染成品)。"""
+    return _STRIP_CONTENT_RE.sub("", markdown)
+
+
+def strip_screenshot_markers(markdown: str) -> str:
+    """Remove *Screenshot-[mm:ss]* markers when screenshot=False。"""
+    return _STRIP_SCREENSHOT_RE.sub("", markdown)
+
+
 def replace_content_markers(markdown: str, video_id: str, platform: str = 'bilibili') -> str:
     """
-    替换 *Content-04:16*、Content-04:16 或 Content-[04:16] 为超链接，跳转到对应平台视频的时间位置
+    替换 *Content-04:16*、Content-04:16 或 Content-[04:16] 为超链接，跳转到对应平台视频的时间位置。
+    支持 mm:ss、mmm:ss、h:mm:ss、hh:mm:ss 格式。
     """
-    # 匹配三种形式：*Content-04:16*、Content-04:16、Content-[04:16]
-    pattern = r"(?:\*?)Content-(?:\[(\d{2}):(\d{2})\]|(\d{2}):(\d{2}))"
-
-    safe_video_id = video_id
+    pattern = r"(?:\*?)Content-(?:\[(\d+:\d{2}(?::\d{2})?)\]|(\d+:\d{2}(?::\d{2})?))"
+    parsed_video_id = video_id.replace("_p", "?p=")
 
     def replacer(match):
-        mm = match.group(1) or match.group(3)
-        ss = match.group(2) or match.group(4)
-        total_seconds = int(mm) * 60 + int(ss)
+        time_str = match.group(1) or match.group(2)
+        parts = [int(p) for p in time_str.split(":")]
+        if len(parts) == 2:
+            total_seconds = parts[0] * 60 + parts[1]
+        else:
+            total_seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
 
         if platform == 'bilibili':
-            video_id = video_id.replace("_p", "?p=")
-            url = f"https://www.bilibili.com/video/{video_id}&t={total_seconds}"
-            parsed_video_id = safe_video_id.replace("_p", "?p=")
             url = f"https://www.bilibili.com/video/{parsed_video_id}&t={total_seconds}"
         elif platform == 'youtube':
-            url = f"https://www.youtube.com/watch?v={video_id}&t={total_seconds}s"
-            url = f"https://www.youtube.com/watch?v={safe_video_id}&t={total_seconds}s"
+            url = f"https://www.youtube.com/watch?v={parsed_video_id}&t={total_seconds}s"
         elif platform == 'douyin':
-            url = f"https://www.douyin.com/video/{video_id}"
-            url = f"https://www.douyin.com/video/{safe_video_id}"
-            return f"[原片 @ {mm}:{ss}]({url})"
+            url = f"https://www.douyin.com/video/{parsed_video_id}"
+            return f"[原片 @ {time_str}]({url})"
         else:
-            return f"({mm}:{ss})"
+            return f"({time_str})"
 
-        return f"[原片 @ {mm}:{ss}]({url})"
+        return f"[原片 @ {time_str}]({url})"
 
     return re.sub(pattern, replacer, markdown)

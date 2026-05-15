@@ -41,6 +41,18 @@ class TestScreenshotMarker(unittest.TestCase):
             ],
         )
 
+    def test_extract_accepts_three_digit_minutes(self):
+        """长视频：分钟数超过99，如 100:03 → 6003s"""
+        markdown = "Screenshot-[100:03]"
+        matches = extract_screenshot_timestamps(markdown)
+        self.assertEqual(matches, [("Screenshot-[100:03]", 6003)])
+
+    def test_extract_accepts_single_digit_hour(self):
+        """长视频：1位小时，如 1:40:03 → 6003s（1h40m3s = 3600+2400+3）"""
+        markdown = "*Screenshot-[1:40:03]*"
+        matches = extract_screenshot_timestamps(markdown)
+        self.assertEqual(matches, [("*Screenshot-[1:40:03]*", 6003)])
+
 
 if __name__ == "__main__":
     unittest.main()

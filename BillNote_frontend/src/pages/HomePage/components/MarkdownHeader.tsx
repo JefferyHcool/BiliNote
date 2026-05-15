@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit, MessageSquare } from 'lucide-react'
+import { Copy, Download, BrainCircuit, MessageSquare, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,11 +16,13 @@ interface VersionNote {
 
 interface NoteHeaderProps {
   currentTask?: {
+    id?: string
     markdown: VersionNote[] | string
   }
   isMultiVersion: boolean
   currentVerId: string
   setCurrentVerId: (id: string) => void
+  onDeleteVersion?: (verId: string) => void
   modelName: string
   style: string
   noteStyles: { value: string; label: string }[]
@@ -40,6 +42,7 @@ export function MarkdownHeader({
   isMultiVersion,
   currentVerId,
   setCurrentVerId,
+  onDeleteVersion,
   modelName,
   style,
   noteStyles,
@@ -92,41 +95,56 @@ export function MarkdownHeader({
       {/* 左侧区域：版本 + 标签 + 创建时间 */}
       <div className="flex flex-wrap items-center gap-3">
         {isMultiVersion && (
-          <Select value={currentVerId} onValueChange={setCurrentVerId}>
-            <SelectTrigger className="h-8 w-[160px] text-sm">
-              <div className="flex items-center">
-                {(() => {
-                  const idx = versions.findIndex(v => v.ver_id === currentVerId)
-                  return idx !== -1 ? `版本（${currentVerId.slice(-6)}）` : ''
-                })()}
-              </div>
-            </SelectTrigger>
-
-            <SelectContent>
-              {versions.map((v) => {
-                const shortId = v.ver_id.slice(-6)
-                return (
-                  <SelectItem key={v.ver_id} value={v.ver_id}>
-                    {`版本（${shortId}）`}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1">
+            <Select value={currentVerId} onValueChange={setCurrentVerId}>
+              <SelectTrigger className="h-8 w-[160px] text-sm">
+                <div className="flex items-center">
+                  {(() => {
+                    const idx = versions.findIndex(v => v.ver_id === currentVerId)
+                    return idx !== -1 ? `版本（${currentVerId.slice(-6)}）` : ''
+                  })()}
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {versions.map(v => {
+                  const shortId = v.ver_id.slice(-6)
+                  return (
+                    <SelectItem key={v.ver_id} value={v.ver_id}>
+                      {`版本（${shortId}）`}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+            {onDeleteVersion && versions.length > 1 && currentVerId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                      onClick={() => onDeleteVersion(currentVerId)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>删除当前版本</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         )}
-
         <Badge variant="secondary" className="bg-pink-100 text-pink-700 hover:bg-pink-200">
           {modelName}
         </Badge>
         <Badge variant="secondary" className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">
           {styleName}
         </Badge>
-
         {createAt && (
           <div className="text-muted-foreground text-sm">创建时间: {formatDate(createAt)}</div>
         )}
       </div>
-
       {/* 右侧操作按钮 */}
       <div className="flex items-center gap-1">
         <TooltipProvider>
@@ -181,7 +199,6 @@ export function MarkdownHeader({
                 size="sm"
                 className="h-8 px-2"
               >
-                {/*<Download className="mr-1.5 h-4 w-4" />*/}
                 <span className="text-sm">原文参照</span>
               </Button>
             </TooltipTrigger>

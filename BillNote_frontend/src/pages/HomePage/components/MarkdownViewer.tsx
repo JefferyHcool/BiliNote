@@ -18,7 +18,12 @@ import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { useTaskStore, type Markdown } from '@/store/taskStore'
-import { get_task_status } from '@/services/note.ts'
+import {
+  get_task_status,
+  normalizeDownloadQuality,
+  normalizeGridSize,
+  normalizeVideoInterval,
+} from '@/services/note.ts'
 import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
@@ -275,6 +280,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const currentTask = useTaskStore(state => state.getCurrentTask())
   const taskStatus = currentTask?.status || 'PENDING'
   const retryTask = useTaskStore.getState().retryTask
+  const deleteNoteVersion = useTaskStore(state => state.deleteNoteVersion)
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
@@ -330,13 +336,13 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
             model_name:      currentTask.formData?.model_name      || gp.model_name      || '',
             provider_id:     currentTask.formData?.provider_id     || gp.provider_id     || '',
             style:           currentTask.formData?.style           || gp.style           || '',
-            quality:         currentTask.formData?.quality         || gp.quality         || '',
+            quality:         normalizeDownloadQuality(currentTask.formData?.quality || gp.quality),
             extras:          currentTask.formData?.extras          || gp.extras          || '',
             link:            currentTask.formData?.link            ?? gp.link            ?? false,
             screenshot:      currentTask.formData?.screenshot      ?? gp.screenshot      ?? false,
             video_understanding: currentTask.formData?.video_understanding ?? gp.video_understanding ?? false,
-            video_interval:  currentTask.formData?.video_interval  ?? gp.video_interval  ?? 6,
-            grid_size:       currentTask.formData?.grid_size       ?? gp.grid_size       ?? [2, 2],
+            video_interval:  normalizeVideoInterval(currentTask.formData?.video_interval ?? gp.video_interval),
+            grid_size:       normalizeGridSize(currentTask.formData?.grid_size ?? gp.grid_size),
           },
         })
       }
@@ -407,6 +413,19 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
       setSelectedContent(currentVer.content)
     }
   }, [currentVerId, currentTask?.id, currentTask?.markdown, isMultiVersion])
+  const handleDeleteVersion = async (verId: string) => {
+    if (!currentTask?.id) return
+    const versions = Array.isArray(currentTask.markdown) ? currentTask.markdown as Markdown[] : []
+    if (versions.length <= 1) return
+    await deleteNoteVersion(currentTask.id, verId)
+    // 切换到剩余版本中最新的
+    const remaining = versions.filter(v => v.ver_id !== verId)
+    if (remaining.length > 0) {
+      const latest = [...remaining].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+      setCurrentVerId(latest.ver_id)
+    }
+  }
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
@@ -504,6 +523,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         isMultiVersion={isMultiVersion}
         currentVerId={currentVerId}
         setCurrentVerId={setCurrentVerId}
+        onDeleteVersion={handleDeleteVersion}
         modelName={modelName}
         style={style}
         noteStyles={noteStyles as unknown as { value: string; label: string }[]}

@@ -107,7 +107,7 @@ class ProviderService:
     def get_all_providers_safe():
         rows = get_all_providers()
 
-        return [ProviderService.serialize_provider(row) for row in rows] if (rows) else []
+        return [ProviderService.serialize_provider_safe(row) for row in rows] if (rows) else []
     @staticmethod
     def get_provider_by_name(name: str):
         row = get_provider_by_name(name)
@@ -129,6 +129,8 @@ class ProviderService:
         try:
         # 过滤掉空值
             filtered_data = {k: v for k, v in data.items() if v is not None and k != 'id'}
+            if "*" in str(filtered_data.get("api_key", "")):
+                filtered_data.pop("api_key", None)
             print('更新模型供应商',filtered_data)
             update_provider(id, **filtered_data)
             # 获取更新后的供应商信息

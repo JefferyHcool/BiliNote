@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { delete_task, generateNote } from '@/services/note.ts'
+import {
+  delete_task,
+  generateNote,
+  delete_note_version,
+  normalizeDownloadQuality,
+  normalizeGridSize,
+  normalizeVideoInterval,
+} from '@/services/note.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
@@ -87,6 +94,7 @@ interface TaskStore {
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
   retryTask: (id: string) => void
+  deleteNoteVersion: (taskId: string, verId: string) => Promise<void>
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -204,7 +212,12 @@ export const useTaskStore = create<TaskStore>()(
         console.log('retry',task)
         if (!task) return
 
-        const newFormData = payload || task.formData
+        const newFormData = {
+          ...(payload || task.formData),
+          quality: normalizeDownloadQuality((payload || task.formData)?.quality),
+          video_interval: normalizeVideoInterval((payload || task.formData)?.video_interval),
+          grid_size: normalizeGridSize((payload || task.formData)?.grid_size),
+        }
         await generateNote({
           ...newFormData,
           task_id: id,
@@ -215,8 +228,9 @@ export const useTaskStore = create<TaskStore>()(
               t.id === id
                   ? {
                     ...t,
-                    formData: newFormData, // ✅ 显式更新 formData
+                    formData: newFormData,
                     status: 'PENDING',
+                    taskProgress: undefined, // 重试时清空旧进度，避免残留 100%/旧计时
                   }
                   : t
           ),
@@ -230,8 +244,8 @@ export const useTaskStore = create<TaskStore>()(
           try {
             await delete_task({
               task_id: task.id,
-              video_id: task.audioMeta.video_id,
-              platform: task.audioMeta.platform,
+              video_id: task.audioMeta?.video_id,
+              platform: task.audioMeta?.platform,
             })
           } catch {
             // delete_task 内部已 toast.error，这里只需阻止后续删除
@@ -241,6 +255,17 @@ export const useTaskStore = create<TaskStore>()(
         set(state => ({
           tasks: state.tasks.filter(t => t.id !== id),
           currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
+        }))
+      },
+
+      deleteNoteVersion: async (taskId: string, verId: string) => {
+        await delete_note_version(taskId, verId)
+        set(state => ({
+          tasks: state.tasks.map(task => {
+            if (task.id !== taskId || !Array.isArray(task.markdown)) return task
+            const remaining = (task.markdown as any[]).filter((v: any) => v.ver_id !== verId)
+            return { ...task, markdown: remaining }
+          }),
         }))
       },
 

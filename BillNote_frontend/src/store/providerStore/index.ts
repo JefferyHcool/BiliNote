@@ -19,6 +19,8 @@ interface ProviderStore {
   updateProvider: (provider: IProvider) => Promise<void>
 }
 
+const isMaskedApiKey = (key?: string) => Boolean(key && key.includes('*'))
+
 export const useProviderStore = create<ProviderStore>((set, get) => ({
   provider: [],
 
@@ -80,8 +82,10 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
       const data = {
         ...merged,
-        api_key: merged.apiKey,
         base_url: merged.baseUrl,
+      }
+      if (!isMaskedApiKey(merged.apiKey)) {
+        data.api_key = merged.apiKey
       }
       // 拦截器已解包：成功时直接返回 data 部分
       await updateProviderById(data)

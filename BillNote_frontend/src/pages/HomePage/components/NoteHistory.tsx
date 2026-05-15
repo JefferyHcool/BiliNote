@@ -89,19 +89,18 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
               className={cn('flex items-center gap-4')}
             >
               {/* 封面图 */}
-              {task.platform === 'local' ? (
+              {(task.audioMeta?.platform ?? task.formData?.platform) === 'local' ? (
                 <img
                   src={
-                    task.audioMeta.cover_url ? `${task.audioMeta.cover_url}` : '/placeholder.png'
+                    task.audioMeta?.cover_url ? `${task.audioMeta.cover_url}` : '/placeholder.png'
                   }
                   alt="封面"
                   className="h-10 w-12 rounded-md object-cover"
                 />
               ) : (
                   <LazyImage
-
                       src={
-                        task.audioMeta.cover_url
+                        task.audioMeta?.cover_url
                             ? `${baseURL}/image_proxy?url=${encodeURIComponent(task.audioMeta.cover_url)}`
                             : '/placeholder.png'
                       }
@@ -153,6 +152,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                         type="button"
                         size="small"
                         variant="ghost"
+                        aria-label={`删除 ${task.audioMeta.title || '笔记'}`}
                         onClick={e => {
                           e.stopPropagation()
                           removeTask(task.id)

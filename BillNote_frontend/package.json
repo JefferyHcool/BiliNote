@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:note-generation": "playwright test e2e/note-generation.spec.ts",
+    "test:frontend-exhaustive": "playwright test e2e/frontend-exhaustive.spec.ts"
   },
   "dependencies": {
     "@ant-design/x": "^2.4.0",
@@ -68,6 +71,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.46.1",
     "@eslint/js": "^9.21.0",
     "@tailwindcss/postcss": "^4.1.3",
     "@tauri-apps/cli": "^2.5.0",

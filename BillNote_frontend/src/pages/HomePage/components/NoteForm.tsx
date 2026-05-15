@@ -8,13 +8,19 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
-import { Info, Loader2, Plus } from 'lucide-react'
+import { Info, Loader2, Plus, StopCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
-import { generateNote } from '@/services/note.ts'
+import {
+  generateNote,
+  cancel_task,
+  normalizeDownloadQuality,
+  normalizeGridSize,
+  normalizeVideoInterval,
+} from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
 import { useTaskStore } from '@/store/taskStore'
 import { useModelStore } from '@/store/modelStore'
@@ -131,6 +137,7 @@ const NoteForm = () => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
@@ -144,8 +151,8 @@ const NoteForm = () => {
       quality: 'medium',
       model_name: modelList[0]?.model_name || '',
       style: 'minimal',
-      video_interval: 6,
-      grid_size: [2, 2],
+      video_interval: 3,
+      grid_size: [5, 6],
       format: [],
     },
   })
@@ -176,13 +183,13 @@ const NoteForm = () => {
       video_url: formData.video_url || '',
       model_name: formData.model_name || modelList[0]?.model_name || '',
       style: formData.style || 'minimal',
-      quality: formData.quality || 'medium',
+      quality: normalizeDownloadQuality(formData.quality),
       extras: formData.extras || '',
       screenshot: formData.screenshot ?? false,
       link: formData.link ?? false,
       video_understanding: formData.video_understanding ?? false,
-      video_interval: formData.video_interval ?? 6,
-      grid_size: formData.grid_size ?? [2, 2],
+      video_interval: normalizeVideoInterval(formData.video_interval),
+      grid_size: normalizeGridSize(formData.grid_size),
       format: formData.format ?? [],
     })
   }, [
@@ -217,6 +224,11 @@ const NoteForm = () => {
   }
 
   // 重新生成：直接绕过 Zod 校验，从存储的 formData 取 URL/平台，只允许修改其他参数
+  const handleCancel = async () => {
+    if (!currentTaskId) return
+    await cancel_task(currentTaskId)
+  }
+
   const handleRegenerate = async () => {
     const task = getCurrentTask()
     if (!task || !currentTaskId) return
@@ -231,6 +243,9 @@ const NoteForm = () => {
       ...values,             // 覆盖可编辑字段（model、style、quality、extras 等）
       video_url: storedFormData.video_url || values.video_url || '',
       platform: storedFormData.platform || values.platform || 'bilibili',
+      quality: normalizeDownloadQuality(values.quality || storedFormData.quality),
+      video_interval: normalizeVideoInterval(values.video_interval || storedFormData.video_interval),
+      grid_size: normalizeGridSize(values.grid_size || storedFormData.grid_size),
       provider_id,
       task_id: currentTaskId,
     }
@@ -243,32 +258,75 @@ const NoteForm = () => {
       provider_id: modelList.find(m => m.model_name === values.model_name)?.provider_id || '',
       task_id: '',
     }
-    const data = await generateNote(payload)
-    addPendingTask(data.task_id, values.platform, payload)
+    try {
+      const data = await generateNote(payload)
+      if (!data) {
+        setFormError('提交失败，后端未返回任务 ID')
+        setTimeout(() => setFormError(null), 4000)
+        return
+      }
+      addPendingTask(data.task_id, values.platform, payload)
+    } catch (e: any) {
+      setFormError(e?.message || '提交失败，请检查网络或后端服务是否正常')
+      setTimeout(() => setFormError(null), 4000)
+    }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
     console.warn('表单校验失败：', errors)
-    // message.error('请完善所有必填项后再提交')
+    const msgs = Object.values(errors)
+      .map((e: any) => e?.message || e?.root?.message)
+      .filter(Boolean)
+    setFormError(msgs.length ? msgs.join('；') : '请检查表单填写是否完整')
+    setTimeout(() => setFormError(null), 4000)
   }
   const handleCreateNew = () => {
-    // 🔁 这里清空当前任务状态
-    // 比如调用 resetCurrentTask() 或者 navigate 到一个新页面
     setCurrentTask(null)
+    form.reset({
+      platform: 'bilibili',
+      quality: 'medium',
+      model_name: modelList[0]?.model_name || '',
+      style: 'minimal',
+      video_interval: 3,
+      grid_size: [5, 6],
+      format: [],
+      video_url: '',
+      extras: '',
+      screenshot: false,
+      link: false,
+      video_understanding: false,
+    })
   }
   const FormButton = () => {
     const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
+
+    // 生成中：重新生成(disabled) + 取消 + 新建笔记，各占 1/3
+    // 完成后：重新生成(2/3) + 新建笔记(1/3)
+    // 全新：生成笔记(full)
+    const mainBtnClass = !editing ? 'w-full' : generating ? 'w-1/3' : 'w-2/3'
 
     return (
       <div className="flex gap-2">
         <Button
           type={editing ? 'button' : 'submit'}
           onClick={editing ? handleRegenerate : undefined}
-          className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
+          className={mainBtnClass}
           disabled={generating}
         >
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {label}
         </Button>
+
+        {generating && currentTaskId && (
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-1/3"
+            onClick={handleCancel}
+          >
+            <StopCircle className="mr-2 h-4 w-4" />
+            取消
+          </Button>
+        )}
 
         {editing && (
           <Button type="button" variant="outline" className="w-1/3" onClick={handleCreateNew}>
@@ -287,6 +345,11 @@ const NoteForm = () => {
         <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
           {/* 顶部按钮 */}
           <FormButton></FormButton>
+          {formError && (
+            <Alert variant="destructive" className="text-sm">
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          )}
 
           {/* 视频链接 & 平台 */}
           <SectionHeader title="视频链接" tip="支持 B 站、YouTube 等平台" />
@@ -499,6 +562,8 @@ const NoteForm = () => {
                       aria-label="视频理解采样间隔"
                       disabled={!videoUnderstandingEnabled}
                       type="number"
+                      min={1}
+                      max={30}
                       {...field}
                     />
                     <FormMessage />
@@ -517,8 +582,13 @@ const NoteForm = () => {
                         aria-label="视频理解拼图列数"
                         disabled={!videoUnderstandingEnabled}
                         type="number"
-                        value={field.value?.[0] || 3}
-                        onChange={e => field.onChange([+e.target.value, field.value?.[1] || 3])}
+                        min={1}
+                        max={10}
+                        value={field.value?.[0] || 2}
+                        onChange={e => {
+                          const n = Math.max(1, Math.min(10, +e.target.value || 1))
+                          field.onChange([n, field.value?.[1] || 2])
+                        }}
                         className="w-16"
                       />
                       <span>x</span>
@@ -526,8 +596,13 @@ const NoteForm = () => {
                         aria-label="视频理解拼图行数"
                         disabled={!videoUnderstandingEnabled}
                         type="number"
-                        value={field.value?.[1] || 3}
-                        onChange={e => field.onChange([field.value?.[0] || 3, +e.target.value])}
+                        min={1}
+                        max={10}
+                        value={field.value?.[1] || 2}
+                        onChange={e => {
+                          const n = Math.max(1, Math.min(10, +e.target.value || 1))
+                          field.onChange([field.value?.[0] || 2, n])
+                        }}
                         className="w-16"
                       />
                     </div>
