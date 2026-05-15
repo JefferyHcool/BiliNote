@@ -1,5 +1,5 @@
 import React, { FC, useRef, useState } from 'react'
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, History as HistoryIcon } from 'lucide-react'
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, History as HistoryIcon, BookOpen } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -61,6 +61,18 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                     </TooltipTrigger>
                     <TooltipContent>
                       <span>收起工作区</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link to={'/library'} className="text-muted-foreground hover:text-primary cursor-pointer">
+                        <BookOpen className="h-[18px] w-[18px]" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span>笔记库</span>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

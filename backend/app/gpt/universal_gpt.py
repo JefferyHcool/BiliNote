@@ -23,7 +23,7 @@ from typing import List
 
 
 DEFAULT_CONTEXT_WINDOW = 32768
-DEFAULT_MAX_OUTPUT_TOKENS = 4096
+DEFAULT_MAX_OUTPUT_TOKENS = 16384
 DEFAULT_CONTEXT_SAFETY_RATIO = 0.9
 DEFAULT_IMAGE_TOKEN_ESTIMATE = 1500
 DEFAULT_RUNTIME_DIR = ".runtime"
@@ -127,6 +127,29 @@ class UniversalGPT(GPT):
         value = entry.get("context_window")
         return value if isinstance(value, int) and value > 0 else None
 
+    def _discover_context_window(self) -> int | None:
+        """Query the provider's /models/{model} endpoint for context window size.
+
+        vLLM returns ``max_model_len``; some cloud providers return
+        ``context_length`` or ``context_window``.  Extra fields from the
+        OpenAI-compatible response are accessible via Pydantic v2's
+        ``model_extra``.  Failures are silently ignored — callers fall back to
+        the cached or default value.
+        """
+        try:
+            model_info = self.client.models.retrieve(self.model)
+            raw: dict = getattr(model_info, "model_extra", None) or {}
+            if not raw and hasattr(model_info, "model_dump"):
+                raw = model_info.model_dump()
+            for key in ("max_model_len", "context_length", "context_window"):
+                val = raw.get(key)
+                if isinstance(val, int) and val > 0:
+                    logger.info(f"从 /models 接口发现上下文窗口: {val} (字段: {key}，模型: {self.model})")
+                    return val
+        except Exception as exc:
+            logger.debug(f"上下文窗口自动发现失败，将使用默认值: {exc}")
+        return None
+
     def _resolve_context_window(self) -> int:
         explicit = (
             self._read_positive_int_env("OPENAI_CONTEXT_WINDOW")
@@ -134,11 +157,17 @@ class UniversalGPT(GPT):
         )
         if explicit:
             return explicit
-        # Minimal fix boundary: we intentionally do not query provider model
-        # metadata here yet. Unknown large-context models should be configured
-        # with OPENAI_CONTEXT_WINDOW until a provider-specific discovery layer is
-        # added.
-        return self._get_cached_context_window() or DEFAULT_CONTEXT_WINDOW
+
+        cached = self._get_cached_context_window()
+        if cached:
+            return cached
+
+        discovered = self._discover_context_window()
+        if discovered:
+            self._save_learned_context_window(discovered, "discovered via /models API")
+            return discovered
+
+        return DEFAULT_CONTEXT_WINDOW
 
     def _calculate_max_request_tokens(self) -> int:
         available = max(1024, self.context_window - self.max_output_tokens)
@@ -402,7 +431,7 @@ class UniversalGPT(GPT):
             any(c.get("type") == "image_url" for c in m["content"] if isinstance(c, dict))
             for m in messages if isinstance(m, dict)
         )
-        request_timeout = 180 if has_images else 120
+        request_timeout = 600
         for attempt in range(self._max_retry_attempts):
             # 每次重试前先检查取消，避免在已取消的任务上继续发起请求
             if task_id:
@@ -412,6 +441,7 @@ class UniversalGPT(GPT):
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
+                    max_tokens=self.max_output_tokens,
                     timeout=request_timeout,
                 )
             except Exception as exc:

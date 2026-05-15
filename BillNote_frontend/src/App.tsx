@@ -11,6 +11,7 @@ import Index from '@/pages/Index.tsx'
 import { HomePage } from './pages/HomePage/Home.tsx'
 
 // 非首屏页面使用 React.lazy 按需加载
+const NoteLibraryPage = lazy(() => import('@/pages/NoteLibraryPage'))
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const SettingPage = lazy(() => import('./pages/SettingPage/index.tsx'))
 
@@ -63,6 +64,7 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/" element={<OnboardingGuard><Index /></OnboardingGuard>}>
               <Route index element={<HomePage />} />
+              <Route path="library" element={<NoteLibraryPage />} />
               <Route path="settings" element={<SettingPage />}>
                 <Route index element={<Navigate to="model" replace />} />
                 <Route path="model" element={<Model />}>

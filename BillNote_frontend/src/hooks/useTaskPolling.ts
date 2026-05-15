@@ -34,6 +34,7 @@ export const useTaskPolling = (interval = 3000) => {
 
       for (const task of pendingTasks) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const res = await get_task_status(task.id) as any
           const { status } = res
 
@@ -49,9 +50,10 @@ export const useTaskPolling = (interval = 3000) => {
 
           if (status === 'SUCCESS') {
             // 跳过旧一轮的 SUCCESS：backend 的 started_at 早于本轮提交时间说明还没刷新
-            const backendStartedAt = res.started_at ? new Date(res.started_at).getTime() : 0
+            // 仅当 started_at 存在时才做此判断；mock 或旧接口没有该字段时直接接受结果
+            const backendStartedAt = res.started_at ? new Date(res.started_at).getTime() : null
             const localSubmitTime = taskSubmitTimeRef.current[task.id] ?? 0
-            if (localSubmitTime > 0 && backendStartedAt < localSubmitTime - 5000) {
+            if (backendStartedAt !== null && localSubmitTime > 0 && backendStartedAt < localSubmitTime - 5000) {
               // 旧结果，等 backend 开始新一轮再处理
               continue
             }
@@ -82,5 +84,7 @@ export const useTaskPolling = (interval = 3000) => {
     }, interval)
 
     return () => clearInterval(timer)
+    // updateTaskContent is stable (zustand action); intentionally omitted
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interval])
 }
