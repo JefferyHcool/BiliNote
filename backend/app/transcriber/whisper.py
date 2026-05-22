@@ -11,8 +11,6 @@ from events import transcription_finished
 from pathlib import Path
 import os
 import shutil
-from tqdm import tqdm
-from modelscope import snapshot_download
 
 
 '''
@@ -20,19 +18,16 @@ from modelscope import snapshot_download
 '''
 logger=get_logger(__name__)
 
-MODEL_MAP={
-    "tiny": "pengzhendong/faster-whisper-tiny",
-    'base':'pengzhendong/faster-whisper-base',
-    'small':'pengzhendong/faster-whisper-small',
-    'medium':'pengzhendong/faster-whisper-medium',
-    'large-v1':'pengzhendong/faster-whisper-large-v1',
-    'large-v2':'pengzhendong/faster-whisper-large-v2',
-    'large-v3':'pengzhendong/faster-whisper-large-v3',
-    'large-v3-turbo':'pengzhendong/faster-whisper-large-v3-turbo',
-}
-
+# 历史遗留：之前用 modelscope 下载到自定义目录然后把路径传给 WhisperModel。
+# 但 faster-whisper 1.1.1 的 download_model（utils.py:76）逻辑是：
+# 只要 size_or_id 里含 "/" 就当 HF repo_id 处理，没有「本地目录直接返回」分支。
+# 我们传 /app/models/whisper/whisper-tiny 进去 → 被当成不存在的 HF repo →
+# 在线请求失败 → fallback local_files_only=True → HF cache 找不到（因为是
+# modelscope 目录布局不是 HF）→ LocalEntryNotFoundError，误导说"离线模式"。
+# 解法：彻底让 faster-whisper 自己处理下载——传 size name，配 download_root
+# 作为 HF cache 根目录，HF_ENDPOINT 已经在 Dockerfile 里指到 hf-mirror.com，
+# 国内能用。删掉 modelscope 那一套，避免布局不匹配。
 class WhisperTranscriber(Transcriber):
-    # TODO:修改为可配置
     def __init__(
             self,
             model_size: str = "base",
@@ -48,44 +43,40 @@ class WhisperTranscriber(Transcriber):
                 print('没有 cuda 使用 cpu进行计算')
 
         self.compute_type = compute_type or ("float16" if self.device == "cuda" else "int8")
+        self.model_size = model_size
 
         model_dir = get_model_dir("whisper")
-        model_path = os.path.join(model_dir, f"whisper-{model_size}")
-        repo_id = MODEL_MAP[model_size]
-
-        # 第一步：目录 / model.bin 不在 → 下载。
-        # 关键判据用 model.bin 而不是目录存在：首次下载若被打断（网络中断 / 磁盘满 /
-        # 容器被 kill）会留下半成品目录，只看目录存在会跳过下载。
-        model_bin = Path(model_path) / "model.bin"
-        if not model_bin.exists():
-            if Path(model_path).exists():
-                logger.warning(f"模型目录 {model_path} 存在但 model.bin 缺失（上次下载未完成），重新下载")
-            else:
-                logger.info(f"模型 whisper-{model_size} 不存在，开始下载...")
-            model_path = snapshot_download(repo_id, local_dir=model_path)
-            logger.info("模型下载完成")
-
-        # 第二步：加载。model.bin 可能存在但【内容截断】（下载到一半被 kill），
-        # 此时 WhisperModel() 会抛 "File model.bin is incomplete: failed to read a buffer..."。
-        # 捕获后删掉损坏目录、重新下载、再试一次——自愈，避免 500 死循环。
         try:
-            self.model = WhisperModel(
-                model_size_or_path=model_path,
-                device=self.device,
-                compute_type=self.compute_type,
-                download_root=model_dir,
-            )
+            self.model = self._build_model(model_size, model_dir)
         except Exception as e:
-            logger.warning(f"加载 whisper-{model_size} 失败（疑似模型文件损坏 / 截断）：{e}；删除后重新下载")
-            shutil.rmtree(model_path, ignore_errors=True)
-            model_path = snapshot_download(repo_id, local_dir=model_path)
-            logger.info("模型重新下载完成，重试加载")
-            self.model = WhisperModel(
-                model_size_or_path=model_path,
-                device=self.device,
-                compute_type=self.compute_type,
-                download_root=model_dir,
-            )
+            # 自愈：损坏 / 截断 / 半成品 cache → 删掉对应 HF cache 重下一次
+            logger.warning(f"加载 whisper-{model_size} 失败：{e}；清理 cache 后重新下载")
+            self._purge_cache(model_dir, model_size)
+            self.model = self._build_model(model_size, model_dir)
+
+    def _build_model(self, model_size: str, model_dir: str) -> WhisperModel:
+        return WhisperModel(
+            model_size_or_path=model_size,  # 传 size name，让 faster-whisper 自己映射到 Systran/faster-whisper-*
+            device=self.device,
+            compute_type=self.compute_type,
+            download_root=model_dir,
+        )
+
+    @staticmethod
+    def _purge_cache(model_dir: str, model_size: str) -> None:
+        """删掉 HF cache 里这个 size 对应的 snapshot 目录，强制下次重新下载。
+
+        HF cache 布局：<model_dir>/models--Systran--faster-whisper-{size}/
+        没找到也不报错——可能用户改了 endpoint 或者 cache 布局变了。
+        """
+        candidates = [
+            Path(model_dir) / f"models--Systran--faster-whisper-{model_size}",
+            Path(model_dir) / f"whisper-{model_size}",  # 历史 modelscope 目录，顺手清掉
+        ]
+        for path in candidates:
+            if path.exists():
+                logger.info(f"清理损坏 cache: {path}")
+                shutil.rmtree(path, ignore_errors=True)
     @staticmethod
     def is_torch_installed() -> bool:
         try:
