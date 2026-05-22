@@ -185,8 +185,9 @@ def get_transcriber_models_status():
                     "downloading": _downloading.get(mlx_key) == "downloading",
                     "available": repo_id is not None,
                 })
-        except Exception:
+        except ImportError:
             # mlx-whisper 未安装或导入失败，跳过该分支
+            logger.warning("MLX Whisper 未安装，跳过模型状态检查")
             pass
 
     return R.success(data={

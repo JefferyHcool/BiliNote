@@ -22,12 +22,7 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
         match = re.search(r"BV([0-9A-Za-z]+)", url)
         if not match:
             return None
-        bv = f"BV{match.group(1)}"
-        # 提取分 P 参数（合集），避免不同 P 覆盖同一文件
-        p_match = re.search(r'[?&]p=(\d+)', url)
-        if p_match:
-            return f"{bv}_p{p_match.group(1)}"
-        return bv
+        return f"BV{match.group(1)}"
 
     elif platform == "youtube":
         # 匹配 v=xxxxx 或 youtu.be/xxxxx，ID 长度通常为 11
@@ -40,6 +35,22 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
         return match.group(1) if match else None
 
     return None
+
+
+def extract_bilibili_task_id(url: str) -> str:
+    """
+    从 B 站链接中提取带分 P 信息的任务签名，用于缓存文件名区分不同 P。
+
+    :param url: Bilibili 视频链接
+    :return: 纯 BV 号，若存在 p 参数则追加为 BVxxxx_p2
+    """
+    bvid = extract_video_id(url, "bilibili")
+    if not bvid:
+        return ""
+    p_match = re.search(r'[?&]p=(\d+)', url)
+    if p_match:
+        return f"{bvid}_p{p_match.group(1)}"
+    return bvid
 
 
 def resolve_bilibili_short_url(short_url: str) -> Optional[str]:
