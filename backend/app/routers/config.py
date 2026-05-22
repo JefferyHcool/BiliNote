@@ -119,12 +119,21 @@ _downloading: dict[str, str] = {}  # model_size -> status ("downloading" | "done
 def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> bool:
     """检查指定 whisper 模型是否已下载完整到本地。
 
-    必须 model.bin 落盘才算完成，仅有空目录或半成品不能算「已下载」——
-    否则监控页会显示绿勾但加载时报「Unable to open file 'model.bin'」。
+    faster-whisper 把模型缓存在 HF cache 布局下：
+      <model_dir>/models--Systran--faster-whisper-{size}/snapshots/<hash>/model.bin
+    必须能在某个 snapshot 目录里找到 model.bin 才算完成。
+    （历史 modelscope 布局 <model_dir>/whisper-{size}/model.bin 也兼容识别。）
     """
-    model_dir = get_model_dir(subdir)
-    model_path = os.path.join(model_dir, f"whisper-{model_size}")
-    return (Path(model_path) / "model.bin").exists()
+    model_dir = Path(get_model_dir(subdir))
+    # HF cache 布局
+    hf_repo_dir = model_dir / f"models--Systran--faster-whisper-{model_size}" / "snapshots"
+    if hf_repo_dir.exists():
+        for snapshot in hf_repo_dir.iterdir():
+            if (snapshot / "model.bin").exists():
+                return True
+    # 历史 modelscope 布局（向后兼容老用户）
+    legacy = model_dir / f"whisper-{model_size}" / "model.bin"
+    return legacy.exists()
 
 
 def _check_mlx_whisper_model_exists(model_size: str) -> bool:
@@ -189,24 +198,37 @@ class ModelDownloadRequest(BaseModel):
 
 
 def _do_download_whisper(model_size: str):
-    """后台下载 faster-whisper 模型。"""
-    from app.transcriber.whisper import MODEL_MAP
-    from modelscope import snapshot_download
+    """后台下载 faster-whisper 模型。
+
+    直接走 huggingface_hub.snapshot_download，把模型放到 HF cache 布局里——
+    这样 faster-whisper 加载时（WhisperModel(model_size_or_path=size_name,
+    download_root=model_dir)）能直接命中缓存，跟加载路径完全对齐。
+    """
+    from huggingface_hub import snapshot_download
 
     try:
         _downloading[model_size] = "downloading"
         model_dir = get_model_dir("whisper")
-        model_path = os.path.join(model_dir, f"whisper-{model_size}")
-        # 用 model.bin 判定而非目录存在：半成品目录不能算「已下载」
-        if (Path(model_path) / "model.bin").exists():
+
+        # 已经下好就不重复下
+        if _check_whisper_model_exists(model_size, "whisper"):
             _downloading[model_size] = "done"
             return
-        repo_id = MODEL_MAP.get(model_size)
-        if not repo_id:
-            _downloading[model_size] = "failed"
-            return
-        logger.info(f"开始下载 whisper 模型: {model_size}")
-        snapshot_download(repo_id, local_dir=model_path)
+        repo_id = f"Systran/faster-whisper-{model_size}"
+        logger.info(f"开始下载 whisper 模型: {repo_id}")
+        # 跟 faster-whisper utils.py 用同样的 allow_patterns，避免多下无关文件；
+        # 不传 local_dir 让它走 HF 默认 cache 布局（与加载逻辑对齐）
+        snapshot_download(
+            repo_id,
+            cache_dir=model_dir,
+            allow_patterns=[
+                "config.json",
+                "preprocessor_config.json",
+                "model.bin",
+                "tokenizer.json",
+                "vocabulary.*",
+            ],
+        )
         logger.info(f"whisper 模型下载完成: {model_size}")
         _downloading[model_size] = "done"
     except Exception as e:
