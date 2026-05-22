@@ -46,8 +46,8 @@ const steps = [
   { label: '保存完成', key: 'SUCCESS' },
 ]
 
-const remarkPlugins = [gfm, remarkMath]
-const rehypePlugins = [rehypeKatex]
+const remarkPlugins = [gfm, [remarkMath, { singleDollarTextMath: true }]]
+const rehypePlugins = [[rehypeKatex, { throwOnError: false, strict: false }]]
 
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。

@@ -20,7 +20,14 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
 
         # 匹配 BV号（如 BV1vc411b7Wa）
         match = re.search(r"BV([0-9A-Za-z]+)", url)
-        return f"BV{match.group(1)}" if match else None
+        if not match:
+            return None
+        bv = f"BV{match.group(1)}"
+        # 提取分 P 参数（合集），避免不同 P 覆盖同一文件
+        p_match = re.search(r'[?&]p=(\d+)', url)
+        if p_match:
+            return f"{bv}_p{p_match.group(1)}"
+        return bv
 
     elif platform == "youtube":
         # 匹配 v=xxxxx 或 youtu.be/xxxxx，ID 长度通常为 11
