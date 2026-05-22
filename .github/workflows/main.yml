@@ -79,6 +79,19 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('BillNote_frontend/src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # 从 tag 注入版本号到 tauri.conf.json：Tauri 取该文件的静态 version 作为
+      # 产物版本，不同步的话构建产物会恒为 conf 里写死的值（此前的 2.0.0）。
+      # github.ref_name 形如 v2.3.2，去掉前缀 v。workflow_dispatch（无 tag）时跳过，保留静态值。
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: BillNote_frontend
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Injecting version $VERSION into tauri.conf.json"
+          node -e "const f='src-tauri/tauri.conf.json'; const fs=require('fs'); const j=JSON.parse(fs.readFileSync(f,'utf8')); j.version=process.argv[1]; fs.writeFileSync(f, JSON.stringify(j,null,2)+'\n');" "$VERSION"
+          node -e "console.log('tauri.conf.json version =', require('./src-tauri/tauri.conf.json').version)"
+
       # 打包 Tauri 应用
       - name: Build Tauri App
         working-directory: BillNote_frontend
