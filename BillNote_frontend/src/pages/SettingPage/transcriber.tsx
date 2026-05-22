@@ -10,13 +10,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save, XCircle } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save, XCircle, Plus, Trash2, Boxes } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   getTranscriberConfig,
   updateTranscriberConfig,
   getModelsStatus,
   downloadModel,
+  addWhisperModel,
+  deleteWhisperModel,
   TranscriberConfig,
   ModelStatus,
 } from '@/services/transcriber'
@@ -33,6 +36,19 @@ export default function Transcriber() {
   const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([])
   const [mlxModelStatuses, setMlxModelStatuses] = useState<ModelStatus[]>([])
   const [mlxAvailable, setMlxAvailable] = useState(false)
+  // 自定义模型表单
+  const [newModelName, setNewModelName] = useState('')
+  const [newModelTarget, setNewModelTarget] = useState('')
+  const [addingModel, setAddingModel] = useState(false)
+
+  // 重新拉取配置（不重置用户当前的选择），用于增删自定义模型后刷新下拉与列表
+  const reloadConfig = useCallback(async () => {
+    try {
+      setConfig(await getTranscriberConfig())
+    } catch {
+      // 静默
+    }
+  }, [])
 
   const fetchModelsStatus = useCallback(async () => {
     try {
@@ -120,6 +136,41 @@ export default function Transcriber() {
       setTimeout(fetchModelsStatus, 1000)
     } catch {
       toast.error('下载请求失败')
+    }
+  }
+
+  const handleAddCustomModel = async () => {
+    const name = newModelName.trim()
+    const target = newModelTarget.trim()
+    if (!name || !target) {
+      toast.error('请填写模型名称和 HF repo_id / 本地路径')
+      return
+    }
+    setAddingModel(true)
+    try {
+      await addWhisperModel({ name, target })
+      toast.success(`已添加自定义模型 ${name}`)
+      setNewModelName('')
+      setNewModelTarget('')
+      await reloadConfig()
+      await fetchModelsStatus()
+    } catch {
+      // 后端的具体错误（如重名）已由请求拦截器 toast，这里不重复提示
+    } finally {
+      setAddingModel(false)
+    }
+  }
+
+  const handleDeleteCustomModel = async (name: string) => {
+    try {
+      await deleteWhisperModel(name)
+      toast.success(`已删除自定义模型 ${name}`)
+      // 删的正好是当前选中的，回退到 tiny，避免选中一个不存在的名称
+      if (selectedModelSize === name) setSelectedModelSize('tiny')
+      await reloadConfig()
+      await fetchModelsStatus()
+    } catch {
+      // 拦截器已提示
     }
   }
 
@@ -268,6 +319,97 @@ export default function Transcriber() {
                   )}
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 自定义 Whisper 模型（仅 fast-whisper：名称不符合内置 Systran 约定的模型在此登记映射） */}
+      {selectedType === 'fast-whisper' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Boxes className="h-5 w-5" />
+              自定义模型
+              <span className="text-sm font-normal text-neutral-400">
+                登记名称不符合内置约定的模型
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert className="text-sm">
+              <AlertDescription>
+                填 <strong>HF repo_id</strong>（如{' '}
+                <code className="rounded bg-neutral-100 px-1">Systran/faster-whisper-large-v3</code>
+                ，会自动下载）或<strong>本地模型目录</strong>（如{' '}
+                <code className="rounded bg-neutral-100 px-1">/app/backend/models/my-whisper</code>
+                ，目录内需含 <code className="rounded bg-neutral-100 px-1">model.bin</code>，下载会跳过）。
+                添加后即可在上方「模型大小」下拉中选用。Docker 部署请把模型目录挂载进容器（见 README 的{' '}
+                <code className="rounded bg-neutral-100 px-1">models</code> 卷）。
+              </AlertDescription>
+            </Alert>
+
+            {config.whisper_custom_models &&
+            Object.keys(config.whisper_custom_models).length > 0 ? (
+              <div className="space-y-2">
+                {Object.entries(config.whisper_custom_models).map(([name, target]) => {
+                  const status = modelStatuses.find(m => m.model_size === name)
+                  return (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between gap-3 rounded-md border px-4 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 font-medium">
+                          {name}
+                          {status?.downloaded && (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          )}
+                          {status?.downloading && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-neutral-400" title={target}>
+                          {target}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-600"
+                        onClick={() => handleDeleteCustomModel(name)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-400">还没有自定义模型</p>
+            )}
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                placeholder="模型名称（自定义，如 my-large-v3）"
+                value={newModelName}
+                onChange={e => setNewModelName(e.target.value)}
+                className="sm:max-w-[220px]"
+              />
+              <Input
+                placeholder="HF repo_id 或本地路径"
+                value={newModelTarget}
+                onChange={e => setNewModelTarget(e.target.value)}
+                className="flex-1"
+              />
+              <Button onClick={handleAddCustomModel} disabled={addingModel}>
+                {addingModel ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-1 h-4 w-4" />
+                )}
+                添加
+              </Button>
             </div>
           </CardContent>
         </Card>
