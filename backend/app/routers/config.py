@@ -172,18 +172,23 @@ def get_transcriber_models_status():
     mlx_available = platform.system() == "Darwin"
     mlx_statuses = []
     if mlx_available:
-        from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
-        for size in WHISPER_MODEL_SIZES:
-            mlx_key = f"mlx-{size}"
-            repo_id = MLX_MODEL_MAP.get(size)
-            # 用 config.json 判定，和 _check_mlx_whisper_model_exists / 加载逻辑保持一致
-            downloaded = _check_mlx_whisper_model_exists(size)
-            mlx_statuses.append({
-                "model_size": size,
-                "downloaded": downloaded,
-                "downloading": _downloading.get(mlx_key) == "downloading",
-                "available": repo_id is not None,
-            })
+        try:
+            from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
+            for size in WHISPER_MODEL_SIZES:
+                mlx_key = f"mlx-{size}"
+                repo_id = MLX_MODEL_MAP.get(size)
+                # 用 config.json 判定，和 _check_mlx_whisper_model_exists / 加载逻辑保持一致
+                downloaded = _check_mlx_whisper_model_exists(size)
+                mlx_statuses.append({
+                    "model_size": size,
+                    "downloaded": downloaded,
+                    "downloading": _downloading.get(mlx_key) == "downloading",
+                    "available": repo_id is not None,
+                })
+        except ImportError:
+            # mlx-whisper 未安装或导入失败，跳过该分支，并反映实际不可用状态
+            mlx_available = False
+            logger.debug("MLX Whisper 未安装，跳过模型状态检查")
 
     return R.success(data={
         "whisper": statuses,

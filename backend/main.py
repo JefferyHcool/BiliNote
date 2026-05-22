@@ -20,7 +20,9 @@ from events import register_handler
 from ffmpeg_helper import ensure_ffmpeg_or_raise
 
 logger = get_logger(__name__)
-load_dotenv()
+# 支持在 backend/ 子目录中运行时也能加载项目根目录的 .env
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(dotenv_path)
 
 # 读取 .env 中的路径
 static_path = os.getenv('STATIC', '/static')

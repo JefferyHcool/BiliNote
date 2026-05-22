@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import tempfile
+import re
 from abc import ABC
 from typing import Union, Optional, List
 
@@ -12,7 +13,7 @@ from app.downloaders.bilibili_subtitle import BilibiliSubtitleFetcher
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.utils.path_helper import get_data_dir
-from app.utils.url_parser import extract_video_id
+from app.utils.url_parser import extract_video_id, extract_bilibili_task_id
 from app.services.cookie_manager import CookieConfigManager
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,11 @@ class BilibiliDownloader(Downloader, ABC):
             output_dir=self.cache_data
         os.makedirs(output_dir, exist_ok=True)
 
-        output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
+        # 合集分 P 处理：识别 URL 中的 p 参数，避免总是下载第一集
+        p_match = re.search(r'[?&]p=(\d+)', video_url)
+        p_suffix = f"_p{p_match.group(1)}" if p_match else ""
+
+        output_path = os.path.join(output_dir, f"%(id)s{p_suffix}.%(ext)s")
 
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
@@ -67,9 +72,14 @@ class BilibiliDownloader(Downloader, ABC):
                     'preferredquality': '64',
                 }
             ],
-            'noplaylist': True,
             'quiet': False,
         }
+
+        if p_match:
+            ydl_opts['playlist_items'] = p_match.group(1)
+        else:
+            ydl_opts['noplaylist'] = True
+
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
 
@@ -79,7 +89,7 @@ class BilibiliDownloader(Downloader, ABC):
             title = info.get("title")
             duration = info.get("duration", 0)
             cover_url = info.get("thumbnail")
-            audio_path = os.path.join(output_dir, f"{video_id}.mp3")
+            audio_path = os.path.join(output_dir, f"{video_id}{p_suffix}.mp3")
 
         return AudioDownloadResult(
             file_path=audio_path,
@@ -106,30 +116,37 @@ class BilibiliDownloader(Downloader, ABC):
         os.makedirs(output_dir, exist_ok=True)
         print("video_url",video_url)
         video_id=extract_video_id(video_url, "bilibili")
-        video_path = os.path.join(output_dir, f"{video_id}.mp4")
+        p_match = re.search(r'[?&]p=(\d+)', video_url)
+        p_suffix = f"_p{p_match.group(1)}" if p_match else ""
+        video_path = os.path.join(output_dir, f"{video_id}{p_suffix}.mp4")
         if os.path.exists(video_path):
             return video_path
 
         # 检查是否已经存在
 
 
-        output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
+        output_path = os.path.join(output_dir, f"%(id)s{p_suffix}.%(ext)s")
 
         ydl_opts = {
             'format': 'bv*[ext=mp4]/bestvideo+bestaudio/best',
             'outtmpl': output_path,
             'http_headers': {'Referer': 'https://www.bilibili.com'},
-            'noplaylist': True,
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4
         }
+
+        if p_match:
+            ydl_opts['playlist_items'] = p_match.group(1)
+        else:
+            ydl_opts['noplaylist'] = True
+
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
             video_id = info.get("id")
-            video_path = os.path.join(output_dir, f"{video_id}.mp4")
+            video_path = os.path.join(output_dir, f"{video_id}{p_suffix}.mp4")
 
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"视频文件未找到: {video_path}")
@@ -175,6 +192,7 @@ class BilibiliDownloader(Downloader, ABC):
             langs = ['zh-Hans', 'zh', 'zh-CN', 'ai-zh', 'en', 'en-US']
 
         video_id = extract_video_id(video_url, "bilibili")
+        task_id = extract_bilibili_task_id(video_url)
 
         ydl_opts = {
             'writesubtitles': True,
@@ -182,9 +200,15 @@ class BilibiliDownloader(Downloader, ABC):
             'subtitleslangs': langs,
             'subtitlesformat': 'srt/json3/best',  # 支持多种格式
             'skip_download': True,
-            'outtmpl': os.path.join(output_dir, f'{video_id}.%(ext)s'),
+            'outtmpl': os.path.join(output_dir, f'{task_id}.%(ext)s'),
             'quiet': True,
         }
+
+        p_match = re.search(r'[?&]p=(\d+)', video_url)
+        if p_match:
+            ydl_opts['playlist_items'] = p_match.group(1)
+        else:
+            ydl_opts['noplaylist'] = True
 
         # 通过 CookieConfigManager 注入 B站 Cookie（Netscape cookiefile）
         if self._cookiefile:
@@ -229,7 +253,7 @@ class BilibiliDownloader(Downloader, ABC):
 
                 # 查找字幕文件
                 ext = sub_info.get('ext', 'srt')
-                subtitle_file = os.path.join(output_dir, f"{video_id}.{detected_lang}.{ext}")
+                subtitle_file = os.path.join(output_dir, f"{task_id}.{detected_lang}.{ext}")
 
                 if not os.path.exists(subtitle_file):
                     logger.info(f"字幕文件不存在: {subtitle_file}")
