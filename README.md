@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.3.2</h1>
+<h1 align="center" > BiliNote v2.3.3</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -163,9 +163,16 @@ docker pull ghcr.io/jefferyhcool/bilinote:latest
 
 docker run -d -p 80:80 \
   -v bilinote-data:/app/backend/data \
+  -v bilinote-config:/app/backend/config \
+  -v bilinote-static:/app/backend/static \
+  -v bilinote-models:/app/backend/models \
   --name bilinote \
   ghcr.io/jefferyhcool/bilinote:latest
 ```
+
+上面四个卷分别持久化：`data`（SQLite 数据库 + 生成的笔记）、`config`（LLM 供应商配置 / Cookie / 转写设置）、`static`（笔记引用的视频截图）、`models`（Whisper 模型缓存，可选，避免每次重新下载）。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
+
+> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂上面这些数据子目录即可。
 
 访问：`http://localhost`
 
@@ -302,9 +309,16 @@ docker pull ghcr.io/jefferyhcool/bilinote:latest
 # 运行容器
 docker run -d -p 80:80 \
   -v bilinote-data:/app/backend/data \
+  -v bilinote-config:/app/backend/config \
+  -v bilinote-static:/app/backend/static \
+  -v bilinote-models:/app/backend/models \
   --name bilinote \
   ghcr.io/jefferyhcool/bilinote:latest
 ```
+
+上面四个卷分别持久化：`data`（SQLite 数据库 + 生成的笔记）、`config`（LLM 供应商配置 / Cookie / 转写设置）、`static`（笔记引用的视频截图）、`models`（Whisper 模型缓存，可选，避免每次重新下载）。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
+
+> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂上面这些数据子目录即可。
 
 访问：`http://localhost`
 
