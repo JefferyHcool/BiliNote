@@ -18,13 +18,34 @@
   <img src="https://img.shields.io/github/stars/jefferyhcool/BiliNote?style=social" />
 </p>
 
+<p align="center">
+  <a href="https://www.bilinote.app/"><b>🚀 BiliNote Pro · 在线版</b></a>
+</p>
+
+<p align="center">
+  <b>不想折腾部署？</b>访问 <a href="https://www.bilinote.app/"><b>www.bilinote.app</b></a> 即开即用 —— 免安装、免配置环境、免下模型，注册即可把视频转成笔记。
+  <br/>
+  本地部署遇到的依赖、代理、模型下载这些坑，云端版统统不用管。
+</p>
+
+<p align="center">
+  <a href="https://www.bilinote.app/">
+    <img src="https://img.shields.io/badge/%E7%AB%8B%E5%8D%B3%E4%BD%93%E9%AA%8C-BiliNote%20Pro-ff5c5c?style=for-the-badge" alt="立即体验 BiliNote Pro" />
+  </a>
+</p>
+
 
 
 ## ✨ 项目简介
 
 BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、YouTube、抖音等视频链接，自动提取内容并生成结构清晰、重点明确的 Markdown 格式笔记。支持插入截图、原片跳转、AI 问答等功能。
-## 在线使用
-可以通过访问 [这里](https://www.bilinote.app/) 进行使用。
+
+> 💡 **想直接用、不想本地部署？** —— [BiliNote Pro 在线版 www.bilinote.app](https://www.bilinote.app/) 已上线，云端托管、开箱即用，省去依赖安装 / 代理配置 / 模型下载的全部麻烦。
+
+## 🌐 在线使用（推荐）
+
+直接访问 **[www.bilinote.app](https://www.bilinote.app/)** 即可使用 BiliNote Pro 在线版，无需本地部署。
+
 ## 📝 使用文档
 详细文档可以查看[这里](https://docs.bilinote.app/)
 ## 📦 桌面版下载
@@ -309,11 +330,20 @@ docker-compose -f docker-compose.gpu.yml up -d
 
 ### Contact and Join-联系和加入社区
 
-扫码加入 BiliNote 交流微信群（如二维码失效，请到 [Issues](https://github.com/JefferyHcool/BiliNote/issues) 反馈）：
+扫码加入 BiliNote 交流微信群（共 5 个群，任选一个即可；二维码会定期更新，如已失效请到 [Issues](https://github.com/JefferyHcool/BiliNote/issues) 反馈）：
 
-<p align="center">
-  <img src="./doc/wechat.png" alt="BiliNote 交流微信群" width="240" />
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="./doc/wechat-group-1.png" alt="BiliNote 交流群 1" width="200" /><br/>交流群 1</td>
+    <td align="center"><img src="./doc/wechat-group-2.png" alt="BiliNote 交流群 2" width="200" /><br/>交流群 2</td>
+    <td align="center"><img src="./doc/wechat-group-3.png" alt="BiliNote 交流群 3" width="200" /><br/>交流群 3</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="./doc/wechat-group-4.png" alt="BiliNote 交流群 4" width="200" /><br/>交流群 4</td>
+    <td align="center"><img src="./doc/wechat-group-5.png" alt="BiliNote 交流群 5" width="200" /><br/>交流群 5</td>
+    <td></td>
+  </tr>
+</table>
 
 
 
