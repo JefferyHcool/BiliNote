@@ -186,9 +186,9 @@ def get_transcriber_models_status():
                     "available": repo_id is not None,
                 })
         except ImportError:
-            # mlx-whisper 未安装或导入失败，跳过该分支
-            logger.warning("MLX Whisper 未安装，跳过模型状态检查")
-            pass
+            # mlx-whisper 未安装或导入失败，跳过该分支，并反映实际不可用状态
+            mlx_available = False
+            logger.debug("MLX Whisper 未安装，跳过模型状态检查")
 
     return R.success(data={
         "whisper": statuses,
