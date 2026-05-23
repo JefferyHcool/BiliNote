@@ -7,7 +7,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form.tsx'
-import { useEffect,useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -65,18 +65,14 @@ const formSchema = z
       if (!video_url) {
         ctx.addIssue({ code: 'custom', message: '本地视频路径不能为空', path: ['video_url'] })
       }
-    }
-    else {
+    } else {
       if (!video_url) {
         ctx.addIssue({ code: 'custom', message: '视频链接不能为空', path: ['video_url'] })
-      }
-      else {
+      } else {
         try {
           const url = new URL(video_url)
-          if (!['http:', 'https:'].includes(url.protocol))
-            throw new Error()
-        }
-        catch {
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
+        } catch {
           ctx.addIssue({ code: 'custom', message: '请输入正确的视频链接', path: ['video_url'] })
         }
       }
@@ -111,7 +107,7 @@ const CheckboxGroup = ({
   onChange: (v: string[]) => void
   disabledMap: Record<string, boolean>
 }) => (
-  <div className="flex flex-wrap space-x-1.5">
+  <div className="flex flex-wrap gap-x-3 gap-y-2">
     {noteFormats.map(({ label, value: v }) => (
       <label key={v} className="flex items-center space-x-2">
         <Checkbox
@@ -129,7 +125,7 @@ const CheckboxGroup = ({
 
 /* -------------------- 主组件 -------------------- */
 const NoteForm = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   /* ---- 全局状态 ---- */
@@ -158,8 +154,8 @@ const NoteForm = () => {
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
-    navigate("/settings/model");
-  };
+    navigate('/settings/model')
+  }
   /* ---- 副作用 ---- */
   useEffect(() => {
     loadEnabledModels()
@@ -205,10 +201,9 @@ const NoteForm = () => {
     setUploadSuccess(false)
 
     try {
-  
-      const  data  = await uploadFile(formData)
-        cb(data.url)
-        setUploadSuccess(true)
+      const data = await uploadFile(formData)
+      cb(data.url)
+      setUploadSuccess(true)
     } catch (err) {
       console.error('上传失败:', err)
       // message.error('上传失败，请重试')
@@ -241,7 +236,7 @@ const NoteForm = () => {
         toast.error(
           downloading
             ? '转写模型正在下载中，请稍候再提交'
-            : '转写模型尚未下载，请先去「音频转写配置」页下载',
+            : '转写模型尚未下载，请先去「音频转写配置」页下载'
         )
         if (!downloading) navigate('/settings/transcriber')
         return
@@ -263,10 +258,10 @@ const NoteForm = () => {
     const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
 
     return (
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           type="submit"
-          className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
+          className={!editing ? 'w-full' : 'bg-primary w-full sm:w-2/3'}
           disabled={generating}
         >
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -274,7 +269,12 @@ const NoteForm = () => {
         </Button>
 
         {editing && (
-          <Button type="button" variant="outline" className="w-1/3" onClick={handleCreateNew}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-1/3"
+            onClick={handleCreateNew}
+          >
             <Plus className="mr-2 h-4 w-4" />
             新建笔记
           </Button>
@@ -293,14 +293,14 @@ const NoteForm = () => {
 
           {/* 视频链接 & 平台 */}
           <SectionHeader title="视频链接" tip="支持 B 站、YouTube 等平台" />
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {/* 平台选择 */}
 
             <FormField
               control={form.control}
               name="platform"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="w-full sm:w-auto">
                   <Select
                     disabled={!!editing}
                     value={field.value}
@@ -308,7 +308,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-full sm:w-32">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -392,51 +392,56 @@ const NoteForm = () => {
               </FormItem>
             )}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {/* 模型选择 */}
-            {
-
-             modelList.length>0?(     <FormField
-               className="w-full"
-               control={form.control}
-               name="model_name"
-               render={({ field }) => (
-                 <FormItem>
-                   <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
-                   <Select
-                     onOpenChange={()=>{
-                       loadEnabledModels()
-                     }}
-                     value={field.value}
-                     onValueChange={field.onChange}
-                     defaultValue={field.value}
-                   >
-                     <FormControl>
-                       <SelectTrigger className="w-full min-w-0 truncate">
-                         <SelectValue />
-                       </SelectTrigger>
-                     </FormControl>
-                     <SelectContent>
-                       {modelList.map(m => (
-                         <SelectItem key={m.id} value={m.model_name}>
-                           {m.model_name}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />): (
-               <FormItem>
-                 <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
-                  <Button type={'button'} variant={
-                    'outline'
-                  } onClick={()=>{goModelAdd()}}>请先添加模型</Button>
-                 <FormMessage />
-               </FormItem>
-             )
-            }
+            {modelList.length > 0 ? (
+              <FormField
+                className="w-full"
+                control={form.control}
+                name="model_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
+                    <Select
+                      onOpenChange={() => {
+                        loadEnabledModels()
+                      }}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full min-w-0 truncate">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {modelList.map(m => (
+                          <SelectItem key={m.id} value={m.model_name}>
+                            {m.model_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormItem>
+                <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
+                <Button
+                  type={'button'}
+                  variant={'outline'}
+                  onClick={() => {
+                    goModelAdd()
+                  }}
+                >
+                  请先添加模型
+                </Button>
+                <FormMessage />
+              </FormItem>
+            )}
 
             {/* 笔记风格 */}
             <FormField
@@ -489,7 +494,7 @@ const NoteForm = () => {
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* 采样间隔 */}
               <FormField
                 control={form.control}

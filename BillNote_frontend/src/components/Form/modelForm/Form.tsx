@@ -66,11 +66,11 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
   const [isBuiltIn, setIsBuiltIn] = useState(false)
-  const loadModelsById= useModelStore(state => state.loadModelsById)
+  const loadModelsById = useModelStore(state => state.loadModelsById)
   const [modelOptions, setModelOptions] = useState<IModel[]>([]) // ⚡新增，保存模型列表
-  const [models, setModels]= useState([])
+  const [models, setModels] = useState([])
   const [modelLoading, setModelLoading] = useState(false)
-  const randomColor = ()=>{
+  const randomColor = () => {
     return '#' + Math.floor(Math.random() * 16777215).toString(16)
   }
 
@@ -98,10 +98,8 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   })
 
   useEffect(() => {
-
     const load = async () => {
       if (isEditMode) {
-
         const data = await loadProviderById(id!)
         providerForm.reset(data)
         setIsBuiltIn(data.type === 'built-in')
@@ -115,16 +113,15 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
         setIsBuiltIn(false)
       }
       const models = await loadModelsById(id!)
-      if(models){
+      if (models) {
         console.log('🔧 模型列表:', models)
         setModels(models)
-
       }
       setLoading(false)
     }
     load()
   }, [id])
-  const handelDelete=async (modelId)=>{
+  const handelDelete = async modelId => {
     if (!window.confirm('确定要删除这个模型吗？')) return
 
     try {
@@ -132,7 +129,6 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       console.log('🔧 删除结果:', res)
 
       toast.success('删除成功')
-
     } catch (e) {
       toast.error('删除异常')
     }
@@ -145,19 +141,17 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       return
     }
     try {
-      if (!id){
+      if (!id) {
         toast.error('请先保存供应商信息')
         return
       }
       setTesting(true)
-     await testConnection({
-             id
-          })
+      await testConnection({
+        id,
+      })
 
-        toast.success('测试连通性成功 🎉')
-
+      toast.success('测试连通性成功 🎉')
     } catch (error) {
-
       toast.error(`连接失败: ${data.data.msg || '未知错误'}`)
       // toast.error('测试连通性异常')
     } finally {
@@ -195,12 +189,11 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       await updateProvider({ ...values, id: id! })
       toast.success('更新供应商成功')
     } else {
-       id = await addNewProvider({ ...values })
+      id = await addNewProvider({ ...values })
 
       toast.success('新增供应商成功')
     }
     // 刷新页面
-
   }
 
   // 保存Model信息
@@ -212,12 +205,12 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   if (loading) return <div className="p-4">加载中...</div>
 
   return (
-    <div className="flex flex-col gap-8 p-4">
+    <div className="flex w-full flex-col gap-8 p-4 sm:p-6">
       {/* Provider信息表单 */}
       <Form {...providerForm}>
         <form
           onSubmit={providerForm.handleSubmit(onProviderSubmit)}
-          className="flex max-w-xl flex-col gap-4"
+          className="flex w-full max-w-xl flex-col gap-4"
         >
           <div className="text-lg font-bold">
             {isEditMode ? '编辑模型供应商' : '新增模型供应商'}
@@ -231,10 +224,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="name"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">名称</FormLabel>
+              <FormItem className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <FormLabel className="w-full text-left sm:w-24 sm:text-right">名称</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={isBuiltIn} className="flex-1" />
+                  <Input {...field} disabled={isBuiltIn} className="w-full flex-1" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -244,10 +237,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="apiKey"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">API Key</FormLabel>
+              <FormItem className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <FormLabel className="w-full text-left sm:w-24 sm:text-right">API Key</FormLabel>
                 <FormControl>
-                  <Input {...field} className="flex-1" />
+                  <Input {...field} className="w-full flex-1" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -257,12 +250,18 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="baseUrl"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">API地址</FormLabel>
+              <FormItem className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <FormLabel className="w-full text-left sm:w-24 sm:text-right">API地址</FormLabel>
                 <FormControl>
-                  <Input {...field} className="flex-1" />
+                  <Input {...field} className="w-full flex-1" />
                 </FormControl>
-                <Button type="button" onClick={handleTest} variant="ghost" disabled={testing}>
+                <Button
+                  type="button"
+                  onClick={handleTest}
+                  variant="ghost"
+                  disabled={testing}
+                  className="w-full sm:w-auto"
+                >
                   {testing ? '测试中...' : '测试连通性'}
                 </Button>
                 <FormMessage />
@@ -273,10 +272,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="type"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">类型</FormLabel>
+              <FormItem className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <FormLabel className="w-full text-left sm:w-24 sm:text-right">类型</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled className="flex-1" />
+                  <Input {...field} disabled className="w-full flex-1" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -291,7 +290,7 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       </Form>
 
       {/* 模型信息表单 */}
-      <div className="flex max-w-xl flex-col gap-4">
+      <div className="flex w-full max-w-xl flex-col gap-4">
         <div className="flex flex-col gap-2">
           <span className="font-bold">模型列表</span>
           <div className={'flex flex-col gap-2 rounded bg-[#FEF0F0] p-2.5'}>
@@ -308,21 +307,25 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
         </div>
         <div className="flex flex-col gap-2">
           <span className="font-bold">已启用模型</span>
-          <div className={'flex flex-wrap gap-2 rounded  p-2.5'}>
-            {
-              models && models.map(model => {
+          <div className={'flex flex-wrap gap-2 rounded p-2.5'}>
+            {models &&
+              models.map(model => {
                 return (
-                  <span key={model.id} className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-sm text-blue-700">
+                  <span
+                    key={model.id}
+                    className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-sm text-blue-700"
+                  >
                     {model.model_name}
-                    <button type="button" onClick={() => handelDelete(model.id)} className="hover:text-blue-900">
+                    <button
+                      type="button"
+                      onClick={() => handelDelete(model.id)}
+                      className="hover:text-blue-900"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
-
                 )
-              })
-            }
-
+              })}
           </div>
           {/*<ModelSelector providerId={id!} />*/}
 

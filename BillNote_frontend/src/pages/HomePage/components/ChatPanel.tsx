@@ -4,18 +4,35 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Trash2, ChevronDown, ChevronUp, BookOpen, UserRound, Bot, Maximize2, Minimize2 } from 'lucide-react'
+import {
+  Loader2,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  UserRound,
+  Bot,
+  Maximize2,
+  Minimize2,
+  X,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useChatStore } from '@/store/chatStore'
 import { useTaskStore } from '@/store/taskStore'
-import { askQuestion, getChatStatus, indexTask, type ChatSource, type IndexStatus } from '@/services/chat'
+import {
+  askQuestion,
+  getChatStatus,
+  indexTask,
+  type ChatSource,
+  type IndexStatus,
+} from '@/services/chat'
 
 type ChatMode = 'half' | 'full'
 
 interface ChatPanelProps {
   taskId: string
   mode: ChatMode
-  onModeChange: (mode: ChatMode) => void
+  onModeChange: (mode: ChatMode | false) => void
 }
 
 function SourceBadges({ sources }: { sources: ChatSource[] }) {
@@ -61,7 +78,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
   const tasks = useTaskStore(state => state.tasks)
   const currentTask = useMemo(
     () => tasks.find(t => t.id === currentTaskId) ?? null,
-    [tasks, currentTaskId],
+    [tasks, currentTaskId]
   )
 
   // 检查索引状态，未索引时自动触发，indexing 时轮询
@@ -134,7 +151,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
         setLoading(false)
       }
     },
-    [loading, taskId, currentTask, messages, addMessage],
+    [loading, taskId, currentTask, messages, addMessage]
   )
 
   // 转换为 Bubble.List 的数据格式
@@ -183,7 +200,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
         ),
         variant: 'outlined' as const,
         contentRender: (content: any) => (
-          <div className="markdown-body prose prose-sm max-w-none prose-p:my-1 prose-li:my-0.5 prose-headings:my-2">
+          <div className="markdown-body prose prose-sm prose-p:my-1 prose-li:my-0.5 prose-headings:my-2 max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {typeof content === 'string' ? content : String(content)}
             </ReactMarkdown>
@@ -191,7 +208,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
         ),
       },
     }),
-    [],
+    []
   )
 
   if (indexStatus === null || indexStatus === 'indexing' || indexStatus === 'idle') {
@@ -230,7 +247,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
   }
 
   return (
-    <div className="flex h-full flex-col border-l">
+    <div className="flex h-full flex-col border-l bg-white">
       {/* 头部 */}
       <div className="flex items-center justify-between border-b px-3 py-2">
         <span className="text-sm font-medium">AI 问答</span>
@@ -258,6 +275,15 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
+            onClick={() => onModeChange(false)}
+            title="关闭"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
 
@@ -271,11 +297,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
             </div>
           </div>
         ) : (
-          <Bubble.List
-            items={bubbleItems}
-            role={roles}
-            style={{ height: '100%' }}
-          />
+          <Bubble.List items={bubbleItems} role={roles} style={{ height: '100%' }} />
         )}
       </div>
 

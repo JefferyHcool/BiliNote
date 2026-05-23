@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
-import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
+import { Copy, Download, ArrowRight, Play, ExternalLink, X } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
@@ -16,6 +16,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
+import '@/styles/markdown-responsive.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { useTaskStore } from '@/store/taskStore'
 import { noteStyles } from '@/constant/note.ts'
@@ -57,7 +58,7 @@ function createMarkdownComponents(baseURL: string) {
   return {
     h1: ({ children, ...props }: any) => (
       <h1
-        className="text-primary my-6 scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl"
+        className="text-primary my-6 scroll-m-20 text-3xl font-extrabold tracking-tight [overflow-wrap:anywhere] break-words lg:text-4xl"
         {...props}
       >
         {children}
@@ -65,7 +66,7 @@ function createMarkdownComponents(baseURL: string) {
     ),
     h2: ({ children, ...props }: any) => (
       <h2
-        className="text-primary mt-10 mb-4 scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight first:mt-0"
+        className="text-primary mt-10 mb-4 scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] break-words first:mt-0"
         {...props}
       >
         {children}
@@ -73,7 +74,7 @@ function createMarkdownComponents(baseURL: string) {
     ),
     h3: ({ children, ...props }: any) => (
       <h3
-        className="text-primary mt-8 mb-4 scroll-m-20 text-xl font-semibold tracking-tight"
+        className="text-primary mt-8 mb-4 scroll-m-20 text-xl font-semibold tracking-tight [overflow-wrap:anywhere] break-words"
         {...props}
       >
         {children}
@@ -81,21 +82,23 @@ function createMarkdownComponents(baseURL: string) {
     ),
     h4: ({ children, ...props }: any) => (
       <h4
-        className="text-primary mt-6 mb-2 scroll-m-20 text-lg font-semibold tracking-tight"
+        className="text-primary mt-6 mb-2 scroll-m-20 text-lg font-semibold tracking-tight [overflow-wrap:anywhere] break-words"
         {...props}
       >
         {children}
       </h4>
     ),
     p: ({ children, ...props }: any) => (
-      <p className="leading-7 [&:not(:first-child)]:mt-6" {...props}>
+      <p
+        className="leading-7 [overflow-wrap:anywhere] break-words [&:not(:first-child)]:mt-6"
+        {...props}
+      >
         {children}
       </p>
     ),
     a: ({ href, children, ...props }: any) => {
       const isOriginLink =
-        typeof children[0] === 'string' &&
-        (children[0] as string).startsWith('原片 @')
+        typeof children[0] === 'string' && (children[0] as string).startsWith('原片 @')
 
       if (isOriginLink) {
         const timeMatch = (children[0] as string).match(/原片 @ (\d{2}:\d{2})/)
@@ -122,13 +125,11 @@ function createMarkdownComponents(baseURL: string) {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:text-primary/80 inline-flex items-center gap-0.5 font-medium underline underline-offset-4"
+          className="text-primary hover:text-primary/80 font-medium [overflow-wrap:anywhere] break-words underline underline-offset-4"
           {...props}
         >
           {children}
-          {href?.startsWith('http') && (
-            <ExternalLink className="ml-0.5 inline-block h-3 w-3" />
-          )}
+          {href?.startsWith('http') && <ExternalLink className="ml-0.5 inline-block h-3 w-3" />}
         </a>
       )
     },
@@ -161,13 +162,11 @@ function createMarkdownComponents(baseURL: string) {
       const isFakeHeading = /^(\*\*.+\*\*)$/.test(rawText.trim())
 
       if (isFakeHeading) {
-        return (
-          <div className="text-primary my-4 text-lg font-bold">{children}</div>
-        )
+        return <div className="text-primary my-4 text-lg font-bold">{children}</div>
       }
 
       return (
-        <li className="my-1" {...props}>
+        <li className="my-1 [overflow-wrap:anywhere] break-words" {...props}>
           {children}
         </li>
       )
@@ -196,7 +195,7 @@ function createMarkdownComponents(baseURL: string) {
 
       if (!inline && match) {
         return (
-          <div className="group bg-muted relative my-6 overflow-hidden rounded-lg border shadow-sm">
+          <div className="group bg-muted relative my-6 overflow-x-auto rounded-lg border shadow-sm">
             <div className="bg-muted text-muted-foreground flex items-center justify-between px-4 py-1.5 text-sm font-medium">
               <div>{match[1].toUpperCase()}</div>
               <button
@@ -214,12 +213,16 @@ function createMarkdownComponents(baseURL: string) {
               style={codeStyle}
               language={match[1]}
               PreTag="div"
+              wrapLongLines
               className="!bg-muted !m-0 !p-0"
               customStyle={{
                 margin: 0,
                 padding: '1rem',
                 background: 'transparent',
                 fontSize: '0.9rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
               }}
               {...props}
             >
@@ -231,7 +234,7 @@ function createMarkdownComponents(baseURL: string) {
 
       return (
         <code
-          className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm"
+          className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm [overflow-wrap:anywhere] break-words whitespace-pre-wrap"
           {...props}
         >
           {children}
@@ -239,7 +242,7 @@ function createMarkdownComponents(baseURL: string) {
       )
     },
     table: ({ children, ...props }: any) => (
-      <div className="my-6 w-full overflow-y-auto">
+      <div className="my-6 w-full overflow-x-auto">
         <table className="w-full border-collapse text-sm" {...props}>
           {children}
         </table>
@@ -261,9 +264,7 @@ function createMarkdownComponents(baseURL: string) {
         {children}
       </td>
     ),
-    hr: ({ ...props }: any) => (
-      <hr className="border-muted-foreground/20 my-8" {...props} />
-    ),
+    hr: ({ ...props }: any) => <hr className="border-muted-foreground/20 my-8" {...props} />,
   }
 }
 
@@ -275,7 +276,9 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [style, setStyle] = useState<string>('')
   const [createTime, setCreateTime] = useState<string>('')
   // 确保baseURL没有尾部斜杠
-  const baseURL = (String(import.meta.env.VITE_API_BASE_URL || '').replace('/api','') || '').replace(/\/$/, '')
+  const baseURL = (
+    String(import.meta.env.VITE_API_BASE_URL || '').replace('/api', '') || ''
+  ).replace(/\/$/, '')
   const getCurrentTask = useTaskStore.getState().getCurrentTask
   const currentTask = useTaskStore(state => state.getCurrentTask())
   const taskStatus = currentTask?.status || 'PENDING'
@@ -371,7 +374,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 text-neutral-500">
+      <div className="flex h-full w-full flex-col items-center justify-center space-y-4 px-4 text-neutral-500">
         <StepBar steps={steps} currentStep={taskStatus} />
         <Loading className="h-5 w-5" />
         <div className="text-center text-sm">
@@ -384,7 +387,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'idle') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-3 text-neutral-500">
+      <div className="flex h-full w-full flex-col items-center justify-center space-y-3 px-4 text-neutral-500">
         <Idle />
         <div className="text-center">
           <p className="text-lg font-bold">输入视频链接并点击"生成笔记"</p>
@@ -396,7 +399,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'failed' && !isMultiVersion) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center gap-4 space-y-3">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 space-y-3 px-4">
         <Error />
         <div className="text-center">
           <p className="text-lg font-bold text-red-500">笔记生成失败</p>
@@ -411,7 +414,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <MarkdownHeader
         currentTask={currentTask}
         isMultiVersion={isMultiVersion}
@@ -432,7 +435,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
       />
 
       {viewMode === 'map' ? (
-        <div className="flex w-full flex-1 overflow-hidden bg-white">
+        <div className="flex min-h-0 w-full flex-1 overflow-hidden bg-white">
           <div className={'w-full'}>
             <MarkmapEditor
               value={selectedContent}
@@ -443,7 +446,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 overflow-hidden bg-white py-2">
+        <div className="flex min-h-0 flex-1 overflow-hidden bg-white py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
               {showChat === 'full' && currentTask ? (
@@ -451,36 +454,53 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                   <ChatPanel taskId={currentTask.id} mode="full" onModeChange={setShowChat} />
                 </div>
               ) : (
-              <>
-              <ScrollArea className="min-w-0 flex-1">
-                <div className="px-2">
-                  <VideoBanner
-                    audioMeta={currentTask?.audioMeta}
-                    videoUrl={currentTask?.formData?.video_url}
-                  />
-                </div>
-                <div className={'markdown-body w-full px-2'}>
-                  <ReactMarkdown
-                    remarkPlugins={remarkPlugins}
-                    rehypePlugins={rehypePlugins}
-                    components={markdownComponents}
-                  >
-                    {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
-                  </ReactMarkdown>
-                </div>
-              </ScrollArea>
-              {showTranscribe && (
-                <div className={'ml-2 w-2/4'}>
-                  <TranscriptViewer />
-                </div>
-              )}
-              {/* 侧边问答模式：markdown + ChatPanel 各占一半 */}
-              {showChat === 'half' && currentTask && (
-                <div className="ml-2 h-full w-1/2 shrink-0">
-                  <ChatPanel taskId={currentTask.id} mode="half" onModeChange={setShowChat} />
-                </div>
-              )}
-              </>
+                <>
+                  <ScrollArea className="h-full max-w-full min-w-0 flex-1 overflow-hidden">
+                    <div className="max-w-full min-w-0 overflow-hidden px-2">
+                      <VideoBanner
+                        audioMeta={currentTask?.audioMeta}
+                        videoUrl={currentTask?.formData?.video_url}
+                      />
+                    </div>
+                    <div
+                      className={
+                        'markdown-body bilinote-markdown-body w-full max-w-full min-w-0 overflow-hidden px-3 [overflow-wrap:anywhere] break-words sm:px-2'
+                      }
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={remarkPlugins}
+                        rehypePlugins={rehypePlugins}
+                        components={markdownComponents}
+                      >
+                        {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
+                      </ReactMarkdown>
+                    </div>
+                  </ScrollArea>
+                  {showTranscribe && (
+                    <div className="fixed inset-0 z-30 flex h-full w-full flex-col bg-white sm:static sm:inset-auto sm:z-auto sm:ml-2 sm:w-2/4">
+                      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4 sm:hidden">
+                        <span className="text-sm font-medium">原文参照</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowTranscribe(false)}
+                          className="rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+                          aria-label="关闭原文参照"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                      <div className="min-h-0 flex-1">
+                        <TranscriptViewer />
+                      </div>
+                    </div>
+                  )}
+                  {/* 侧边问答模式：markdown + ChatPanel 各占一半 */}
+                  {showChat === 'half' && currentTask && (
+                    <div className="fixed inset-0 z-30 h-full w-full shrink-0 bg-white sm:static sm:inset-auto sm:z-auto sm:ml-2 sm:w-1/2">
+                      <ChatPanel taskId={currentTask.id} mode="half" onModeChange={setShowChat} />
+                    </div>
+                  )}
+                </>
               )}
             </>
           ) : (

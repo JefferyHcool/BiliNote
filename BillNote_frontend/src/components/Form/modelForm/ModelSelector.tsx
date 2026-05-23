@@ -64,7 +64,7 @@ export function ModelSelector({ providerId }: ModelSelectorProps) {
       </div>
 
       <Select value={selectedModel} onValueChange={setSelectedModel}>
-        <SelectTrigger className="w-[300px]">
+        <SelectTrigger className="w-full max-w-[300px]">
           <SelectValue placeholder="请选择模型" />
         </SelectTrigger>
         <SelectContent>

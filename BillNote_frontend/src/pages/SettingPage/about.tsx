@@ -16,20 +16,14 @@ export default function AboutPage() {
   ]
   return (
     <ScrollArea className={'h-full overflow-y-auto bg-white'}>
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto min-w-0 px-4 py-8 [overflow-wrap:anywhere] break-words sm:py-12">
         {/* Hero Section */}
-        <div className="mb-16 flex flex-col items-center justify-center text-center">
-          <div className="mb-4 flex items-center gap-4">
-            <img
-              src={logo}
-              alt="BiliNote Logo"
-              width={50}
-              height={50}
-              className="rounded-lg"
-            />
-            <h1 className="text-4xl font-bold">BiliNote v2.0.0</h1>
+        <div className="mb-12 flex flex-col items-center justify-center text-center sm:mb-16">
+          <div className="mb-4 flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
+            <img src={logo} alt="BiliNote Logo" width={50} height={50} className="rounded-lg" />
+            <h1 className="text-3xl font-bold sm:text-4xl">BiliNote v2.0.0</h1>
           </div>
-          <p className="text-muted-foreground mb-6 text-xl italic">
+          <p className="text-muted-foreground mb-6 text-lg italic sm:text-xl">
             AI 视频笔记生成工具 让 AI 为你的视频做笔记
           </p>
 
@@ -129,7 +123,7 @@ export default function AboutPage() {
             <TabsContent value="manual" className="mt-6 space-y-6">
               <div>
                 <h3 className="mb-3 text-xl font-semibold">1. 克隆仓库</h3>
-                <div className="bg-muted rounded-md p-4 font-mono text-sm">
+                <div className="bg-muted overflow-x-auto rounded-md p-4 font-mono text-sm [overflow-wrap:anywhere] break-all">
                   git clone https://github.com/JefferyHcool/BiliNote.git
                   <br />
                   cd BiliNote
@@ -139,7 +133,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className="mb-3 text-xl font-semibold">2. 启动后端（FastAPI）</h3>
-                <div className="bg-muted rounded-md p-4 font-mono text-sm">
+                <div className="bg-muted overflow-x-auto rounded-md p-4 font-mono text-sm [overflow-wrap:anywhere] break-all">
                   cd backend
                   <br />
                   pip install -r requirements.txt
@@ -149,7 +143,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className="mb-3 text-xl font-semibold">3. 启动前端（Vite + React）</h3>
-                <div className="bg-muted rounded-md p-4 font-mono text-sm">
+                <div className="bg-muted overflow-x-auto rounded-md p-4 font-mono text-sm [overflow-wrap:anywhere] break-all">
                   cd BiliNote_frontend
                   <br />
                   pnpm install
@@ -164,7 +158,7 @@ export default function AboutPage() {
             <TabsContent value="docker" className="mt-6 space-y-6">
               <div>
                 <h3 className="mb-3 text-xl font-semibold">1. 克隆仓库</h3>
-                <div className="bg-muted rounded-md p-4 font-mono text-sm">
+                <div className="bg-muted overflow-x-auto rounded-md p-4 font-mono text-sm [overflow-wrap:anywhere] break-all">
                   git clone https://github.com/JefferyHcool/BiliNote.git
                   <br />
                   cd BiliNote
@@ -174,7 +168,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className="mb-3 text-xl font-semibold">2. 启动 Docker Compose</h3>
-                <div className="bg-muted rounded-md p-4 font-mono text-sm">
+                <div className="bg-muted overflow-x-auto rounded-md p-4 font-mono text-sm [overflow-wrap:anywhere] break-all">
                   docker compose up --build
                 </div>
               </div>
@@ -201,7 +195,11 @@ export default function AboutPage() {
               <div className="text-center">
                 <h3 className="mb-3 text-xl font-semibold">BiliNote 交流微信群</h3>
                 <div className="bg-muted mx-auto flex h-52 w-52 items-center justify-center rounded-md">
-                  <img src={wechatQr} alt="BiliNote 交流微信群" className="h-full w-full object-contain" />
+                  <img
+                    src={wechatQr}
+                    alt="BiliNote 交流微信群"
+                    className="h-full w-full object-contain"
+                  />
                 </div>
               </div>
             </div>

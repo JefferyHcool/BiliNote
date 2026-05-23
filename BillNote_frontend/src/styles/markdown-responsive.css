@@ -1,0 +1,57 @@
+.bilinote-markdown-body {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-wrap: anywhere !important;
+  word-break: break-word;
+}
+
+.bilinote-markdown-body * {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.bilinote-markdown-body :where(p, li, blockquote, h1, h2, h3, h4, h5, h6, a, strong, em, span) {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.bilinote-markdown-body :where(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.bilinote-markdown-body :where(pre) {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.bilinote-markdown-body :where(pre code, code) {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.bilinote-markdown-body :where(table) {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+}
+
+.bilinote-markdown-body :where(th, td) {
+  min-width: 0;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.bilinote-markdown-body :where(img, video, svg, canvas) {
+  height: auto;
+  max-width: 100% !important;
+}
