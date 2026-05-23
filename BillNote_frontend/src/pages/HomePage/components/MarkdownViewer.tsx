@@ -123,7 +123,27 @@ function createMarkdownComponents(baseURL: string) {
         const handleAnchorClick = (e: React.MouseEvent) => {
           e.preventDefault()
           const id = decodeURIComponent(href.slice(1))
-          const target = document.getElementById(id)
+
+          // 1. 优先精确匹配 id
+          let target = document.getElementById(id)
+
+          // 2. 精确失败时按 heading 文本模糊匹配
+          // LLM 生成的目录锚点可能和 heading 实际文本不完全一致
+          //（例如 heading 带 *Content-[00:00]* 后缀，目录链接里没有）
+          if (!target) {
+            const normalize = (s: string) =>
+              s.replace(/[-：:\s*\[\]]/g, '').toLowerCase()
+            const search = normalize(id)
+            const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6')
+            for (const h of headings) {
+              const text = h.textContent || ''
+              if (normalize(text).includes(search) || search.includes(normalize(text))) {
+                target = h
+                break
+              }
+            }
+          }
+
           if (target) {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' })
           } else {
