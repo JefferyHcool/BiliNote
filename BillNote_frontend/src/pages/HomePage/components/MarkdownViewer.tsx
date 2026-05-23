@@ -14,6 +14,7 @@ import 'react-medium-image-zoom/dist/styles.css'
 import gfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeSlug from 'rehype-slug'
 import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
@@ -47,7 +48,7 @@ const steps = [
 ]
 
 const remarkPlugins = [gfm, remarkMath]
-const rehypePlugins = [rehypeKatex]
+const rehypePlugins = [rehypeKatex, rehypeSlug]
 
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。
@@ -114,6 +115,31 @@ function createMarkdownComponents(baseURL: string) {
               <span>原片（{timeText}）</span>
             </a>
           </span>
+        )
+      }
+
+      // 处理笔记内部锚点链接（如目录跳转）
+      if (href?.startsWith('#')) {
+        const handleAnchorClick = (e: React.MouseEvent) => {
+          e.preventDefault()
+          const id = decodeURIComponent(href.slice(1))
+          const target = document.getElementById(id)
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          } else {
+            toast.error('未找到对应章节')
+          }
+        }
+
+        return (
+          <a
+            href={href}
+            onClick={handleAnchorClick}
+            className="text-primary hover:text-primary/80 inline-flex items-center gap-0.5 font-medium underline underline-offset-4"
+            {...props}
+          >
+            {children}
+          </a>
         )
       }
 
