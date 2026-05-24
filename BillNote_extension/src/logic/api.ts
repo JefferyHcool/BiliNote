@@ -5,6 +5,7 @@ import type {
   Provider,
   ProviderCreatePayload,
   ProviderUpdatePayload,
+  ServerNote,
   TaskStatusResponse,
   TranscriberConfig,
   TranscriberModelsStatus,
@@ -25,7 +26,7 @@ function backendUrl(): string {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${backendUrl()}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers || {}) },
     ...init,
   })
   if (!res.ok)
@@ -39,6 +40,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return env.data
   }
   return body as T
+}
+
+function authHeaders(): Record<string, string> {
+  const token = settings.value?.authToken
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+function withAccessToken(url: string): string {
+  const token = settings.value?.authToken
+  if (!token)
+    return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}access_token=${encodeURIComponent(token)}`
+}
+
+export async function getAuthStatus(): Promise<{ enabled: boolean, authenticated: boolean }> {
+  return request('/api/auth/status')
+}
+
+export async function login(password: string): Promise<void> {
+  const data = await request<{ token: string }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+  settings.value.authToken = data.token || ''
+}
+
+export async function listNotes(): Promise<ServerNote[]> {
+  return request('/api/notes')
 }
 
 export async function getProviders(): Promise<Provider[]> {
@@ -189,7 +219,9 @@ export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse>
   //   成功：{code:0, data:{status, message, task_id, result?}}
   //   任务失败：{code:500, msg:'xxx', data:null}
   // 这里手动拆，把任务失败翻译成 status:'FAILED'，避免 request() 抛错让 UI 收不到状态
-  const res = await fetch(`${backendUrl()}/api/task_status/${taskId}`)
+  const res = await fetch(`${backendUrl()}/api/task_status/${taskId}`, {
+    headers: authHeaders(),
+  })
   if (!res.ok)
     throw new Error(`HTTP ${res.status}`)
   const body = (await res.json()) as { code: number, msg: string, data: TaskStatusResponse | null }
@@ -211,7 +243,10 @@ export async function ping(): Promise<boolean> {
 // markdown 里的 /static/screenshots/xxx 是相对路径，extension 渲染时需要拼绝对地址
 export function absolutizeMarkdownImages(md: string): string {
   const base = backendUrl()
-  return md.replace(/!\[([^\]]*)\]\((\/static\/[^)]+)\)/g, (_, alt, path) => `![${alt}](${base}${path})`)
+  return md.replace(
+    /!\[([^\]]*)\]\((\/static\/[^)]+)\)/g,
+    (_, alt, path) => `![${alt}](${withAccessToken(`${base}${path}`)})`,
+  )
 }
 
 // backend 用 note_helper 在笔记开头插一行 '> 来源链接：URL'。侧边栏顶部已经有原片链接卡片，
@@ -227,9 +262,30 @@ export function resolveImageUrl(url: string | undefined | null): string {
     return ''
   const base = backendUrl()
   if (url.startsWith('/'))
-    return `${base}${url}`
+    return withAccessToken(`${base}${url}`)
   // B 站封面、抖音封面等会做 referer 校验；走后端代理
   if (/(hdslb|byteimg|kpcdn|akamaized|ytimg)\.com/i.test(url))
-    return `${base}/api/image_proxy?url=${encodeURIComponent(url)}`
+    return withAccessToken(`${base}/api/image_proxy?url=${encodeURIComponent(url)}`)
   return url
+}
+
+export function serverNoteToTask(note: ServerNote): import('./types').TaskRecord {
+  const formData = note.form_data || {}
+  return {
+    taskId: note.task_id,
+    videoUrl: formData.video_url || '',
+    platform: (formData.platform || note.audio_meta?.platform || 'bilibili') as import('./types').Platform,
+    status: note.status,
+    message: note.message || '',
+    createdAt: new Date(note.created_at || Date.now()).getTime(),
+    updatedAt: new Date(note.updated_at || note.created_at || Date.now()).getTime(),
+    result: note.markdown
+      ? {
+          markdown: note.markdown,
+          transcript: note.transcript,
+          audio_meta: note.audio_meta,
+        }
+      : undefined,
+    title: note.audio_meta?.title,
+  }
 }

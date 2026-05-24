@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react'
 import type { AudioMeta } from '@/store/taskStore'
+import { withAuthTokenQuery } from '@/services/auth'
 
 interface VideoBannerProps {
   audioMeta?: AudioMeta
@@ -20,9 +21,7 @@ export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
   const rawCover = audioMeta.cover_url
   // 通过后端代理加载封面，避免跨域/Referrer 限制
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || 'api').replace(/\/$/, '')
-  const coverUrl = rawCover
-    ? `${apiBase}/image_proxy?url=${encodeURIComponent(rawCover)}`
-    : ''
+  const coverUrl = rawCover ? withAuthTokenQuery(`${apiBase}/image_proxy?url=${encodeURIComponent(rawCover)}`) : ''
   const title = audioMeta.title
   const uploader = audioMeta.raw_info?.uploader || ''
   const platform = platformLabel[audioMeta.platform] || audioMeta.platform || ''

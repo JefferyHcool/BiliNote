@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getProviders, ping } from '~/logic/api'
+import { getAuthStatus, getProviders, login, ping } from '~/logic/api'
 import { settings, settingsReady } from '~/logic/storage'
 import { getModelsByProvider } from '~/logic/api'
 import { NOTE_FORMATS, NOTE_STYLES, type Model, type NoteFormat, type Provider } from '~/logic/types'
@@ -17,6 +17,9 @@ const providers = ref<Provider[]>([])
 const models = ref<Model[]>([])
 const status = ref<{ kind: 'idle' | 'ok' | 'err', text: string }>({ kind: 'idle', text: '' })
 const loading = ref(false)
+const authPassword = ref('')
+const authStatus = ref<{ enabled: boolean, authenticated: boolean } | null>(null)
+const authMsg = ref('')
 
 async function refresh() {
   loading.value = true
@@ -58,6 +61,33 @@ async function testConnection() {
     : { kind: 'err', text: '无法连接后端，请检查地址、端口与 CORS' }
 }
 
+async function refreshAuthStatus() {
+  authMsg.value = ''
+  try {
+    authStatus.value = await getAuthStatus()
+    authMsg.value = authStatus.value.enabled
+      ? (authStatus.value.authenticated ? '鉴权已通过 ✓' : '后端已开启鉴权，请登录')
+      : '后端未开启鉴权'
+  }
+  catch (e) {
+    authStatus.value = null
+    authMsg.value = `鉴权状态获取失败：${(e as Error).message}`
+  }
+}
+
+async function doLogin() {
+  authMsg.value = '正在登录…'
+  try {
+    await login(authPassword.value)
+    authPassword.value = ''
+    await refreshAuthStatus()
+    await refresh()
+  }
+  catch (e) {
+    authMsg.value = `登录失败：${(e as Error).message}`
+  }
+}
+
 watch(() => settings.value?.providerId, (id) => {
   if (id)
     refreshModels(id)
@@ -65,6 +95,7 @@ watch(() => settings.value?.providerId, (id) => {
 
 onMounted(async () => {
   await settingsReady
+  await refreshAuthStatus()
   if (settings.value.backendUrl)
     await refresh()
 })
@@ -97,6 +128,35 @@ onMounted(async () => {
       <p class="text-xs text-gray-500">
         默认 http://localhost:8483 — 需要在该地址先跑起 BiliNote 后端
       </p>
+    </section>
+
+    <section class="section-card">
+      <h2 class="font-semibold">访问鉴权</h2>
+      <p class="text-xs text-gray-500">
+        如果后端开启了 <code>BILINOTE_AUTH_ENABLED</code>，插件需要在这里登录后才能提交任务和轮询结果。
+      </p>
+      <div class="flex gap-2">
+        <input
+          v-model="authPassword"
+          type="password"
+          class="input flex-1"
+          placeholder="访问密码"
+          @keyup.enter="doLogin"
+        >
+        <button class="btn-secondary" @click="doLogin">登录</button>
+        <button class="btn-secondary" @click="refreshAuthStatus">检查</button>
+      </div>
+      <div
+        v-if="authMsg"
+        class="text-xs"
+        :class="{
+          'text-green-700': authStatus?.authenticated || authStatus?.enabled === false,
+          'text-amber-700': authStatus?.enabled && !authStatus?.authenticated,
+          'text-red-600': !authStatus && authMsg.includes('失败'),
+        }"
+      >
+        {{ authMsg }}
+      </div>
     </section>
 
     <section class="section-card">

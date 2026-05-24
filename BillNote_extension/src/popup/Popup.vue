@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { detectPlatform } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
-import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
+import { generateNote, getTaskStatus, listNotes, resolveImageUrl, serverNoteToTask } from '~/logic/api'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
 import { NOTE_FORMATS, NOTE_STYLES, type NoteFormat, type TaskRecord } from '~/logic/types'
 
@@ -158,6 +158,13 @@ function fmtTime(ts?: number) {
 
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
+  try {
+    const notes = await listNotes()
+    notes.forEach(n => upsertTask(serverNoteToTask(n)))
+  }
+  catch {
+    // 未登录或旧版后端不支持同步时，不影响 popup 基本使用；设置页会展示具体错误。
+  }
   await loadActiveTab()
   const running = tasks.value?.find(t => t.status !== 'SUCCESS' && t.status !== 'FAILED')
   if (running) {

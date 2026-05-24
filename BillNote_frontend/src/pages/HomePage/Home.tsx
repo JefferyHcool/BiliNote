@@ -8,12 +8,23 @@ type ViewStatus = 'idle' | 'loading' | 'success' | 'failed'
 export const HomePage: FC = () => {
   const tasks = useTaskStore(state => state.tasks)
   const currentTaskId = useTaskStore(state => state.currentTaskId)
+  const syncNotes = useTaskStore(state => state.syncNotes)
 
   const currentTask = tasks.find(t => t.id === currentTaskId)
 
   const [status, setStatus] = useState<ViewStatus>('idle')
 
   const content = currentTask?.markdown || ''
+
+  useEffect(() => {
+    syncNotes().catch(err => {
+      console.warn('同步后端笔记失败:', err)
+    })
+    const timer = window.setInterval(() => {
+      syncNotes().catch(err => console.warn('同步后端笔记失败:', err))
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [syncNotes])
 
   useEffect(() => {
     if (!currentTask) {
