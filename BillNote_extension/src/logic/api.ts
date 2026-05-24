@@ -22,7 +22,22 @@ interface ApiEnvelope<T> {
 }
 
 function backendUrl(): string {
-  return (settings.value?.backendUrl || DEFAULT_BACKEND_URL).replace(/\/$/, '')
+  const raw = (settings.value?.backendUrl || DEFAULT_BACKEND_URL).trim()
+  let url = raw || DEFAULT_BACKEND_URL
+
+  // Allow users to type shorthand values in the extension options:
+  //   3015                -> http://localhost:3015
+  //   localhost:3015      -> http://localhost:3015
+  //   http://host:3015/api -> http://host:3015
+  if (/^\d+$/.test(url))
+    url = `http://localhost:${url}`
+  else if (!/^https?:\/\//i.test(url))
+    url = `http://${url}`
+
+  url = url.replace(/\/+$/, '')
+  if (url.endsWith('/api'))
+    url = url.slice(0, -4)
+  return url
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
