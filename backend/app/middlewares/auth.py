@@ -9,6 +9,7 @@ PUBLIC_PATHS = {
     "/api/auth/status",
     "/api/auth/login",
     "/api/auth/logout",
+    "/api/sys_health",
     "/api/sys_check",
 }
 
