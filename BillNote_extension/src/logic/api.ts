@@ -12,6 +12,7 @@ import type {
   TranscriberType,
   WhisperModelSize,
 } from './types'
+import { DEFAULT_BACKEND_URL } from './constants'
 import { settings } from './storage'
 
 interface ApiEnvelope<T> {
@@ -21,7 +22,7 @@ interface ApiEnvelope<T> {
 }
 
 function backendUrl(): string {
-  return (settings.value?.backendUrl || 'http://localhost:8483').replace(/\/$/, '')
+  return (settings.value?.backendUrl || DEFAULT_BACKEND_URL).replace(/\/$/, '')
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -232,7 +233,7 @@ export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse>
 
 export async function ping(): Promise<boolean> {
   try {
-    await getProviders()
+    await getAuthStatus()
     return true
   }
   catch {

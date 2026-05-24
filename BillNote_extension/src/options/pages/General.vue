@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getAuthStatus, getProviders, login, ping } from '~/logic/api'
+import { getAuthStatus, getProviders, login } from '~/logic/api'
 import { settings, settingsReady } from '~/logic/storage'
 import { getModelsByProvider } from '~/logic/api'
 import { NOTE_FORMATS, NOTE_STYLES, type Model, type NoteFormat, type Provider } from '~/logic/types'
@@ -31,7 +31,13 @@ async function refresh() {
     status.value = { kind: 'ok', text: `已加载 ${providers.value.length} 个供应商` }
   }
   catch (e) {
-    status.value = { kind: 'err', text: `加载失败：${(e as Error).message}` }
+    const msg = (e as Error).message
+    status.value = {
+      kind: 'err',
+      text: msg.includes('401') || msg.includes('未登录')
+        ? '后端已开启鉴权，请先在上方输入访问密码登录'
+        : `加载失败：${msg}`,
+    }
     providers.value = []
     models.value = []
   }
@@ -55,10 +61,18 @@ async function refreshModels(providerId: string) {
 
 async function testConnection() {
   status.value = { kind: 'idle', text: '正在测试…' }
-  const ok = await ping()
-  status.value = ok
-    ? { kind: 'ok', text: '后端连通 ✓' }
-    : { kind: 'err', text: '无法连接后端，请检查地址、端口与 CORS' }
+  try {
+    authStatus.value = await getAuthStatus()
+    status.value = authStatus.value.enabled && !authStatus.value.authenticated
+      ? { kind: 'ok', text: '后端连通 ✓，但已开启鉴权，请先登录' }
+      : { kind: 'ok', text: '后端连通 ✓' }
+    authMsg.value = authStatus.value.enabled
+      ? (authStatus.value.authenticated ? '鉴权已通过 ✓' : '后端已开启鉴权，请登录')
+      : '后端未开启鉴权'
+  }
+  catch (e) {
+    status.value = { kind: 'err', text: `无法连接后端：${(e as Error).message}` }
+  }
 }
 
 async function refreshAuthStatus() {
@@ -108,7 +122,7 @@ onMounted(async () => {
     <section class="section-card">
       <h2 class="font-semibold">后端地址</h2>
       <div class="flex gap-2">
-        <input v-model="settings.backendUrl" class="input flex-1" placeholder="http://localhost:8483">
+        <input v-model="settings.backendUrl" class="input flex-1" placeholder="http://localhost:3015">
         <button class="btn-secondary" @click="testConnection">测试连通</button>
         <button class="btn-secondary" :disabled="loading" @click="refresh">
           {{ loading ? '加载中…' : '刷新' }}
@@ -126,7 +140,7 @@ onMounted(async () => {
         {{ status.text }}
       </div>
       <p class="text-xs text-gray-500">
-        默认 http://localhost:8483 — 需要在该地址先跑起 BiliNote 后端
+        Docker/自托管默认填 http://localhost:3015；本地直连后端开发环境可填 http://localhost:8483。
       </p>
     </section>
 
