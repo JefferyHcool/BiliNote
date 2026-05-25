@@ -43,6 +43,7 @@ async function poll(taskId: string) {
       createdAt: activeTask.value?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
       result: res.result ?? activeTask.value?.result,
+      title: activeTask.value?.title,
     })
     if (res.status !== 'SUCCESS' && res.status !== 'FAILED')
       pollTimer = setTimeout(() => poll(taskId), 3000)
@@ -94,6 +95,7 @@ async function start() {
       message: '已提交',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      title: tabTitle.value || undefined,
     })
     poll(task_id)
     // 提交后顺手把侧边栏拉起来，免得用户来回切窗口
@@ -142,7 +144,10 @@ function selectTask(id: string) {
 }
 
 const activeCover = computed(() => activeTask.value?.result?.audio_meta?.cover_url as string | undefined)
-const activeTitle = computed(() => (activeTask.value?.result?.audio_meta?.title as string | undefined) || tabTitle.value)
+const activeTitle = computed(() =>
+  (activeTask.value?.result?.audio_meta?.title as string | undefined)
+  || activeTask.value?.title
+  || tabTitle.value)
 
 function fmtTime(ts?: number) {
   if (!ts)
@@ -331,8 +336,8 @@ onUnmounted(() => {
           :class="{ 'bg-blue-50': t.taskId === activeTaskId }"
           @click="selectTask(t.taskId)"
         >
-          <span class="truncate flex-1" :title="t.videoUrl">
-            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.videoUrl }}
+          <span class="truncate flex-1" :title="t.title || t.videoUrl">
+            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.title || t.videoUrl }}
           </span>
           <span class="text-gray-500 shrink-0">{{ t.status }}</span>
         </li>
