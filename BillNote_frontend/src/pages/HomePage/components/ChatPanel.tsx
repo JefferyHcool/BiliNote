@@ -211,13 +211,56 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
     []
   )
 
+  const panelHeader = (
+    <div className="flex h-12 shrink-0 items-center justify-between border-b px-3 py-2">
+      <span className="text-sm font-medium">AI 问答</span>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
+          onClick={() => onModeChange(mode === 'half' ? 'full' : 'half')}
+          title={mode === 'half' ? '全屏' : '半屏'}
+        >
+          {mode === 'half' ? (
+            <Maximize2 className="h-3.5 w-3.5" />
+          ) : (
+            <Minimize2 className="h-3.5 w-3.5" />
+          )}
+        </Button>
+        {messages.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-neutral-400 hover:text-red-500"
+            onClick={() => clearChat(taskId)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
+          onClick={() => onModeChange(false)}
+          title="关闭"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+
   if (indexStatus === null || indexStatus === 'indexing' || indexStatus === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-400">
-        <Loader2 className="h-6 w-6 animate-spin" />
-        <div className="text-center">
-          <p className="text-sm font-medium">正在索引笔记内容...</p>
-          <p className="mt-1 text-xs">首次使用需下载 Embedding 模型（约 80MB），请耐心等待</p>
+      <div className="flex h-full flex-col border-l bg-white">
+        {panelHeader}
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 text-neutral-400">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <div className="text-center">
+            <p className="text-sm font-medium">正在索引笔记内容...</p>
+            <p className="mt-1 text-xs">首次使用需下载 Embedding 模型（约 80MB），请耐心等待</p>
+          </div>
         </div>
       </div>
     )
@@ -225,67 +268,33 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
 
   if (indexStatus === 'failed') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-400">
-        <span className="text-sm">索引失败，请重试</span>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={async () => {
-            setIndexStatus('indexing')
-            try {
-              await indexTask(taskId)
-            } catch {
-              toast.error('索引请求失败')
-              setIndexStatus('failed')
-            }
-          }}
-        >
-          重新索引
-        </Button>
+      <div className="flex h-full flex-col border-l bg-white">
+        {panelHeader}
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-neutral-400">
+          <span className="text-sm">索引失败，请重试</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              setIndexStatus('indexing')
+              try {
+                await indexTask(taskId)
+              } catch {
+                toast.error('索引请求失败')
+                setIndexStatus('failed')
+              }
+            }}
+          >
+            重新索引
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="flex h-full flex-col border-l bg-white">
-      {/* 头部 */}
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-sm font-medium">AI 问答</span>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
-            onClick={() => onModeChange(mode === 'half' ? 'full' : 'half')}
-            title={mode === 'half' ? '全屏' : '半屏'}
-          >
-            {mode === 'half' ? (
-              <Maximize2 className="h-3.5 w-3.5" />
-            ) : (
-              <Minimize2 className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-neutral-400 hover:text-red-500"
-              onClick={() => clearChat(taskId)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
-            onClick={() => onModeChange(false)}
-            title="关闭"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
+      {panelHeader}
 
       {/* 消息列表 */}
       <div className="flex-1 overflow-hidden">
