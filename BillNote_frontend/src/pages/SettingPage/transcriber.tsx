@@ -10,7 +10,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save, XCircle } from 'lucide-react'
+import {
+  AudioLines,
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Loader2,
+  Save,
+  XCircle,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   getTranscriberConfig,
@@ -21,8 +29,7 @@ import {
   ModelStatus,
 } from '@/services/transcriber'
 
-const isWhisperType = (type: string) =>
-  type === 'fast-whisper' || type === 'mlx-whisper'
+const isWhisperType = (type: string) => type === 'fast-whisper' || type === 'mlx-whisper'
 
 export default function Transcriber() {
   const [config, setConfig] = useState<TranscriberConfig | null>(null)
@@ -79,17 +86,17 @@ export default function Transcriber() {
       const target = pool.find(m => m.model_size === selectedModelSize)
       if (target && !target.downloaded && !target.downloading) {
         const sizeHint: Record<string, string> = {
-          'tiny': '~75MB',
-          'base': '~150MB',
-          'small': '~500MB',
-          'medium': '~1.5GB',
+          tiny: '~75MB',
+          base: '~150MB',
+          small: '~500MB',
+          medium: '~1.5GB',
           'large-v3': '~3GB',
           'large-v3-turbo': '~1.6GB',
         }
         const ok = window.confirm(
           `选择 ${selectedType} / ${selectedModelSize} 后，首次转写时会下载该模型（${sizeHint[selectedModelSize] || '体积未知'}）。\n` +
-          `网络较差时容易中断；推荐改用 Groq / 必剪 / 快手 等在线引擎。\n\n` +
-          '继续保存吗？',
+            `网络较差时容易中断；推荐改用 Groq / 必剪 / 快手 等在线引擎。\n\n` +
+            '继续保存吗？'
         )
         if (!ok) return
       }
@@ -138,7 +145,7 @@ export default function Transcriber() {
   const currentModels = selectedType === 'mlx-whisper' ? mlxModelStatuses : modelStatuses
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div>
         <h2 className="text-2xl font-semibold">音频转写配置</h2>
         <p className="mt-1 text-sm text-neutral-500">
@@ -194,9 +201,7 @@ export default function Transcriber() {
                   })}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-neutral-400">
-                模型越大精度越高，但速度更慢、占用更多显存
-              </p>
+              <p className="text-xs text-neutral-400">模型越大精度越高，但速度更慢、占用更多显存</p>
             </div>
           )}
 
@@ -211,7 +216,11 @@ export default function Transcriber() {
             </Alert>
           )}
 
-          <Button onClick={handleSave} disabled={saving || (selectedType === 'mlx-whisper' && !config.mlx_whisper_available)} className="mt-2">
+          <Button
+            onClick={handleSave}
+            disabled={saving || (selectedType === 'mlx-whisper' && !config.mlx_whisper_available)}
+            className="mt-2"
+          >
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -239,7 +248,7 @@ export default function Transcriber() {
               {currentModels.map(model => (
                 <div
                   key={model.model_size}
-                  className="flex items-center justify-between rounded-md border px-4 py-3"
+                  className="flex flex-col gap-3 rounded-md border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{model.model_size}</span>

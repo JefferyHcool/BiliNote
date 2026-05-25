@@ -3,11 +3,15 @@ import { Outlet } from 'react-router-dom'
 
 const Model = () => {
   return (
-    <div className={'flex h-full min-h-0 bg-white'}>
-      <div className={'flex-1/5 min-h-0 overflow-y-auto border-r border-neutral-200 p-2'}>
+    <div className={'flex h-full min-h-0 flex-col bg-white md:flex-row'}>
+      <div
+        className={
+          'max-h-64 min-h-0 shrink-0 overflow-y-auto border-b border-neutral-200 p-2 md:max-h-none md:w-1/5 md:border-r md:border-b-0'
+        }
+      >
         <Provider></Provider>
       </div>
-      <div className={'flex-4/5 min-h-0 overflow-y-auto'}>
+      <div className={'min-h-0 flex-1 overflow-y-auto'}>
         <Outlet />
       </div>
     </div>

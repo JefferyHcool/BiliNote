@@ -1,5 +1,13 @@
-import React, { FC, useRef, useState } from 'react'
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, History as HistoryIcon } from 'lucide-react'
+import React, { FC, useEffect, useRef, useState } from 'react'
+import {
+  SlidersHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  History as HistoryIcon,
+  FileText,
+  Eye,
+  Settings,
+} from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -9,9 +17,11 @@ import {
 
 import { Link } from 'react-router-dom'
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from '@/components/ui/resizable'
-import { ScrollArea } from "@/components/ui/scroll-area.tsx"
+import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import type { ImperativePanelHandle } from 'react-resizable-panels'
 import logo from '@/assets/icon.svg'
+import { useIsMobile } from '@/hooks/useMobile.ts'
+import { useTaskStore } from '@/store/taskStore'
 
 interface IProps {
   NoteForm: React.ReactNode
@@ -19,15 +29,88 @@ interface IProps {
   History: React.ReactNode
 }
 
+type MobileTab = 'form' | 'history' | 'preview'
+
 const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
   const [, setShowSettings] = useState(false)
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false)
   const [isMiddleCollapsed, setIsMiddleCollapsed] = useState(false)
+  const [mobileTab, setMobileTab] = useState<MobileTab>('form')
   const leftPanelRef = useRef<ImperativePanelHandle>(null)
   const middlePanelRef = useRef<ImperativePanelHandle>(null)
+  const isMobile = useIsMobile()
+  const currentTaskId = useTaskStore(state => state.currentTaskId)
+
+  useEffect(() => {
+    if (isMobile && currentTaskId) {
+      setMobileTab('preview')
+    }
+  }, [currentTaskId, isMobile])
+
+  if (isMobile) {
+    const tabs: Array<{ id: MobileTab; label: string; icon: React.ReactNode }> = [
+      { id: 'form', label: '生成', icon: <FileText className="h-5 w-5" /> },
+      { id: 'history', label: '历史', icon: <HistoryIcon className="h-5 w-5" /> },
+      { id: 'preview', label: '笔记', icon: <Eye className="h-5 w-5" /> },
+    ]
+
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-white">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl">
+              <img src={logo} alt="logo" className="h-full w-full object-contain" />
+            </div>
+            <div className="truncate text-xl font-bold text-gray-800">BiliNote</div>
+          </div>
+          <Link
+            to="/settings"
+            className="text-muted-foreground hover:text-primary rounded p-2"
+            aria-label="全局配置"
+          >
+            <Settings className="h-5 w-5" />
+          </Link>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-hidden bg-white">
+          {mobileTab === 'form' && (
+            <ScrollArea className="h-full">
+              <div className="p-4 pb-6">{NoteForm}</div>
+            </ScrollArea>
+          )}
+          {mobileTab === 'history' && (
+            <ScrollArea className="h-full">
+              <div className="p-2">{History}</div>
+            </ScrollArea>
+          )}
+          {mobileTab === 'preview' && <div className="h-full overflow-hidden">{Preview}</div>}
+        </main>
+
+        <nav className="flex shrink-0 items-center justify-around border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]">
+          {tabs.map(tab => {
+            const active = mobileTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setMobileTab(tab.id)}
+                className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
+                  active ? 'text-primary' : 'text-muted-foreground'
+                }`}
+                aria-current={active ? 'page' : undefined}
+              >
+                {tab.icon}
+                <span className="text-xs">{tab.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         {/* 左边表单 */}
         <ResizablePanel
@@ -53,6 +136,7 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
+                        type="button"
                         onClick={() => leftPanelRef.current?.collapse()}
                         className="text-muted-foreground hover:text-primary cursor-pointer rounded p-1 hover:bg-neutral-100"
                       >
@@ -92,10 +176,11 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
                   onClick={() => leftPanelRef.current?.expand()}
                   className="flex h-full w-8 shrink-0 items-center justify-center border-r border-neutral-200 bg-white hover:bg-neutral-50"
                 >
-                  <PanelLeftOpen className="h-4 w-4 text-muted-foreground" />
+                  <PanelLeftOpen className="text-muted-foreground h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
@@ -123,6 +208,7 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      type="button"
                       onClick={() => middlePanelRef.current?.collapse()}
                       className="text-muted-foreground hover:text-primary cursor-pointer rounded p-1 hover:bg-neutral-100"
                     >
@@ -149,10 +235,11 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
                   onClick={() => middlePanelRef.current?.expand()}
                   className="flex h-full w-8 shrink-0 items-center justify-center border-r border-neutral-200 bg-white hover:bg-neutral-50"
                 >
-                  <HistoryIcon className="h-4 w-4 text-muted-foreground" />
+                  <HistoryIcon className="text-muted-foreground h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
@@ -164,7 +251,9 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
 
         {/* 右边预览 */}
         <ResizablePanel defaultSize={61} minSize={30}>
-          <main className="flex h-full flex-col overflow-hidden bg-white p-6">{Preview}</main>
+          <main className="flex h-full min-w-0 flex-col overflow-hidden bg-white p-6">
+            {Preview}
+          </main>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
