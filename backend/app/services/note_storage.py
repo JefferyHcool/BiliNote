@@ -16,6 +16,11 @@ NOTE_OUTPUT_DIR = Path(os.getenv("NOTE_OUTPUT_DIR", "note_results"))
 TASK_ID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+TASK_ARTIFACT_ID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"(?:_(?:audio|markdown|request|transcript))?$"
+)
+TASK_ARTIFACT_SUFFIXES = ("_audio", "_markdown", "_request", "_transcript")
 
 
 def _now_iso() -> str:
@@ -37,6 +42,19 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
+
+
+def _base_task_id_from_artifact(stem: str) -> str | None:
+    if TASK_ID_RE.match(stem):
+        return stem
+
+    for suffix in TASK_ARTIFACT_SUFFIXES:
+        if stem.endswith(suffix):
+            candidate = stem[:-len(suffix)]
+            if TASK_ID_RE.match(candidate):
+                return candidate
+
+    return None
 
 
 def _jsonable(value: Any) -> Any:
@@ -126,17 +144,16 @@ def list_notes() -> list[dict[str, Any]]:
     for path in NOTE_OUTPUT_DIR.glob("*.json"):
         name = path.name
         if name.endswith(".status.json"):
-            task_ids.add(name[:-len(".status.json")])
+            # 旧逻辑会把 <task_id>_markdown.status.json 误当成一个真实任务，
+            # 导致网页端出现删不掉的“等待中”伪任务。这里只同步真实 task_id。
+            task_id = _base_task_id_from_artifact(name[:-len(".status.json")])
+            if task_id and TASK_ID_RE.match(task_id):
+                task_ids.add(task_id)
             continue
         stem = path.stem
-        if TASK_ID_RE.match(stem):
-            task_ids.add(stem)
-            continue
-        for suffix in ("_request", "_audio", "_transcript"):
-            if stem.endswith(suffix):
-                candidate = stem[:-len(suffix)]
-                if TASK_ID_RE.match(candidate):
-                    task_ids.add(candidate)
+        task_id = _base_task_id_from_artifact(stem)
+        if task_id:
+            task_ids.add(task_id)
 
     notes = []
     for task_id in task_ids:
@@ -175,7 +192,7 @@ def list_notes() -> list[dict[str, Any]]:
 def delete_note_artifacts(task_id: str) -> int:
     """Delete persisted note artifacts for one task. Returns deleted file count."""
     deleted = 0
-    if not TASK_ID_RE.match(task_id or ""):
+    if not TASK_ARTIFACT_ID_RE.match(task_id or ""):
         return 0
 
     for path in NOTE_OUTPUT_DIR.glob(f"{task_id}*"):

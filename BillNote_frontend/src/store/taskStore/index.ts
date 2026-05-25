@@ -85,6 +85,9 @@ interface TaskStore {
   retryTask: (id: string, payload?: any) => void
 }
 
+export const isArtifactTaskId = (id?: string | null) =>
+  /_(audio|markdown|request|transcript)$/.test(id || '')
+
 const defaultTranscript = (): Transcript => ({
   full_text: '',
   language: '',
@@ -302,20 +305,28 @@ export const useTaskStore = create<TaskStore>()(
       clearTasks: () => set({ tasks: [], currentTaskId: null }),
 
       syncNotes: async () => {
-        const notes = await listNotes()
+        const notes = (await listNotes()).filter(note => !isArtifactTaskId(note.task_id))
         set(state => {
           const existingMap = new Map(state.tasks.map(task => [task.id, task]))
           const synced = notes.map(note => normalizeServerTask(note, existingMap.get(note.task_id)))
           const syncedIds = new Set(synced.map(task => task.id))
           const localOnly = state.tasks.filter(
-            task => !syncedIds.has(task.id) && task.status !== 'SUCCESS' && task.status !== 'FAILED'
+            task =>
+              !isArtifactTaskId(task.id) &&
+              !syncedIds.has(task.id) &&
+              task.status !== 'SUCCESS' &&
+              task.status !== 'FAILED'
           )
           const tasks = [...synced, ...localOnly].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
+          const currentTaskId = state.currentTaskId && tasks.some(task => task.id === state.currentTaskId)
+            ? state.currentTaskId
+            : tasks[0]?.id || null
+
           return {
             tasks,
-            currentTaskId: state.currentTaskId || tasks[0]?.id || null,
+            currentTaskId,
           }
         })
       },
