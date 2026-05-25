@@ -129,6 +129,10 @@ class ProviderService:
         try:
         # 过滤掉空值
             filtered_data = {k: v for k, v in data.items() if v is not None and k != 'id'}
+            # 防御掩码污染：前端展示时 api_key 被 mask_key() 处理过（如 a92f****...2d3a），
+            # 如果用户未重新输入直接保存，带星号的值不应覆盖原 key。
+            if 'api_key' in filtered_data and '*' in str(filtered_data.get('api_key', '')):
+                filtered_data.pop('api_key')
             print('更新模型供应商',filtered_data)
             update_provider(id, **filtered_data)
             # 获取更新后的供应商信息
