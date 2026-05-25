@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { detectPlatform } from '~/logic/platform'
-import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
-import { generateNote, getTaskStatus, listNotes, resolveImageUrl, serverNoteToTask } from '~/logic/api'
+import { readDeletedTaskIds, removeTask, settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
+import { deleteTask as deleteServerTask, generateNote, getTaskStatus, listNotes, resolveImageUrl, serverNoteToTask } from '~/logic/api'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
 import { NOTE_FORMATS, NOTE_STYLES, type NoteFormat, type TaskRecord } from '~/logic/types'
 
@@ -16,8 +16,22 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const activeTaskId = ref<string>('')
 const activeTask = computed<TaskRecord | undefined>(() => tasks.value?.find(t => t.taskId === activeTaskId.value))
+const pendingDeleteTask = ref<TaskRecord | null>(null)
+const deletingTask = ref(false)
+const pendingDeleteTitle = computed(() =>
+  (pendingDeleteTask.value?.result?.audio_meta as { title?: string } | undefined)?.title
+  || pendingDeleteTask.value?.title
+  || pendingDeleteTask.value?.videoUrl
+  || '该任务')
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearPollTimer() {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
 
 async function loadActiveTab() {
   try {
@@ -32,18 +46,26 @@ async function loadActiveTab() {
 }
 
 async function poll(taskId: string) {
+  const currentTask = tasks.value?.find(t => t.taskId === taskId)
+  if (!currentTask)
+    return
+
   try {
     const res = await getTaskStatus(taskId)
-    upsertTask({
+    const latestTask = tasks.value?.find(t => t.taskId === taskId)
+    if (!latestTask)
+      return
+
+    await upsertTask({
       taskId,
-      videoUrl: activeTask.value?.videoUrl ?? tabUrl.value,
-      platform: (activeTask.value?.platform ?? platform.value)!,
+      videoUrl: latestTask.videoUrl,
+      platform: latestTask.platform,
       status: res.status,
       message: res.message,
-      createdAt: activeTask.value?.createdAt ?? Date.now(),
+      createdAt: latestTask.createdAt,
       updatedAt: Date.now(),
-      result: res.result ?? activeTask.value?.result,
-      title: activeTask.value?.title,
+      result: res.result ?? latestTask.result,
+      title: latestTask.title,
     })
     if (res.status !== 'SUCCESS' && res.status !== 'FAILED')
       pollTimer = setTimeout(() => poll(taskId), 3000)
@@ -87,7 +109,7 @@ async function start() {
       prefetched_transcript: prefetched ?? undefined,
     })
     activeTaskId.value = task_id
-    upsertTask({
+    await upsertTask({
       taskId: task_id,
       videoUrl: tabUrl.value,
       platform: platform.value!,
@@ -137,10 +159,55 @@ async function openSidePanel() {
 }
 
 function selectTask(id: string) {
+  clearPollTimer()
   activeTaskId.value = id
   const t = tasks.value?.find(x => x.taskId === id)
   if (t && t.status !== 'SUCCESS' && t.status !== 'FAILED')
     poll(id)
+}
+
+function requestDeleteTask(id: string) {
+  pendingDeleteTask.value = tasks.value?.find(t => t.taskId === id) ?? null
+}
+
+function cancelDeleteTask() {
+  if (!deletingTask.value)
+    pendingDeleteTask.value = null
+}
+
+async function confirmDeleteTask() {
+  const taskId = pendingDeleteTask.value?.taskId
+  if (!taskId || deletingTask.value)
+    return
+
+  errorMsg.value = ''
+  deletingTask.value = true
+  try {
+    const deletingActive = activeTaskId.value === taskId
+
+    // 先写本地 tombstone，防止其它 popup/sidepanel 轮询或后端同步把刚删的任务刷回来。
+    await removeTask(taskId)
+
+    try {
+      await deleteServerTask(taskId)
+    }
+    catch (e) {
+      errorMsg.value = `已从插件本地删除，但后端删除失败：${(e as Error).message}`
+    }
+
+    if (deletingActive) {
+      clearPollTimer()
+      const nextTask = tasks.value?.[0]
+      activeTaskId.value = nextTask?.taskId ?? ''
+      if (nextTask && nextTask.status !== 'SUCCESS' && nextTask.status !== 'FAILED')
+        poll(nextTask.taskId)
+    }
+
+    pendingDeleteTask.value = null
+  }
+  finally {
+    deletingTask.value = false
+  }
 }
 
 const activeCover = computed(() => activeTask.value?.result?.audio_meta?.cover_url as string | undefined)
@@ -159,8 +226,12 @@ function fmtTime(ts?: number) {
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
   try {
-    const notes = await listNotes()
-    notes.forEach(n => upsertTask(serverNoteToTask(n)))
+    const [notes, deletedTaskIds] = await Promise.all([listNotes(), readDeletedTaskIds()])
+    const deletedIds = new Set(deletedTaskIds)
+    for (const note of notes) {
+      if (!deletedIds.has(note.task_id))
+        await upsertTask(serverNoteToTask(note))
+    }
   }
   catch {
     // 未登录或旧版后端不支持同步时，不影响 popup 基本使用；设置页会展示具体错误。
@@ -174,8 +245,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (pollTimer)
-    clearTimeout(pollTimer)
+  clearPollTimer()
 })
 </script>
 
@@ -347,9 +417,47 @@ onUnmounted(() => {
             {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.title || t.videoUrl }}
           </span>
           <span class="text-gray-500 shrink-0">{{ t.status }}</span>
+          <button
+            class="text-red-400 hover:text-red-600 px-1 py-0.5 rounded hover:bg-red-50 shrink-0"
+            title="删除任务"
+            @click.stop="requestDeleteTask(t.taskId)"
+          >
+            删除
+          </button>
         </li>
       </ul>
     </details>
+
+    <div
+      v-if="pendingDeleteTask"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4"
+      @click.self="cancelDeleteTask"
+    >
+      <div class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl border text-sm">
+        <div class="font-medium text-gray-900">
+          确认删除这个任务？
+        </div>
+        <div class="mt-2 text-xs text-gray-600 break-words">
+          {{ pendingDeleteTitle }}
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="btn-secondary"
+            :disabled="deletingTask"
+            @click="cancelDeleteTask"
+          >
+            取消
+          </button>
+          <button
+            class="bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+            :disabled="deletingTask"
+            @click="confirmDeleteTask"
+          >
+            {{ deletingTask ? '删除中…' : '删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 

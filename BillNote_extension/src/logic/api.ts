@@ -87,6 +87,13 @@ export async function listNotes(): Promise<ServerNote[]> {
   return request('/api/notes')
 }
 
+export async function deleteTask(taskId: string): Promise<void> {
+  await request('/api/delete_task', {
+    method: 'POST',
+    body: JSON.stringify({ task_id: taskId }),
+  })
+}
+
 export async function getProviders(): Promise<Provider[]> {
   return request<Provider[]>('/api/get_all_providers')
 }
@@ -280,7 +287,7 @@ export function resolveImageUrl(url: string | undefined | null): string {
   if (url.startsWith('/'))
     return withAccessToken(`${base}${url}`)
   // B 站封面、抖音封面等会做 referer 校验；走后端代理
-  if (/(hdslb|byteimg|kpcdn|akamaized|ytimg)\.com/i.test(url))
+  if (/(?:hdslb|byteimg|kpcdn|akamaized|ytimg)\.com/i.test(url))
     return withAccessToken(`${base}/api/image_proxy?url=${encodeURIComponent(url)}`)
   return url
 }

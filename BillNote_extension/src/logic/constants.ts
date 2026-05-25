@@ -22,3 +22,4 @@ export const MAX_TASKS = 30
 
 export const SETTINGS_KEY = 'bilinote-settings'
 export const TASKS_KEY = 'bilinote-tasks'
+export const DELETED_TASK_IDS_KEY = 'bilinote-deleted-task-ids'
