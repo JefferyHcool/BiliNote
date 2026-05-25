@@ -14,6 +14,7 @@ import 'react-medium-image-zoom/dist/styles.css'
 import gfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeSlug from 'rehype-slug'
 import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
@@ -47,7 +48,7 @@ const steps = [
 ]
 
 const remarkPlugins = [gfm, remarkMath]
-const rehypePlugins = [rehypeKatex]
+const rehypePlugins = [rehypeKatex, rehypeSlug]
 
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。
@@ -114,6 +115,51 @@ function createMarkdownComponents(baseURL: string) {
               <span>原片（{timeText}）</span>
             </a>
           </span>
+        )
+      }
+
+      // 处理笔记内部锚点链接（如目录跳转）
+      if (href?.startsWith('#')) {
+        const handleAnchorClick = (e: React.MouseEvent) => {
+          e.preventDefault()
+          const id = decodeURIComponent(href.slice(1))
+
+          // 1. 优先精确匹配 id
+          let target = document.getElementById(id)
+
+          // 2. 精确失败时按 heading 文本模糊匹配
+          // LLM 生成的目录锚点可能和 heading 实际文本不完全一致
+          //（例如 heading 带 *Content-[00:00]* 后缀，目录链接里没有）
+          if (!target) {
+            const normalize = (s: string) =>
+              s.replace(/[-：:\s*\[\]]/g, '').toLowerCase()
+            const search = normalize(id)
+            const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6')
+            for (const h of headings) {
+              const text = h.textContent || ''
+              if (normalize(text).includes(search) || search.includes(normalize(text))) {
+                target = h
+                break
+              }
+            }
+          }
+
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          } else {
+            toast.error('未找到对应章节')
+          }
+        }
+
+        return (
+          <a
+            href={href}
+            onClick={handleAnchorClick}
+            className="text-primary hover:text-primary/80 inline-flex items-center gap-0.5 font-medium underline underline-offset-4"
+            {...props}
+          >
+            {children}
+          </a>
         )
       }
 

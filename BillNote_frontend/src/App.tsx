@@ -1,6 +1,6 @@
 import './App.css'
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { useTaskPolling } from '@/hooks/useTaskPolling.ts'
 import { useCheckBackend } from '@/hooks/useCheckBackend.ts'
 import { systemCheck } from '@/services/system.ts'
@@ -57,12 +57,16 @@ function App() {
     )
   }
 
+  // 桌面端使用 HashRouter 避免刷新 404；Web 端继续使用 BrowserRouter
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  const Router = isTauri ? HashRouter : BrowserRouter
+
   // 后端已初始化，渲染主应用
   return (
     <>
       <StartupBanner />
       <BackendHealthIndicator />
-      <BrowserRouter>
+      <Router>
         <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中…</div>}>
           <Routes>
             <Route path="/onboarding" element={<Onboarding />} />
@@ -86,7 +90,7 @@ function App() {
             </Route>
           </Routes>
         </Suspense>
-      </BrowserRouter>
+      </Router>
     </>
   )
 }
