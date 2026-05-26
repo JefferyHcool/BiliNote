@@ -35,6 +35,10 @@ COPY ./backend /tmp/backend
 ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/node:20-alpine AS frontend-builder
 
+# 可由发布 workflow 从 git tag 注入，用于前端 About 页展示版本；未传时由 Vite 回退读取 tauri.conf.json。
+ARG VITE_APP_VERSION=
+ENV VITE_APP_VERSION=${VITE_APP_VERSION}
+
 # pnpm 版本 pin 到 9 系列：
 # - lockfile (BillNote_frontend/pnpm-lock.yaml) 是 lockfileVersion '9.0'，由 pnpm 9 生成
 # - pnpm 11+ 要求 Node 22+，与 node:20 不兼容（ERR_UNKNOWN_BUILTIN_MODULE）
