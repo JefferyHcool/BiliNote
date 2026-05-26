@@ -7,7 +7,7 @@ import {
 import { Link, Outlet } from 'react-router-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import React from 'react'
-import logo from '@/assets/icon.svg'
+import { BrandLogo } from '@/components/BrandLogo'
 
 interface ISettingLayoutProps {
   Menu: React.ReactNode
@@ -25,12 +25,7 @@ const SettingLayout = ({ Menu }: ISettingLayoutProps) => {
         <aside className="flex w-[300px] flex-col border-r border-neutral-200 bg-white">
           {/* Header */}
           <header className="flex h-16 items-center justify-between px-6">
-            <div className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl">
-                <img src={logo} alt="logo" className="h-full w-full object-contain" />
-              </div>
-              <div className="text-2xl font-bold text-gray-800">BiliNote</div>
-            </div>
+            <BrandLogo />
             <div>
               <TooltipProvider>
                 <Tooltip>
