@@ -5,7 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Github, Star, ExternalLink, Download } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import logo from '@/assets/icon.svg'
-import wechatQr from '@/assets/wechat.png'
+
+// 二维码统一走 GitHub 在线地址：后续在仓库替换图片后，已打包的 App 会自动更新，无需重新发版
+const GITHUB_DOC_RAW = 'https://raw.githubusercontent.com/JefferyHcool/BiliNote/master/doc'
+const wechatQr = `${GITHUB_DOC_RAW}/wechat-group-1.png`
+const remoteInstallQr = `${GITHUB_DOC_RAW}/remote-install-wechat.png`
 
 export default function AboutPage() {
   const appVersion = __APP_VERSION__
@@ -198,12 +202,28 @@ export default function AboutPage() {
         <section className="mb-16">
           <h2 className="mb-8 text-center text-3xl font-bold">联系和加入社区</h2>
           <div className="mx-auto max-w-3xl">
-            <div className="flex flex-col items-center justify-center gap-8">
+            <div className="flex flex-col items-center justify-center gap-10 md:flex-row md:items-start">
               <div className="text-center">
                 <h3 className="mb-3 text-xl font-semibold">BiliNote 交流微信群</h3>
                 <div className="bg-muted mx-auto flex h-52 w-52 items-center justify-center rounded-md">
                   <img src={wechatQr} alt="BiliNote 交流微信群" className="h-full w-full object-contain" />
                 </div>
+                <p className="text-muted-foreground mt-3 text-sm">扫码加入交流群，一起讨论使用问题</p>
+              </div>
+              <div className="text-center">
+                <h3 className="mb-3 text-xl font-semibold">BiliNote AI笔记系统一对一搭建服务</h3>
+                <div className="bg-muted mx-auto flex h-52 w-52 items-center justify-center rounded-md">
+                  <img
+                    src={remoteInstallQr}
+                    alt="BiliNote AI笔记系统一对一搭建服务"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <p className="text-muted-foreground mt-3 text-sm">
+                  专人一对一远程协助，从部署到上手全程陪跑
+                  <br />
+                  扫码加微信，备注「搭建服务」即可咨询
+                </p>
               </div>
             </div>
           </div>
