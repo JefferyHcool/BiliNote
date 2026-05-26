@@ -73,7 +73,7 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                 </TooltipProvider>
               </div>
             </header>
-            <ScrollArea className="flex-1 overflow-auto">
+            <ScrollArea className="min-h-0 flex-1">
               <div className="p-4">{NoteForm}</div>
             </ScrollArea>
           </aside>
@@ -130,7 +130,7 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                 </Tooltip>
               </TooltipProvider>
             </header>
-            <ScrollArea className="flex-1 overflow-auto">
+            <ScrollArea className="min-h-0 flex-1">
               <div>{History}</div>
             </ScrollArea>
           </aside>
