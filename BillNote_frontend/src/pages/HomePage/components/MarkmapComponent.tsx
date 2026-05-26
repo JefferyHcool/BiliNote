@@ -5,6 +5,171 @@ import { Toolbar } from 'markmap-toolbar'
 import 'markmap-toolbar/dist/style.css'
 import JSZip from 'jszip'
 
+const MIN_EXPORT_FONT_PX = 256
+const MIN_EXPORT_WIDTH = 12800
+const WEB_EXPORT_SCALE_FACTOR = 0.34
+const MAX_EXPORT_SCALE = 24
+const MAX_CANVAS_SIDE = 32767
+const MAX_CANVAS_PIXELS = 268000000
+
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('无法创建PNG图片'))
+      }
+    }, 'image/png')
+  })
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
+  return document.createElementNS('http://www.w3.org/2000/svg', tag)
+}
+
+function sanitizeSvgForCanvas(svg: SVGSVGElement): SVGSVGElement {
+  const cloned = svg.cloneNode(true) as SVGSVGElement
+
+  // markmap 会在 SVG 的顶层 <g> 上写入当前预览视口的 pan/zoom transform。
+  // 导出时我们按内容 bbox 裁剪，如果保留这个视口 transform，会产生双重偏移，
+  // 导致图片内容跑到角落并留下大片空白。这里只移除顶层视口 transform，
+  // 保留内部节点自身的布局 transform。
+  cloned.querySelector(':scope > g')?.removeAttribute('transform')
+
+  cloned.querySelectorAll('image').forEach(el => el.remove())
+  cloned.querySelectorAll('foreignObject').forEach((foreignObject) => {
+    const textContent = foreignObject.textContent?.replace(/\s+/g, ' ').trim()
+    if (!textContent) {
+      foreignObject.remove()
+      return
+    }
+
+    const x = Number(foreignObject.getAttribute('x') || 0)
+    const y = Number(foreignObject.getAttribute('y') || 0)
+    const height = Number(foreignObject.getAttribute('height') || 20)
+    const text = createSvgElement('text')
+    text.setAttribute('x', String(x))
+    text.setAttribute('y', String(y + height / 2))
+    text.setAttribute('dominant-baseline', 'middle')
+    text.setAttribute('font-size', '14')
+    text.setAttribute('font-family', 'Arial, "Microsoft YaHei", sans-serif')
+    text.setAttribute('fill', '#333')
+    text.textContent = textContent
+    foreignObject.replaceWith(text)
+  })
+
+  return cloned
+}
+
+function getExportFontSize(svg: SVGSVGElement): number {
+  const text = svg.querySelector('text, foreignObject')
+  if (!text) return 14
+
+  const fontSize = Number.parseFloat(getComputedStyle(text).fontSize || '')
+  if (Number.isFinite(fontSize) && fontSize > 0) return fontSize
+
+  const attrSize = Number.parseFloat(text.getAttribute('font-size') || '')
+  return Number.isFinite(attrSize) && attrSize > 0 ? attrSize : 14
+}
+
+function getMindmapBounds(svg: SVGSVGElement) {
+  const target = svg.querySelector('g') || svg
+  const bbox = target.getBBox()
+  const padding = 50
+  return {
+    x: Math.floor(bbox.x - padding),
+    y: Math.floor(bbox.y - padding),
+    width: Math.max(Math.ceil(bbox.width + padding * 2), 1),
+    height: Math.max(Math.ceil(bbox.height + padding * 2), 1),
+  }
+}
+
+function stripMindmapImages(markdown: string) {
+  return (markdown || '')
+    // 思维导图只保留文字结构，图片节点会让预览排版和 PNG 导出效果都很差。
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/<img\b[^>]*>/gi, '')
+}
+
+function transformMindmap(markdown: string) {
+  return transformer.transform(stripMindmapImages(markdown))
+}
+
+function createExportSvg(svgEl: SVGSVGElement) {
+  const bounds = getMindmapBounds(svgEl)
+  const clonedSvg = sanitizeSvgForCanvas(svgEl)
+
+  clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+  clonedSvg.setAttribute('width', String(bounds.width))
+  clonedSvg.setAttribute('height', String(bounds.height))
+  clonedSvg.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`)
+  clonedSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  bgRect.setAttribute('x', String(bounds.x))
+  bgRect.setAttribute('y', String(bounds.y))
+  bgRect.setAttribute('width', String(bounds.width))
+  bgRect.setAttribute('height', String(bounds.height))
+  bgRect.setAttribute('fill', 'white')
+  const firstG = clonedSvg.querySelector('g')
+  clonedSvg.insertBefore(bgRect, firstG || clonedSvg.firstChild)
+
+  return { clonedSvg, ...bounds }
+}
+
+async function exportSvgToPngBlob(svgEl: SVGSVGElement): Promise<Blob> {
+  const { clonedSvg, width, height } = createExportSvg(svgEl)
+  const svgData = new XMLSerializer().serializeToString(clonedSvg)
+  const svgUrl = URL.createObjectURL(new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' }))
+
+  try {
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = svgUrl
+    await img.decode()
+
+    // 按导图内容尺寸和字号动态反推 PNG 倍率，而不是按预览容器或固定倍率导出。
+    const fontScale = MIN_EXPORT_FONT_PX / getExportFontSize(svgEl)
+    const widthScale = MIN_EXPORT_WIDTH / width
+    const rawScale = Math.max(window.devicePixelRatio || 1, fontScale, widthScale)
+    const sideLimitScale = Math.min(MAX_CANVAS_SIDE / width, MAX_CANVAS_SIDE / height)
+    const pixelLimitScale = Math.sqrt(MAX_CANVAS_PIXELS / (width * height))
+    const baseScale = Math.min(rawScale, MAX_EXPORT_SCALE, sideLimitScale, pixelLimitScale)
+    const scale = Math.max(1, baseScale * WEB_EXPORT_SCALE_FACTOR)
+
+    let currentScale = scale
+    let lastError: unknown
+    while (currentScale >= 1) {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.ceil(width * currentScale)
+        canvas.height = Math.ceil(height * currentScale)
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          throw new Error('无法获取Canvas上下文')
+        }
+
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.setTransform(currentScale, 0, 0, currentScale, 0, 0)
+        ctx.drawImage(img, 0, 0, width, height)
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+
+        return await canvasToBlob(canvas)
+      } catch (error) {
+        lastError = error
+        currentScale = Math.floor(currentScale / 2)
+      }
+    }
+    throw lastError || new Error('导出PNG失败')
+  } finally {
+    URL.revokeObjectURL(svgUrl)
+  }
+}
+
 export interface MarkmapEditorProps {
   /** 要渲染的 Markdown 文本 */
   value: string
@@ -34,6 +199,13 @@ export default function MarkmapEditor({
 
   // 用于跟踪是否处于全屏状态
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [pngAction, setPngAction] = useState<'idle' | 'exporting' | 'copying'>('idle')
+  const [pngMessage, setPngMessage] = useState('')
+
+  const showPngMessage = (message: string) => {
+    setPngMessage(message)
+    window.setTimeout(() => setPngMessage(''), 2500)
+  }
 
   // 监听全屏状态变化
   useEffect(() => {
@@ -64,7 +236,7 @@ export default function MarkmapEditor({
   // 导出HTML思维导图
   const exportHtml = () => {
     try {
-      const { root } = transformer.transform(value)
+      const { root } = transformMindmap(value)
       const data = JSON.stringify(root)
       
       // 创建HTML内容
@@ -202,7 +374,7 @@ export default function MarkmapEditor({
   // 导出XMind格式思维导图
   const exportXMind = async () => {
     try {
-      const { root } = transformer.transform(value);
+      const { root } = transformMindmap(value);
 
       // 生成唯一ID
       const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -311,100 +483,44 @@ export default function MarkmapEditor({
     try {
       if (!svgRef.current || !mmRef.current) return;
 
-      const svgEl = svgRef.current;
-      const mm = mmRef.current;
-
-      // 先调用fit()确保显示完整的思维导图内容
-      await mm.fit();
-      // 等待渲染完成
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // 获取SVG实际尺寸
-      const svgWidth = svgEl.width.baseVal.value || svgEl.clientWidth || 800;
-      const svgHeight = svgEl.height.baseVal.value || svgEl.clientHeight || 600;
-      
-      // 设置足够大的缩放比例以确保高清输出
-      const scale = 3;
-      
-      // 克隆SVG以避免修改原始SVG
-      const clonedSvg = svgEl.cloneNode(true) as SVGSVGElement;
-      
-      // 设置SVG的背景为白色
-      const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      style.textContent = 'svg { background-color: white; }';
-      clonedSvg.insertBefore(style, clonedSvg.firstChild);
-      
-      // 确保SVG有正确的命名空间
-      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      clonedSvg.setAttribute('width', svgWidth.toString());
-      clonedSvg.setAttribute('height', svgHeight.toString());
-      
-      // 将SVG转换为Data URI (避免使用Blob URL来解决跨域问题)
-      const svgData = new XMLSerializer().serializeToString(clonedSvg);
-      const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
-      const dataUri = `data:image/svg+xml;base64,${svgBase64}`;
-      
-      // 创建Canvas
-      const canvas = document.createElement('canvas');
-      canvas.width = svgWidth * scale;
-      canvas.height = svgHeight * scale;
-      
-      // 获取上下文并设置白色背景
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('无法获取Canvas上下文');
-      }
-      
-      // 设置白色背景
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // 创建Image对象
-      const img = new Image();
-      
-      // 当图片加载完成后，在Canvas上绘制并导出
-      img.onload = () => {
-        try {
-          // 应用缩放
-          ctx.setTransform(scale, 0, 0, scale, 0, 0);
-          
-          // 绘制SVG
-          ctx.drawImage(img, 0, 0);
-          
-          // 重置变换
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          
-          // 将Canvas转换为PNG Blob
-          canvas.toBlob((blob) => {
-            if (blob) {
-              // 创建下载链接
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `${title || 'mindmap'}.png`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            } else {
-              console.error('无法创建Blob对象');
-            }
-          }, 'image/png');
-        } catch (err) {
-          console.error('Canvas处理失败:', err);
-        }
-      };
-      
-      // 设置图片加载错误处理
-      img.onerror = (error) => {
-        console.error('导出PNG失败（图片加载错误）:', error);
-      };
-      
-      // 开始加载SVG图像 (使用Data URI而不是Blob URL)
-      img.src = dataUri;
-      
+      setPngAction('exporting');
+      setPngMessage('正在生成高清 PNG…');
+      const blob = await exportSvgToPngBlob(svgRef.current);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title || 'mindmap'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showPngMessage('PNG 已开始下载');
     } catch (error) {
       console.error('导出PNG失败:', error);
+      showPngMessage('导出 PNG 失败，请查看控制台');
+    } finally {
+      setPngAction('idle');
+    }
+  };
+
+  // 复制PNG思维导图
+  const copyPng = async () => {
+    try {
+      if (!svgRef.current || !mmRef.current) return;
+
+      setPngAction('copying');
+      setPngMessage('正在复制高清 PNG…');
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': exportSvgToPngBlob(svgRef.current),
+        }),
+      ]);
+      showPngMessage('PNG 已复制');
+    } catch (error) {
+      console.error('复制PNG失败:', error);
+      showPngMessage('复制 PNG 失败，请查看控制台');
+    } finally {
+      setPngAction('idle');
     }
   };
 
@@ -428,7 +544,7 @@ export default function MarkmapEditor({
   useEffect(() => {
     const mm = mmRef.current
     if (!mm) return
-    const { root } = transformer.transform(value)
+    const { root } = transformMindmap(value)
     mm.setData(root).then(() => mm.fit())
   }, [value])
 
@@ -459,8 +575,17 @@ export default function MarkmapEditor({
           onClick={exportPng}
           className="rounded p-1 hover:bg-gray-200"
           title="导出PNG图片"
+          disabled={pngAction !== 'idle'}
         >
-          🖼️
+          {pngAction === 'exporting' ? '⏳' : '🖼️'}
+        </button>
+        <button
+          onClick={copyPng}
+          className="rounded p-1 hover:bg-gray-200"
+          title="复制PNG图片"
+          disabled={pngAction !== 'idle'}
+        >
+          {pngAction === 'copying' ? '⏳' : '📋'}
         </button>
         <button
           onClick={exportHtml}
@@ -483,6 +608,11 @@ export default function MarkmapEditor({
           </button>
         )}
       </div>
+      {pngMessage && (
+        <div className="absolute top-11 right-2 z-20 rounded bg-white/95 px-2 py-1 text-xs text-gray-600 shadow">
+          {pngMessage}
+        </div>
+      )}
 
       {/* 如果需要编辑区，就自己加一个 <textarea> 并把 handleChange 绑上 */}
       {/* <textarea value={value} onChange={handleChange} className="mb-2 p-2 border rounded" /> */}
