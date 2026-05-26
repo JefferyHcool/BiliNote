@@ -41,6 +41,7 @@ async function poll(taskId: string) {
         message: res.message,
         result: res.result ?? cur.result,
         updatedAt: Date.now(),
+        title: cur.title,
       })
     }
     if (res.status !== 'SUCCESS' && res.status !== 'FAILED')
@@ -89,7 +90,10 @@ function downloadMarkdown() {
 }
 
 const activeTitle = computed(() =>
-  (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title || activeTask.value?.videoUrl || '')
+  (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title
+  || activeTask.value?.title
+  || activeTask.value?.videoUrl
+  || '')
 
 const activeCover = computed(() =>
   (activeTask.value?.result?.audio_meta as { cover_url?: string } | undefined)?.cover_url)
@@ -140,8 +144,8 @@ onUnmounted(() => {
           :class="{ 'bg-white border': t.taskId === activeTaskId }"
           @click="selectTask(t.taskId)"
         >
-          <span class="truncate flex-1" :title="t.videoUrl">
-            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.videoUrl }}
+          <span class="truncate flex-1" :title="t.title || t.videoUrl">
+            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.title || t.videoUrl }}
           </span>
           <span class="text-gray-400 shrink-0">{{ STAGE_LABELS[t.status] || t.status }}</span>
         </li>
@@ -170,7 +174,7 @@ onUnmounted(() => {
           class="text-sm font-medium leading-tight line-clamp-1 break-all flex-1 min-w-0 hover:text-blue-600"
           :href="activeTask.videoUrl"
           target="_blank"
-          :title="activeTask.videoUrl"
+          :title="activeTitle || activeTask.videoUrl"
         >{{ activeTitle }}</a>
         <span
           v-if="isDone"

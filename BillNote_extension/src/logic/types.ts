@@ -79,6 +79,8 @@ export interface TaskRecord {
   createdAt: number
   updatedAt: number
   result?: NoteResult
+  // 从浏览器 tab.title 抓取，任务完成前用来替代 videoUrl 显示
+  title?: string
 }
 
 // 与 backend/app/gpt/prompt_builder.py note_styles 一一对齐

@@ -56,7 +56,7 @@ async function upsertTask(record: TaskRecord) {
 
 // ---------- 启动任务 ----------
 
-async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, error?: string }> {
+async function startTask(url: string, title?: string): Promise<{ ok: boolean, taskId?: string, error?: string }> {
   const platform = detectPlatform(url)
   if (!platform)
     return { ok: false, error: '当前链接不是支持的视频平台' }
@@ -107,6 +107,7 @@ async function startTask(url: string): Promise<{ ok: boolean, taskId?: string, e
       message: '已提交',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      title,
     })
     return { ok: true, taskId: body.data.task_id }
   }
@@ -129,8 +130,8 @@ async function openSidePanelInTab(tabId?: number) {
 
 // ---------- 消息桥 ----------
 
-onMessage<{ url: string }, 'bilinote-start'>('bilinote-start', async ({ data, sender }) => {
-  const result = await startTask(data.url)
+onMessage<{ url: string; title?: string }, 'bilinote-start'>('bilinote-start', async ({ data, sender }) => {
+  const result = await startTask(data.url, data.title)
   // 成功就把侧边栏拉起来给用户看进度
   if (result.ok)
     await openSidePanelInTab(sender?.tabId)
@@ -168,7 +169,7 @@ browser.contextMenus?.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || tab?.url
   if (!url)
     return
-  const result = await startTask(url)
+  const result = await startTask(url, tab?.title)
   if (result.ok)
     await openSidePanelInTab(tab?.id)
   else

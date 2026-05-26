@@ -19,6 +19,7 @@ async function trigger() {
     const res = await sendMessage('bilinote-start', {
       url: window.location.href,
       platform,
+      title: document.title,
     }, 'background')
     const ok = res && (res as any).ok
     toast.value = ok
