@@ -263,10 +263,10 @@ const NoteForm = () => {
     const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
 
     return (
-      <div className="flex gap-2">
+      <div className={editing ? 'grid grid-cols-2 gap-2' : 'flex'}>
         <Button
           type="submit"
-          className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
+          className="w-full"
           disabled={generating}
         >
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -274,7 +274,7 @@ const NoteForm = () => {
         </Button>
 
         {editing && (
-          <Button type="button" variant="outline" className="w-1/3" onClick={handleCreateNew}>
+          <Button type="button" variant="outline" className="w-full" onClick={handleCreateNew}>
             <Plus className="mr-2 h-4 w-4" />
             新建笔记
           </Button>
@@ -489,14 +489,14 @@ const NoteForm = () => {
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {/* 采样间隔 */}
               <FormField
                 control={form.control}
                 name="video_interval"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>采样间隔（秒）</FormLabel>
+                  <FormItem className="min-w-0">
+                    <FormLabel className="block truncate whitespace-nowrap">采样间隔（秒）</FormLabel>
                     <Input disabled={!videoUnderstandingEnabled} type="number" {...field} />
                     <FormMessage />
                   </FormItem>
@@ -507,23 +507,23 @@ const NoteForm = () => {
                 control={form.control}
                 name="grid_size"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>拼图尺寸（列 × 行）</FormLabel>
-                    <div className="flex items-center space-x-2">
+                  <FormItem className="min-w-0">
+                    <FormLabel className="block truncate whitespace-nowrap">拼图尺寸（列×行）</FormLabel>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                       <Input
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[0] || 3}
                         onChange={e => field.onChange([+e.target.value, field.value?.[1] || 3])}
-                        className="w-16"
+                        className="min-w-0 text-center"
                       />
-                      <span>x</span>
+                      <span className="text-center text-neutral-600">x</span>
                       <Input
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[1] || 3}
                         onChange={e => field.onChange([field.value?.[0] || 3, +e.target.value])}
-                        className="w-16"
+                        className="min-w-0 text-center"
                       />
                     </div>
                     <FormMessage />

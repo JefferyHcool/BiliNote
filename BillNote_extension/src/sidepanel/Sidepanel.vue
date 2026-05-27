@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getTaskStatus, resolveImageUrl } from '~/logic/api'
+import { openSidepanelPage, type SidepanelViewMode } from '~/logic/open-note-page'
 import { tasks, tasksReady, settingsReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
-
-type ViewMode = 'markdown' | 'mindmap' | 'chat'
 
 const activeTaskId = ref<string>('')
 const activeTask = computed<TaskRecord | undefined>(() => tasks.value?.find(t => t.taskId === activeTaskId.value))
 const errorMsg = ref('')
-const viewMode = ref<ViewMode>('markdown')
+const viewMode = ref<SidepanelViewMode>('markdown')
 const showHistory = ref(false)
 
 const isDone = computed(() => activeTask.value?.status === 'SUCCESS')
@@ -69,6 +68,10 @@ function openOptions() {
   browser.runtime.openOptionsPage()
 }
 
+async function openCurrentNotePage() {
+  await openSidepanelPage(activeTaskId.value || undefined, viewMode.value)
+}
+
 async function copyMarkdown() {
   const md = activeTask.value?.result?.markdown
   if (md)
@@ -100,7 +103,15 @@ const activeCover = computed(() =>
 
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
-  const latest = tasks.value?.[0]
+  const params = new URLSearchParams(window.location.search)
+  const requestedTaskId = params.get('taskId') || ''
+  const requestedView = params.get('view')
+  const validViews: SidepanelViewMode[] = ['markdown', 'mindmap', 'chat']
+
+  if (validViews.includes(requestedView as SidepanelViewMode))
+    viewMode.value = requestedView as SidepanelViewMode
+
+  const latest = tasks.value?.find(t => t.taskId === requestedTaskId) || tasks.value?.[0]
   if (latest) {
     activeTaskId.value = latest.taskId
     if (latest.status !== 'SUCCESS' && latest.status !== 'FAILED')
@@ -118,7 +129,13 @@ onUnmounted(() => {
   <main class="w-full h-full flex flex-col bg-white text-sm text-gray-800">
     <!-- 顶栏：极简 -->
     <header class="flex items-center justify-between px-3 py-2 border-b shrink-0">
-      <div class="font-semibold">BiliNote</div>
+      <button
+        class="font-semibold rounded px-1 -ml-1 hover:text-blue-600 hover:bg-blue-50"
+        title="在新标签页打开当前笔记预览"
+        @click="openCurrentNotePage"
+      >
+        打开笔记
+      </button>
       <div class="flex items-center gap-1">
         <button
           v-if="(tasks?.length ?? 0) > 0"

@@ -4,6 +4,7 @@ import { detectPlatform } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
+import { openSidepanelPage } from '~/logic/open-note-page'
 import { NOTE_FORMATS, NOTE_STYLES, type NoteFormat, type TaskRecord } from '~/logic/types'
 
 const tabUrl = ref<string>('')
@@ -113,6 +114,11 @@ function openOptions() {
   browser.runtime.openOptionsPage()
 }
 
+async function openCurrentNotePage() {
+  const taskId = activeTaskId.value || tasks.value?.[0]?.taskId
+  await openSidepanelPage(taskId, 'markdown')
+}
+
 function toggleFormat(value: NoteFormat, checked: boolean) {
   const cur = settings.value.formats || []
   settings.value.formats = checked
@@ -176,7 +182,13 @@ onUnmounted(() => {
   <main class="w-[400px] p-3 text-sm text-gray-800 flex flex-col gap-3 bg-white">
     <header class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <span class="font-semibold text-base">BiliNote</span>
+        <button
+          class="font-semibold text-base rounded px-1 -ml-1 hover:text-blue-600 hover:bg-blue-50"
+          title="在新标签页打开当前笔记预览"
+          @click="openCurrentNotePage"
+        >
+          打开笔记
+        </button>
         <PlatformBadge :platform="platform" />
       </div>
       <button class="text-xs text-gray-500 hover:text-gray-800" @click="openOptions">设置</button>
