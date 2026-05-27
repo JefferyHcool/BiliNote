@@ -105,6 +105,7 @@ soupsieve==2.7
 starlette==0.46.1
 sympy==1.13.1
 SQLAlchemy==2.0.41
+setuptools>=65.0.0,<81.0.0
 tenacity==9.1.2
 tinycss2==1.4.0
 tinyhtml5==2.0.0
