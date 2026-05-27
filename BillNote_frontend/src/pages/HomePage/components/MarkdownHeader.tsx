@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit, MessageSquare } from 'lucide-react'
+import { Copy, Download, BrainCircuit, MessageSquare, Captions } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
+import { videoPlatforms } from '@/constant/note'
 
 interface VersionNote {
   ver_id: string
@@ -17,7 +18,8 @@ interface VersionNote {
 interface NoteHeaderProps {
   currentTask?: {
     markdown: VersionNote[] | string
-  }
+  } | null
+  platform?: string
   isMultiVersion: boolean
   currentVerId: string
   setCurrentVerId: (id: string) => void
@@ -27,13 +29,17 @@ interface NoteHeaderProps {
   onCopy: () => void
   onDownload: () => void
   createAt?: string | Date
+  showTranscribe: boolean
   setShowTranscribe: (show: boolean) => void
   showChat?: false | 'half' | 'full'
   setShowChat?: (mode: false | 'half' | 'full') => void
+  viewMode: 'map' | 'preview'
+  setViewMode: (mode: 'map' | 'preview') => void
 }
 
 export function MarkdownHeader({
   currentTask,
+  platform,
   isMultiVersion,
   currentVerId,
   setCurrentVerId,
@@ -66,10 +72,10 @@ export function MarkdownHeader({
   }
 
   const styleName = noteStyles.find(v => v.value === style)?.label || style
-
-  const reversedMarkdown: VersionNote[] = Array.isArray(currentTask?.markdown)
-    ? [...currentTask!.markdown].reverse()
-    : []
+  const versions: VersionNote[] = Array.isArray(currentTask?.markdown) ? currentTask.markdown : []
+  const platformMeta = videoPlatforms.find(item => item.value === platform)
+  const platformName = platformMeta?.label || platform || ''
+  const PlatformLogo = platformMeta?.logo
 
   const formatDate = (date: string | Date | undefined) => {
     if (!date) return ''
@@ -87,22 +93,21 @@ export function MarkdownHeader({
   }
 
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-2 backdrop-blur-sm">
-      {/* 左侧区域：版本 + 标签 + 创建时间 */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="sticky top-0 z-10 flex min-h-12 flex-col gap-2 border-b bg-white/95 px-3 py-2 backdrop-blur-sm sm:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
         {isMultiVersion && (
           <Select value={currentVerId} onValueChange={setCurrentVerId}>
-            <SelectTrigger className="h-8 w-[160px] text-sm">
-              <div className="flex items-center">
+            <SelectTrigger className="h-8 w-[132px] shrink-0 text-sm sm:w-[160px]">
+              <div className="flex min-w-0 items-center truncate">
                 {(() => {
-                  const idx = currentTask?.markdown.findIndex(v => v.ver_id === currentVerId)
+                  const idx = versions.findIndex(v => v.ver_id === currentVerId)
                   return idx !== -1 ? `版本（${currentVerId.slice(-6)}）` : ''
                 })()}
               </div>
             </SelectTrigger>
 
             <SelectContent>
-              {(currentTask?.markdown || []).map((v, idx) => {
+              {versions.map(v => {
                 const shortId = v.ver_id.slice(-6)
                 return (
                   <SelectItem key={v.ver_id} value={v.ver_id}>
@@ -114,97 +119,129 @@ export function MarkdownHeader({
           </Select>
         )}
 
-        <Badge variant="secondary" className="bg-pink-100 text-pink-700 hover:bg-pink-200">
-          {modelName}
-        </Badge>
-        <Badge variant="secondary" className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">
-          {styleName}
-        </Badge>
+        {platformName && (
+          <Badge
+            variant="secondary"
+            className="max-w-[8rem] shrink-0 gap-1.5 truncate bg-white text-neutral-700 ring-1 ring-neutral-200 hover:bg-neutral-50"
+            title={platformName}
+          >
+            {PlatformLogo && (
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-sm">
+                <PlatformLogo />
+              </span>
+            )}
+            {platformName}
+          </Badge>
+        )}
 
-        {createAt && (
-          <div className="text-muted-foreground text-sm">创建时间: {formatDate(createAt)}</div>
+        {modelName && (
+          <Badge
+            variant="secondary"
+            className="max-w-[9rem] shrink-0 truncate bg-pink-100 text-pink-700 hover:bg-pink-200"
+            title={modelName}
+          >
+            {modelName}
+          </Badge>
+        )}
+        {styleName && (
+          <Badge
+            variant="secondary"
+            className="max-w-[8rem] shrink-0 truncate bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+            title={styleName}
+          >
+            {styleName}
+          </Badge>
         )}
       </div>
 
-      {/* 右侧操作按钮 */}
-      <div className="flex items-center gap-1">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => {
-                  setViewMode(viewMode == 'preview' ? 'map' : 'preview')
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-              >
-                <BrainCircuit className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">{viewMode == 'preview' ? '思维导图' : 'markdown'}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>思维导图</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={handleCopy} variant="ghost" size="sm" className="h-8 px-2">
-                <Copy className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">{copied ? '已复制' : '复制'}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>复制内容</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+      <div className="flex w-full min-w-0 shrink-0 items-center justify-between gap-3">
+        <div className="text-muted-foreground shrink-0 text-sm whitespace-nowrap">
+          {createAt ? `创建时间: ${formatDate(createAt)}` : ''}
+        </div>
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={onDownload} variant="ghost" size="sm" className="h-8 px-2">
-                <Download className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">导出 Markdown</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>下载为 Markdown 文件</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => {
-                  setShowTranscribe(!showTranscribe)
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-              >
-                {/*<Download className="mr-1.5 h-4 w-4" />*/}
-                <span className="text-sm">原文参照</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>原文参照</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {setShowChat && (
+        <div className="flex min-w-0 items-center justify-end gap-1 overflow-x-auto">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={() => setShowChat(showChat ? false : 'half')}
-                  variant={showChat ? 'default' : 'ghost'}
+                  onClick={() => {
+                    setViewMode(viewMode === 'preview' ? 'map' : 'preview')
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 min-w-8 px-2 sm:min-w-24"
+                >
+                  <BrainCircuit className="h-4 w-4" />
+                  <span className="hidden text-sm sm:inline">
+                    {viewMode === 'preview' ? '思维导图' : '返回笔记'}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>切换视图</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => {
+                    setShowTranscribe(!showTranscribe)
+                  }}
+                  variant={showTranscribe ? 'default' : 'ghost'}
                   size="sm"
                   className="h-8 px-2"
                 >
-                  <MessageSquare className="mr-1.5 h-4 w-4" />
-                  <span className="text-sm">AI 问答</span>
+                  <Captions className="h-4 w-4" />
+                  <span className="hidden text-sm sm:inline">原文参照</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>基于笔记内容的 AI 问答</TooltipContent>
+              <TooltipContent>原文参照</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        )}
+
+          {setShowChat && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => setShowChat(showChat ? false : 'half')}
+                    variant={showChat ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-8 px-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    <span className="hidden text-sm sm:inline">AI 问答</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>基于笔记内容的 AI 问答</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleCopy} variant="ghost" size="sm" className="h-8 px-2">
+                  <Copy className="h-4 w-4" />
+                  <span className="hidden text-sm sm:inline">{copied ? '已复制' : '复制'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>复制内容</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={onDownload} variant="ghost" size="sm" className="h-8 px-2">
+                  <Download className="h-4 w-4" />
+                  <span className="hidden text-sm sm:inline">导出Md</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>下载为 Markdown 文件</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
     </div>
   )
