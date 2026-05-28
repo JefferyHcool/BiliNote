@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
   const appVersion = env.VITE_APP_VERSION || process.env.VITE_APP_VERSION || readAppVersion()
 
   return {
-    base: './',
+    base: process.env.DOCKER_BUILD ? '/' : './',
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
     },
