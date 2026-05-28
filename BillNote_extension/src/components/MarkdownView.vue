@@ -10,11 +10,11 @@ const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 const html = computed(() => md.render(absolutizeMarkdownImages(stripSourceLink(props.markdown || ''))))
 
 async function copy() {
-  await navigator.clipboard.writeText(props.markdown)
+  await navigator.clipboard.writeText(absolutizeMarkdownImages(props.markdown))
 }
 
 function download() {
-  const blob = new Blob([props.markdown], { type: 'text/markdown;charset=utf-8' })
+  const blob = new Blob([absolutizeMarkdownImages(props.markdown)], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

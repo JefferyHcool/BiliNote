@@ -208,10 +208,10 @@ export async function ping(): Promise<boolean> {
   }
 }
 
-// markdown 里的 /static/screenshots/xxx 是相对路径，extension 渲染时需要拼绝对地址
+// markdown 里的根相对路径图片（如 /static/screenshots/xxx）需要拼绝对地址
 export function absolutizeMarkdownImages(md: string): string {
   const base = backendUrl()
-  return md.replace(/!\[([^\]]*)\]\((\/static\/[^)]+)\)/g, (_, alt, path) => `![${alt}](${base}${path})`)
+  return md.replace(/!\[([^\]]*)\]\((?!https?:\/\/|data:|\/\/)(\/[^)]+)\)/g, (_, alt, path) => `![${alt}](${base}${path})`)
 }
 
 // backend 用 note_helper 在笔记开头插一行 '> 来源链接：URL'。侧边栏顶部已经有原片链接卡片，
