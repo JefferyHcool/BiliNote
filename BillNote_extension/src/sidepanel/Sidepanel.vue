@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getTaskStatus, resolveImageUrl } from '~/logic/api'
+import { getTaskStatus, resolveImageUrl, absolutizeMarkdownImages } from '~/logic/api'
 import { tasks, tasksReady, settingsReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
 
@@ -72,7 +72,7 @@ function openOptions() {
 async function copyMarkdown() {
   const md = activeTask.value?.result?.markdown
   if (md)
-    await navigator.clipboard.writeText(md)
+    await navigator.clipboard.writeText(absolutizeMarkdownImages(md))
 }
 
 function downloadMarkdown() {
@@ -80,7 +80,7 @@ function downloadMarkdown() {
   if (!md)
     return
   const title = (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title || 'bilinote'
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const blob = new Blob([absolutizeMarkdownImages(md)], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

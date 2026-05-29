@@ -19,6 +19,7 @@ import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { useTaskStore } from '@/store/taskStore'
+import { toPortableMarkdown, getBackendOrigin } from '@/utils/index'
 import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
@@ -320,8 +321,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [modelName, setModelName] = useState<string>('')
   const [style, setStyle] = useState<string>('')
   const [createTime, setCreateTime] = useState<string>('')
-  // 确保baseURL没有尾部斜杠
-  const baseURL = (String(import.meta.env.VITE_API_BASE_URL || '').replace('/api','') || '').replace(/\/$/, '')
+  const baseURL = getBackendOrigin()
   const getCurrentTask = useTaskStore.getState().getCurrentTask
   const currentTask = useTaskStore(state => state.getCurrentTask())
   const taskStatus = currentTask?.status || 'PENDING'
@@ -368,7 +368,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   }, [currentVerId, currentTask?.id])
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(selectedContent)
+      const portable = toPortableMarkdown(selectedContent, baseURL)
+      await navigator.clipboard.writeText(portable)
       setCopied(true)
       toast.success('已复制到剪贴板')
       setTimeout(() => setCopied(false), 2000)
@@ -406,7 +407,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const handleDownload = () => {
     const task = getCurrentTask()
     const name = task?.audioMeta.title || 'note'
-    const blob = new Blob([selectedContent], { type: 'text/markdown;charset=utf-8' })
+    const portable = toPortableMarkdown(selectedContent, baseURL)
+    const blob = new Blob([portable], { type: 'text/markdown;charset=utf-8' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `${name}.md`
