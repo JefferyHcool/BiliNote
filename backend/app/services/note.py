@@ -225,6 +225,14 @@ class NoteGenerator:
 
             markdown = prepend_source_link(markdown, str(video_url))
 
+            # 4.1 用最终版本（含截图 URL、来源链接）覆盖缓存，
+            #     避免刷新页面时前端从缓存读到未经 post-process 的原始 Markdown
+            try:
+                markdown_cache_file.write_text(markdown, encoding="utf-8")
+                logger.info(f"已用后处理结果覆盖缓存 ({markdown_cache_file})")
+            except Exception as exc:
+                logger.warning(f"覆盖 Markdown 缓存失败：{exc}")
+
             # 5. 保存记录到数据库
             self._update_status(task_id, TaskStatus.SAVING)
             self._save_metadata(video_id=audio_meta.video_id, platform=platform, task_id=task_id)
@@ -667,9 +675,8 @@ class NoteGenerator:
                 img_url = f"{IMAGE_BASE_URL.rstrip('/')}/{filename}"
                 markdown = markdown.replace(marker, f"![]({img_url})", 1)
             except Exception as exc:
-                logger.error(f"生成截图失败 (timestamp={ts})：{exc}")
-                # self._handle_exception(task_id, exc)
-                return None
+                logger.error(f"生成截图失败 (timestamp={ts}, marker={marker})：{exc}")
+                continue
         return markdown
 
     @staticmethod
