@@ -83,6 +83,19 @@ export interface TaskRecord {
   title?: string
 }
 
+export interface ServerNote {
+  id: string
+  task_id: string
+  status: TaskStatus
+  message?: string
+  created_at: string
+  updated_at: string
+  markdown: string
+  transcript?: unknown
+  audio_meta?: NoteResult['audio_meta']
+  form_data?: Partial<GenerateRequest>
+}
+
 // 与 backend/app/gpt/prompt_builder.py note_styles 一一对齐
 export type NoteStyle =
   | 'minimal' | 'detailed' | 'academic' | 'tutorial'
@@ -113,6 +126,7 @@ export const NOTE_FORMATS: Array<{ value: NoteFormat, label: string }> = [
 
 export interface Settings {
   backendUrl: string
+  authToken: string
   providerId: string
   modelName: string
   quality: Quality

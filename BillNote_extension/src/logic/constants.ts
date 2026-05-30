@@ -1,9 +1,10 @@
 import type { Settings } from './types'
 
-export const DEFAULT_BACKEND_URL = 'http://localhost:8483'
+export const DEFAULT_BACKEND_URL = 'http://localhost:3015'
 
 export const DEFAULT_SETTINGS: Settings = {
   backendUrl: DEFAULT_BACKEND_URL,
+  authToken: '',
   providerId: '',
   modelName: '',
   quality: 'medium',
@@ -21,3 +22,4 @@ export const MAX_TASKS = 30
 
 export const SETTINGS_KEY = 'bilinote-settings'
 export const TASKS_KEY = 'bilinote-tasks'
+export const DELETED_TASK_IDS_KEY = 'bilinote-deleted-task-ids'

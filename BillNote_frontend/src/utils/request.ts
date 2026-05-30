@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast'
 
+const AUTH_TOKEN_KEY = 'bilinote-auth-token'
+
 // 统一响应类型
 export interface IResponse<T = any> {
   code: number;
@@ -25,7 +27,17 @@ const baseURL = import.meta.env.VITE_API_BASE_URL;
  const request: AxiosInstance = axios.create({
   baseURL: baseURL || '/api',
   timeout: 10000,
+  withCredentials: true,
 });
+
+request.interceptors.request.use(config => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
 
 // 响应拦截器
 request.interceptors.response.use(
@@ -50,6 +62,9 @@ request.interceptors.response.use(
     if (res) {
       // 如果后端有返回错误信息，则显示后端信息
       if (!suppress) toast.error(res.msg || '服务器错误，请稍后再试');
+      if (error?.response?.status === 401) {
+        window.dispatchEvent(new CustomEvent('bilinote-auth-expired'))
+      }
       return Promise.reject(res);
     } else {
       // 没有响应数据（如网络中断），显示通用网络错误

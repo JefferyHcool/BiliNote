@@ -25,6 +25,7 @@ import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
+import { withAuthTokenQuery } from '@/services/auth'
 
 interface VersionNote {
   ver_id: string
@@ -183,7 +184,7 @@ function createMarkdownComponents(baseURL: string) {
       if (src.startsWith('/')) {
         src = baseURL + src
       }
-      props.src = src
+      props.src = withAuthTokenQuery(src)
 
       return (
         <div className="my-8 flex justify-center">

@@ -13,8 +13,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
-import LazyImage from "@/components/LazyImage.tsx";
-import {FC, useState, useEffect, useMemo} from 'react'
+import LazyImage from '@/components/LazyImage.tsx'
+import { FC, useState, useEffect, useMemo } from 'react'
+import { withAuthTokenQuery } from '@/services/auth'
 
 interface NoteHistoryProps {
   onSelect: (taskId: string) => void
@@ -98,15 +99,14 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                   className="h-10 w-12 rounded-md object-cover"
                 />
               ) : (
-                  <LazyImage
-
-                      src={
-                        task.audioMeta.cover_url
-                            ? `${baseURL}/image_proxy?url=${encodeURIComponent(task.audioMeta.cover_url)}`
-                            : '/placeholder.png'
-                      }
-                      alt="封面"
-                  />
+                <LazyImage
+                  src={
+                    task.audioMeta.cover_url
+                      ? withAuthTokenQuery(`${baseURL}/image_proxy?url=${encodeURIComponent(task.audioMeta.cover_url)}`)
+                      : '/placeholder.png'
+                  }
+                  alt="封面"
+                />
               )}
 
               {/* 标题 + 状态 */}
