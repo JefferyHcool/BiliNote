@@ -24,7 +24,7 @@ const MenuBar: ({ menuItem }: { menuItem: any }) => JSX.Element = ({ menuItem })
         className={
           styles.menuBar +
           ' flex h-12 w-full items-center gap-1 rounded px-2' +
-          (isActive ? ' bg-[#F0F0F0] font-semibold text-blue-600' : '')
+          (isActive ? ' bg-muted font-semibold text-blue-600' : '')
         }
       >
         <div className="h-6 w-6">{menuItem.icon}</div>

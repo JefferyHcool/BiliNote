@@ -158,7 +158,7 @@ export default function MarkmapEditor({
 
       // 设置SVG的背景为白色
       const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      style.textContent = 'svg { background-color: white; }';
+      style.textContent = 'svg { background-color: var(--background); }';
       clonedSvg.insertBefore(style, clonedSvg.firstChild);
 
       // 添加白色背景矩形（确保背景在所有查看器中都是白色）
@@ -168,7 +168,7 @@ export default function MarkmapEditor({
       bgRect.setAttribute('y', viewBox[1].toString());
       bgRect.setAttribute('width', viewBox[2].toString());
       bgRect.setAttribute('height', viewBox[3].toString());
-      bgRect.setAttribute('fill', 'white');
+      bgRect.setAttribute('fill', 'var(--background)');
       // 插入到最前面作为背景
       const firstG = clonedSvg.querySelector('g');
       if (firstG) {
@@ -438,33 +438,33 @@ export default function MarkmapEditor({
   // }
 
   return (
-    <div className="relative flex h-full flex-col bg-white">
+    <div className="relative flex h-full flex-col bg-card">
       {/* 全屏/退出全屏 按钮 */}
       <div className="absolute top-2 right-2 z-20 flex space-x-2">
         <button
           onClick={exportXMind}
-          className="rounded p-1 hover:bg-gray-200"
+          className="rounded p-1 hover:bg-accent"
           title="导出XMind格式"
         >
           🧠
         </button>
         <button
           onClick={exportSvg}
-          className="rounded p-1 hover:bg-gray-200"
+          className="rounded p-1 hover:bg-accent"
           title="导出SVG矢量图（可无限放大）"
         >
           📐
         </button>
         <button
           onClick={exportPng}
-          className="rounded p-1 hover:bg-gray-200"
+          className="rounded p-1 hover:bg-accent"
           title="导出PNG图片"
         >
           🖼️
         </button>
         <button
           onClick={exportHtml}
-          className="rounded p-1 hover:bg-gray-200"
+          className="rounded p-1 hover:bg-accent"
           title="导出HTML（可交互）"
         >
           💾
@@ -472,13 +472,13 @@ export default function MarkmapEditor({
         {isFullscreen ? (
           <button
             onClick={exitFullscreen}
-            className="rounded p-1 hover:bg-gray-200"
+            className="rounded p-1 hover:bg-accent"
             title="退出全屏"
           >
             🗗
           </button>
         ) : (
-          <button onClick={enterFullscreen} className="rounded p-1 hover:bg-gray-200" title="全屏">
+          <button onClick={enterFullscreen} className="rounded p-1 hover:bg-accent" title="全屏">
             🗖
           </button>
         )}

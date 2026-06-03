@@ -27,7 +27,7 @@ function SourceBadges({ sources }: { sources: ChatSource[] }) {
     <div className="mt-1.5">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <BookOpen className="h-3 w-3" />
         <span>引用来源 ({sources.length})</span>
@@ -177,7 +177,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
       ai: {
         placement: 'start' as const,
         avatar: (
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-500 text-white">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted-foreground text-white">
             <Bot className="h-4 w-4" />
           </div>
         ),
@@ -196,7 +196,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
 
   if (indexStatus === null || indexStatus === 'indexing' || indexStatus === 'idle') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-400">
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
         <div className="text-center">
           <p className="text-sm font-medium">正在索引笔记内容...</p>
@@ -208,7 +208,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
 
   if (indexStatus === 'failed') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-400">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <span className="text-sm">索引失败，请重试</span>
         <Button
           size="sm"
@@ -238,7 +238,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-neutral-400 hover:text-neutral-600"
+            className="h-7 px-2 text-muted-foreground hover:text-foreground"
             onClick={() => onModeChange(mode === 'half' ? 'full' : 'half')}
             title={mode === 'half' ? '全屏' : '半屏'}
           >
@@ -252,7 +252,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-neutral-400 hover:text-red-500"
+              className="h-7 px-2 text-muted-foreground hover:text-red-500"
               onClick={() => clearChat(taskId)}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -264,7 +264,7 @@ export default function ChatPanel({ taskId, mode, onModeChange }: ChatPanelProps
       {/* 消息列表 */}
       <div className="flex-1 overflow-hidden">
         {messages.length === 0 && !loading ? (
-          <div className="flex h-full items-center justify-center text-center text-sm text-neutral-400">
+          <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
             <div>
               <p>针对笔记内容提问</p>
               <p className="mt-1 text-xs">例如：这个视频的核心观点是什么？</p>
