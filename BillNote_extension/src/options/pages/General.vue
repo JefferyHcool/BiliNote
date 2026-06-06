@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getProviders, ping } from '~/logic/api'
+import { getAuthStatus, getProviders, login } from '~/logic/api'
 import { settings, settingsReady } from '~/logic/storage'
 import { getModelsByProvider } from '~/logic/api'
 import { NOTE_FORMATS, NOTE_STYLES, type Model, type NoteFormat, type Provider } from '~/logic/types'
@@ -17,6 +17,9 @@ const providers = ref<Provider[]>([])
 const models = ref<Model[]>([])
 const status = ref<{ kind: 'idle' | 'ok' | 'err', text: string }>({ kind: 'idle', text: '' })
 const loading = ref(false)
+const authPassword = ref('')
+const authStatus = ref<{ enabled: boolean, authenticated: boolean } | null>(null)
+const authMsg = ref('')
 
 async function refresh() {
   loading.value = true
@@ -28,7 +31,13 @@ async function refresh() {
     status.value = { kind: 'ok', text: `已加载 ${providers.value.length} 个供应商` }
   }
   catch (e) {
-    status.value = { kind: 'err', text: `加载失败：${(e as Error).message}` }
+    const msg = (e as Error).message
+    status.value = {
+      kind: 'err',
+      text: msg.includes('401') || msg.includes('未登录')
+        ? '后端已开启鉴权，请先在上方输入访问密码登录'
+        : `加载失败：${msg}`,
+    }
     providers.value = []
     models.value = []
   }
@@ -52,10 +61,45 @@ async function refreshModels(providerId: string) {
 
 async function testConnection() {
   status.value = { kind: 'idle', text: '正在测试…' }
-  const ok = await ping()
-  status.value = ok
-    ? { kind: 'ok', text: '后端连通 ✓' }
-    : { kind: 'err', text: '无法连接后端，请检查地址、端口与 CORS' }
+  try {
+    authStatus.value = await getAuthStatus()
+    status.value = authStatus.value.enabled && !authStatus.value.authenticated
+      ? { kind: 'ok', text: '后端连通 ✓，但已开启鉴权，请先登录' }
+      : { kind: 'ok', text: '后端连通 ✓' }
+    authMsg.value = authStatus.value.enabled
+      ? (authStatus.value.authenticated ? '鉴权已通过 ✓' : '后端已开启鉴权，请登录')
+      : '后端未开启鉴权'
+  }
+  catch (e) {
+    status.value = { kind: 'err', text: `无法连接后端：${(e as Error).message}` }
+  }
+}
+
+async function refreshAuthStatus() {
+  authMsg.value = ''
+  try {
+    authStatus.value = await getAuthStatus()
+    authMsg.value = authStatus.value.enabled
+      ? (authStatus.value.authenticated ? '鉴权已通过 ✓' : '后端已开启鉴权，请登录')
+      : '后端未开启鉴权'
+  }
+  catch (e) {
+    authStatus.value = null
+    authMsg.value = `鉴权状态获取失败：${(e as Error).message}`
+  }
+}
+
+async function doLogin() {
+  authMsg.value = '正在登录…'
+  try {
+    await login(authPassword.value)
+    authPassword.value = ''
+    await refreshAuthStatus()
+    await refresh()
+  }
+  catch (e) {
+    authMsg.value = `登录失败：${(e as Error).message}`
+  }
 }
 
 watch(() => settings.value?.providerId, (id) => {
@@ -65,6 +109,7 @@ watch(() => settings.value?.providerId, (id) => {
 
 onMounted(async () => {
   await settingsReady
+  await refreshAuthStatus()
   if (settings.value.backendUrl)
     await refresh()
 })
@@ -77,7 +122,7 @@ onMounted(async () => {
     <section class="section-card">
       <h2 class="font-semibold">后端地址</h2>
       <div class="flex gap-2">
-        <input v-model="settings.backendUrl" class="input flex-1" placeholder="http://localhost:8483">
+        <input v-model="settings.backendUrl" class="input flex-1" placeholder="http://localhost:3015">
         <button class="btn-secondary" @click="testConnection">测试连通</button>
         <button class="btn-secondary" :disabled="loading" @click="refresh">
           {{ loading ? '加载中…' : '刷新' }}
@@ -95,8 +140,37 @@ onMounted(async () => {
         {{ status.text }}
       </div>
       <p class="text-xs text-gray-500">
-        默认 http://localhost:8483 — 需要在该地址先跑起 BiliNote 后端
+        Docker/自托管默认填 http://localhost:3015；本地直连后端开发环境可填 http://localhost:8483。
       </p>
+    </section>
+
+    <section class="section-card">
+      <h2 class="font-semibold">访问鉴权</h2>
+      <p class="text-xs text-gray-500">
+        如果后端开启了 <code>BILINOTE_AUTH_ENABLED</code>，插件需要在这里登录后才能提交任务和轮询结果。
+      </p>
+      <div class="flex gap-2">
+        <input
+          v-model="authPassword"
+          type="password"
+          class="input flex-1"
+          placeholder="访问密码"
+          @keyup.enter="doLogin"
+        >
+        <button class="btn-secondary" @click="doLogin">登录</button>
+        <button class="btn-secondary" @click="refreshAuthStatus">检查</button>
+      </div>
+      <div
+        v-if="authMsg"
+        class="text-xs"
+        :class="{
+          'text-green-700': authStatus?.authenticated || authStatus?.enabled === false,
+          'text-amber-700': authStatus?.enabled && !authStatus?.authenticated,
+          'text-red-600': !authStatus && authMsg.includes('失败'),
+        }"
+      >
+        {{ authMsg }}
+      </div>
     </section>
 
     <section class="section-card">

@@ -18,6 +18,7 @@ from app import create_app
 from app.services.transcriber_config_manager import TranscriberConfigManager
 from events import register_handler
 from ffmpeg_helper import ensure_ffmpeg_or_raise
+from app.middlewares.auth import AuthMiddleware
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -68,6 +69,10 @@ async def lifespan(app: FastAPI):
     yield
 
 app = create_app(lifespan=lifespan)
+
+# Optional self-host auth must be added before CORS so CORS can still decorate
+# 401 responses returned by the auth gate.
+app.add_middleware(AuthMiddleware)
 
 # 允许的源：本地 web 端 + Tauri 桌面端 + 浏览器扩展（chrome/edge/firefox）
 # 用 regex 是因为 chrome-extension://<id> 的 id 在每次开发版加载时不固定

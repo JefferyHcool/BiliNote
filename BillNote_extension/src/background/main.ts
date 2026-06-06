@@ -76,7 +76,10 @@ async function startTask(url: string, title?: string): Promise<{ ok: boolean, ta
   try {
     const res = await fetch(`${backend}/api/generate_note`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.authToken ? { Authorization: `Bearer ${settings.authToken}` } : {}),
+      },
       body: JSON.stringify({
         video_url: url,
         platform,

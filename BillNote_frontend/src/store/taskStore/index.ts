@@ -1,12 +1,21 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { delete_task, generateNote } from '@/services/note.ts'
+import { delete_task, generateNote, listNotes, type ServerNote } from '@/services/note.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
 
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
+export type TaskStatus =
+  | 'PENDING'
+  | 'PARSING'
+  | 'DOWNLOADING'
+  | 'TRANSCRIBING'
+  | 'SUMMARIZING'
+  | 'FORMATTING'
+  | 'SAVING'
+  | 'SUCCESS'
+  | 'FAILED'
 
 export interface AudioMeta {
   cover_url: string
@@ -44,6 +53,7 @@ export interface Task {
   transcript: Transcript
   status: TaskStatus
   audioMeta: AudioMeta
+  platform: string
   createdAt: string
   formData: {
     video_url: string
@@ -53,19 +63,89 @@ export interface Task {
     quality: string
     model_name: string
     provider_id: string
+    style?: string
+    extras?: string
+    format?: string[]
+    video_understanding?: boolean
+    video_interval?: number
+    grid_size?: number[]
   }
 }
 
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (taskId: string, platform: string, formData: any) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
+  syncNotes: () => Promise<void>
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
-  retryTask: (id: string) => void
+  retryTask: (id: string, payload?: any) => void
+}
+
+export const isArtifactTaskId = (id?: string | null) =>
+  /_(audio|markdown|request|transcript)$/.test(id || '')
+
+const defaultTranscript = (): Transcript => ({
+  full_text: '',
+  language: '',
+  raw: null,
+  segments: [],
+})
+
+const defaultAudioMeta = (): AudioMeta => ({
+  cover_url: '',
+  duration: 0,
+  file_path: '',
+  platform: '',
+  raw_info: null,
+  title: '',
+  video_id: '',
+})
+
+const normalizeServerTask = (note: ServerNote, existing?: Task): Task => {
+  const formData = {
+    video_url: '',
+    platform: note.audio_meta?.platform || note.form_data?.platform || '',
+    quality: 'medium',
+    model_name: '',
+    provider_id: '',
+    style: 'minimal',
+    format: [],
+    screenshot: false,
+    link: false,
+    extras: '',
+    video_understanding: false,
+    video_interval: 6,
+    grid_size: [2, 2],
+    ...(note.form_data || {}),
+  }
+
+  const serverMarkdown: Markdown[] | string = note.markdown
+    ? [{
+        ver_id: `${note.task_id}-server`,
+        content: note.markdown,
+        style: formData.style || '',
+        model_name: formData.model_name || '',
+        created_at: note.updated_at || note.created_at,
+      }]
+    : ''
+
+  return {
+    id: note.task_id,
+    status: note.status as TaskStatus,
+    markdown:
+      existing?.status === 'SUCCESS' && Array.isArray(existing.markdown) && existing.markdown.length > 0
+        ? existing.markdown
+        : serverMarkdown,
+    transcript: note.transcript || defaultTranscript(),
+    audioMeta: { ...defaultAudioMeta(), ...(note.audio_meta || {}) },
+    platform: formData.platform || note.audio_meta?.platform || '',
+    createdAt: note.created_at || new Date().toISOString(),
+    formData,
+  }
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -217,11 +297,39 @@ export const useTaskStore = create<TaskStore>()(
           await delete_task({
             video_id: task.audioMeta.video_id,
             platform: task.platform,
+            task_id: task.id,
           })
         }
       },
 
       clearTasks: () => set({ tasks: [], currentTaskId: null }),
+
+      syncNotes: async () => {
+        const notes = (await listNotes()).filter(note => !isArtifactTaskId(note.task_id))
+        set(state => {
+          const existingMap = new Map(state.tasks.map(task => [task.id, task]))
+          const synced = notes.map(note => normalizeServerTask(note, existingMap.get(note.task_id)))
+          const syncedIds = new Set(synced.map(task => task.id))
+          const localOnly = state.tasks.filter(
+            task =>
+              !isArtifactTaskId(task.id) &&
+              !syncedIds.has(task.id) &&
+              task.status !== 'SUCCESS' &&
+              task.status !== 'FAILED'
+          )
+          const tasks = [...synced, ...localOnly].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          const currentTaskId = state.currentTaskId && tasks.some(task => task.id === state.currentTaskId)
+            ? state.currentTaskId
+            : tasks[0]?.id || null
+
+          return {
+            tasks,
+            currentTaskId,
+          }
+        })
+      },
 
       setCurrentTask: taskId => set({ currentTaskId: taskId }),
     }),

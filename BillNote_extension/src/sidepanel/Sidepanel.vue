@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getTaskStatus, resolveImageUrl } from '~/logic/api'
+import { getTaskStatus, listNotes, resolveImageUrl, serverNoteToTask } from '~/logic/api'
 import { tasks, tasksReady, settingsReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
 import { getTaskDisplayTitle } from '~/logic/task-display'
@@ -144,6 +144,13 @@ const activeCover = computed(() =>
 
 onMounted(async () => {
   await Promise.all([settingsReady, tasksReady])
+  try {
+    const notes = await listNotes()
+    notes.forEach(n => upsertTask(serverNoteToTask(n)))
+  }
+  catch {
+    // 未登录或旧版后端不支持同步时，保留本地历史。
+  }
   const latest = tasks.value?.[0]
   if (latest) {
     activeTaskId.value = latest.taskId
