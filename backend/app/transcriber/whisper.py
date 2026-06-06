@@ -3,6 +3,11 @@ from faster_whisper import WhisperModel
 from app.decorators.timeit import timeit
 from app.models.transcriber_model import TranscriptSegment, TranscriptResult
 from app.transcriber.base import Transcriber
+from app.transcriber.whisper_models import (
+    resolve_whisper_model,
+    is_local_target,
+    hf_cache_dirname,
+)
 from app.utils.env_checker import is_cuda_available, is_torch_installed
 from app.utils.logger import get_logger
 from app.utils.path_helper import get_model_dir
@@ -55,8 +60,12 @@ class WhisperTranscriber(Transcriber):
             self.model = self._build_model(model_size, model_dir)
 
     def _build_model(self, model_size: str, model_dir: str) -> WhisperModel:
+        # resolve 把模型名映射成可加载标识：内置 size→Systran repo_id、自定义映射、
+        # 直通的 repo_id 或本地路径。faster-whisper 对本地目录走 os.path.isdir 分支，
+        # 对 repo_id 走 download_model(cache_dir=download_root)，两者都吃 model_size_or_path。
+        target = resolve_whisper_model(model_size)
         return WhisperModel(
-            model_size_or_path=model_size,  # 传 size name，让 faster-whisper 自己映射到 Systran/faster-whisper-*
+            model_size_or_path=target,
             device=self.device,
             compute_type=self.compute_type,
             download_root=model_dir,
@@ -64,14 +73,23 @@ class WhisperTranscriber(Transcriber):
 
     @staticmethod
     def _purge_cache(model_dir: str, model_size: str) -> None:
-        """删掉 HF cache 里这个 size 对应的 snapshot 目录，强制下次重新下载。
+        """加载失败时清掉对应 HF cache 的 snapshot 目录，强制下次重下。
 
-        HF cache 布局：<model_dir>/models--Systran--faster-whisper-{size}/
-        没找到也不报错——可能用户改了 endpoint 或者 cache 布局变了。
+        关键：本地路径模型**绝不删**——那是用户自己的文件，删了就是数据丢失；
+        只清 HF cache 布局 <model_dir>/models--{org}--{name}/（含历史 modelscope 目录）。
         """
+        try:
+            target = resolve_whisper_model(model_size)
+        except Exception:
+            target = model_size
+        if is_local_target(target):
+            logger.warning(
+                f"模型 {model_size} 指向本地路径 {target}，加载失败不清理用户文件，请检查该目录是否完整"
+            )
+            return
         candidates = [
-            Path(model_dir) / f"models--Systran--faster-whisper-{model_size}",
-            Path(model_dir) / f"whisper-{model_size}",  # 历史 modelscope 目录，顺手清掉
+            Path(model_dir) / hf_cache_dirname(target),       # HF cache: models--org--name
+            Path(model_dir) / f"whisper-{model_size}",        # 历史 modelscope 目录，顺手清掉
         ]
         for path in candidates:
             if path.exists():
