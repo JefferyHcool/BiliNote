@@ -2,6 +2,27 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.0] - 2026-06-07
+
+### Added
+
+- **可配置 Whisper 模型**：转写设置支持自定义 Whisper 模型与名称映射，可指定自定义 HuggingFace repo 或本地路径（新增 `backend/app/transcriber/whisper_models.py` + 测试），转写设置页可选择 / 配置模型。
+- **关注公众号获取交流群**：关于页群二维码改为公众号二维码，关注公众号后回复「交流群」即可获取最新群二维码，避免群码过期失效。
+
+### Fixed
+
+- **浏览器扩展**：修复标题显示异常，优化脑图（Markmap）导出。
+
+### Docs
+
+- **GPU/CUDA 部署**：README 补全 GPU/CUDA 部署说明。
+
+## [2.3.4] - 2026-05-27
+
+### Added
+
+- **一对一搭建服务二维码**：新增「BiliNote AI 笔记系统一对一搭建服务」二维码（README + 关于页），扫码加微信、备注「搭建服务」即可咨询。
+
 ## [2.3.3] - 2026-05-22
 
 ### Fixed

@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.3.4</h1>
+<h1 align="center" > BiliNote v2.4.0</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
@@ -303,10 +303,42 @@ sudo apt install ffmpeg
 >
 > Docker 部署已内置 FFmpeg，无需额外安装。
 
-### 🚀 CUDA 加速（可选）
-若你希望更快地执行音频转写任务，可使用具备 NVIDIA GPU 的机器，并启用 fast-whisper + CUDA 加速版本：
+### 🚀 CUDA / GPU 加速（可选）
 
-具体 `fast-whisper` 配置方法，请参考：[fast-whisper 项目地址](http://github.com/SYSTRAN/faster-whisper#requirements)
+本地 **Faster Whisper** 转写可用 NVIDIA GPU 加速（在线引擎 Groq / 必剪 / 快手 与 GPU 无关）。仓库已自带 GPU 镜像与编排，**无需改代码、无需手动配置 device**——后端会自动检测 CUDA，可用就走 GPU，否则回退 CPU。
+
+**1. 宿主机前提**
+
+- NVIDIA 显卡 + 较新驱动（CUDA ≥ 12.4），宿主机 `nvidia-smi` 能正常输出；
+- 安装 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)（最易漏的一步，没它 Docker 进不去 GPU）。装完验证：
+  ```bash
+  docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+  ```
+  能列出显卡即 OK。
+
+**2. 切换到 GPU 编排**（在源码目录里）
+
+CPU 与 GPU 两套 compose 用了相同的容器名，先停掉当前栈再起 GPU 栈：
+
+```bash
+docker-compose down                                     # 停掉当前（CPU）栈
+docker-compose -f docker-compose.gpu.yml up --build -d   # 用 GPU 栈重建
+```
+
+- GPU 栈用 `backend/Dockerfile.gpu`（CUDA 12.4.1 + cuDNN 基础镜像，并额外装 torch 用于 CUDA 检测），compose 已声明 `deploy...devices: nvidia` 自动透传 GPU。
+- **数据不丢**：两套 compose 都把 `./backend` 整目录绑挂进容器，数据库 / 配置 / 已下载模型都保留。
+- 首次构建较大较慢（CUDA 基础镜像数 GB + torch），耐心等。
+
+**3. 启用并确认**
+
+- 「设置 → 音频转写配置」转写引擎选 **Faster Whisper（本地）**，GPU 下可放心选大模型（如 `large-v3`）。
+- 确认真的走了 GPU：`docker logs bilinote-backend | grep -i cuda` 看到 `CUDA 可用，使用 GPU`；或转写时宿主机 `nvidia-smi` 能看到 python 进程占显存。
+
+**国内镜像**：GPU compose 支持 `BASE_REGISTRY` / `APT_MIRROR` / `PIP_INDEX` 这几个 build-arg（注意 `BASE_REGISTRY` 选的源必须支持 `nvidia/cuda` 命名空间，否则拉不到 CUDA 基础镜像）。
+
+**起来了但没走 GPU？** 依次排查：① 宿主机 `nvidia-smi` 是否正常 → ② NVIDIA Container Toolkit 是否装好（上面 `--gpus all` 测试是否通过）→ ③ `docker logs bilinote-backend` 是否有 CUDA / cuDNN 报错（驱动 CUDA 版本需 ≥ 12.4）。
+
+`fast-whisper` 本身的 GPU 依赖说明可参考：[faster-whisper 项目](https://github.com/SYSTRAN/faster-whisper#requirements)
 
 ### 🐳 使用 Docker 一键部署
 
@@ -338,8 +370,8 @@ docker run -d -p 80:80 \
 # 标准部署
 docker-compose up -d
 
-# GPU 加速部署（需要 NVIDIA GPU）
-docker-compose -f docker-compose.gpu.yml up -d
+# GPU 加速部署（需要 NVIDIA GPU + NVIDIA Container Toolkit，详见上方「CUDA / GPU 加速」）
+docker-compose -f docker-compose.gpu.yml up --build -d
 ```
 
 ## 🧠 TODO
