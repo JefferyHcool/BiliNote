@@ -7,7 +7,7 @@ const NotFoundPage = () => {
   const navigate = useNavigate()
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center text-gray-500">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center text-muted-foreground">
       <div className="text-center">
         <h1 className="mb-4 text-4xl font-bold">你好像走丢了哦！～～</h1>
         <p className="mb-4 text-lg">请检查你的网址是否正确，或者点击下面的按钮返回首页。</p>

@@ -40,11 +40,11 @@ const BackendLogPanel = ({ status, exitCode, logs, health, onRestart, onCopyLogs
       {/* 半透明遮罩 */}
       <div className="fixed inset-0 z-[9998] bg-black/20" onClick={onClose} />
 
-      <aside className="fixed right-0 bottom-0 top-0 z-[9999] flex w-[480px] max-w-[90vw] flex-col border-l bg-white shadow-2xl">
+      <aside className="fixed right-0 bottom-0 top-0 z-[9999] flex w-[480px] max-w-[90vw] flex-col border-l bg-card shadow-2xl">
         <header className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <h2 className="text-base font-semibold">后端运行状态</h2>
-            <div className="mt-0.5 text-xs text-gray-500">
+            <div className="mt-0.5 text-xs text-muted-foreground">
               {status === 'terminated'
                 ? `已退出（退出码 ${exitCode ?? 'unknown'}）`
                 : health === 'red'
@@ -54,7 +54,7 @@ const BackendLogPanel = ({ status, exitCode, logs, health, onRestart, onCopyLogs
                     : '运行正常'}
             </div>
           </div>
-          <button className="rounded p-1 text-gray-500 hover:bg-gray-100" onClick={onClose}>✕</button>
+          <button className="rounded p-1 text-muted-foreground hover:bg-accent" onClick={onClose}>✕</button>
         </header>
 
         <div className="flex items-center gap-2 border-b px-4 py-2">
@@ -66,12 +66,12 @@ const BackendLogPanel = ({ status, exitCode, logs, health, onRestart, onCopyLogs
             {restarting ? '重启中…' : '重启后端'}
           </button>
           <button
-            className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+            className="rounded bg-muted px-3 py-1 text-sm text-foreground hover:bg-accent"
             onClick={handleCopy}
           >
             {copied ? '已复制 ✓' : '复制日志'}
           </button>
-          <span className="ml-auto text-xs text-gray-400">
+          <span className="ml-auto text-xs text-muted-foreground">
             最近 {logs.length} 行
           </span>
         </div>
@@ -81,14 +81,14 @@ const BackendLogPanel = ({ status, exitCode, logs, health, onRestart, onCopyLogs
           className="flex-1 overflow-auto bg-gray-900 p-3 font-mono text-xs text-gray-100"
         >
           {logs.length === 0 ? (
-            <div className="text-gray-500 italic">暂无日志输出</div>
+            <div className="text-muted-foreground italic">暂无日志输出</div>
           ) : (
             logs.map((l, i) => (
               <div
                 key={`${l.ts}-${i}`}
                 className={`whitespace-pre-wrap break-all leading-snug ${l.level === 'error' ? 'text-red-300' : 'text-gray-100'}`}
               >
-                <span className="mr-2 text-gray-500">
+                <span className="mr-2 text-muted-foreground">
                   {new Date(l.ts).toISOString().slice(11, 19)}
                 </span>
                 {l.text}
@@ -97,7 +97,7 @@ const BackendLogPanel = ({ status, exitCode, logs, health, onRestart, onCopyLogs
           )}
         </div>
 
-        <footer className="border-t px-4 py-2 text-xs text-gray-500">
+        <footer className="border-t px-4 py-2 text-xs text-muted-foreground">
           后端进程退出 / 无响应时，先点「重启后端」；仍不行复制日志去 issue 反馈。
         </footer>
       </aside>
