@@ -241,17 +241,35 @@ class DouyinDownloader(Downloader):
             for tag in video_data['aweme_detail']['video_tag']:
                 if tag['tag_name']:
                     tags.append(tag['tag_name'])
+            aweme = video_data['aweme_detail']
+            author = aweme.get('author') or {}
+            statistics = aweme.get('statistics') or {}
 
             return AudioDownloadResult(
                 file_path=output_path,
-                title=video_data['aweme_detail']['item_title'],
-                duration=video_data['aweme_detail']['video']['duration'],
-                cover_url=video_data['aweme_detail']['video']['cover_original_scale']['url_list'][0] if
-                video_data['aweme_detail']['video']['cover'] else video_data['video']['big_thumbs']['img_url'],
+                title=aweme['item_title'],
+                duration=aweme['video']['duration'],
+                cover_url=aweme['video']['cover_original_scale']['url_list'][0] if
+                aweme['video']['cover'] else video_data['video']['big_thumbs']['img_url'],
                 platform="douyin",
-                video_id=video_data['aweme_detail']['aweme_id'],
+                video_id=aweme['aweme_id'],
                 raw_info={
-                    'tags': video_data['aweme_detail']['caption'] + ''.join(tags),
+                    'tags': tags,
+                    'description': aweme.get('desc') or aweme.get('caption') or aweme.get('item_title') or '',
+                    'caption': aweme.get('caption') or '',
+                    'uploader': author.get('nickname') or author.get('unique_id') or '',
+                    'author': {
+                        'id': author.get('uid') or author.get('sec_uid') or '',
+                        'name': author.get('nickname') or '',
+                        'follower_count': author.get('follower_count'),
+                    },
+                    'follower_count': author.get('follower_count'),
+                    'play_count': statistics.get('play_count'),
+                    'comment_count': statistics.get('comment_count'),
+                    'like_count': statistics.get('digg_count'),
+                    'share_count': statistics.get('share_count'),
+                    'create_time': aweme.get('create_time'),
+                    'webpage_url': video_url,
                 },
                 video_path=None  # ❗音频下载不包含视频路径
             )

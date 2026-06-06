@@ -1,12 +1,26 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { delete_task, generateNote } from '@/services/note.ts'
+import {
+  delete_task,
+  generateNote,
+  listNotes,
+  refreshNoteMetadata,
+  type ServerNote,
+} from '@/services/note.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
-
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
+export type TaskStatus =
+  | 'PENDING'
+  | 'PARSING'
+  | 'DOWNLOADING'
+  | 'TRANSCRIBING'
+  | 'SUMMARIZING'
+  | 'FORMATTING'
+  | 'SAVING'
+  | 'SUCCESS'
+  | 'FAILED'
 
 export interface AudioMeta {
   cover_url: string
@@ -40,10 +54,11 @@ export interface Markdown {
 
 export interface Task {
   id: string
-  markdown: string|Markdown [] //为了兼容之前的笔记
+  markdown: string | Markdown[] //为了兼容之前的笔记
   transcript: Transcript
   status: TaskStatus
   audioMeta: AudioMeta
+  platform: string
   createdAt: string
   formData: {
     video_url: string
@@ -53,19 +68,98 @@ export interface Task {
     quality: string
     model_name: string
     provider_id: string
+    style?: string
+    extras?: string
+    format?: string[]
+    video_understanding?: boolean
+    video_interval?: number
+    grid_size?: number[]
   }
 }
 
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (taskId: string, platform: string, formData: any) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
+  syncNotes: () => Promise<void>
+  refreshTaskMetadata: (id: string) => Promise<void>
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
-  retryTask: (id: string) => void
+  retryTask: (id: string, payload?: any) => void
+}
+
+export const isArtifactTaskId = (id?: string | null) =>
+  /_(audio|markdown|request|transcript)$/.test(id || '')
+
+const refreshingMetadataIds = new Set<string>()
+const metadataRefreshedAt = new Map<string, number>()
+const METADATA_REFRESH_TTL = 10 * 60 * 1000
+
+const defaultTranscript = (): Transcript => ({
+  full_text: '',
+  language: '',
+  raw: null,
+  segments: [],
+})
+
+const defaultAudioMeta = (): AudioMeta => ({
+  cover_url: '',
+  duration: 0,
+  file_path: '',
+  platform: '',
+  raw_info: null,
+  title: '',
+  video_id: '',
+})
+
+const normalizeServerTask = (note: ServerNote, existing?: Task): Task => {
+  const formData = {
+    video_url: '',
+    platform: note.audio_meta?.platform || note.form_data?.platform || '',
+    quality: 'medium',
+    model_name: '',
+    provider_id: '',
+    style: 'minimal',
+    format: [],
+    screenshot: false,
+    link: false,
+    extras: '',
+    video_understanding: false,
+    video_interval: 6,
+    grid_size: [2, 2],
+    ...(note.form_data || {}),
+  }
+
+  const serverMarkdown: Markdown[] | string = note.markdown
+    ? [
+        {
+          ver_id: `${note.task_id}-server`,
+          content: note.markdown,
+          style: formData.style || '',
+          model_name: formData.model_name || '',
+          created_at: note.updated_at || note.created_at,
+        },
+      ]
+    : ''
+
+  return {
+    id: note.task_id,
+    status: note.status as TaskStatus,
+    markdown:
+      existing?.status === 'SUCCESS' &&
+      Array.isArray(existing.markdown) &&
+      existing.markdown.length > 0
+        ? existing.markdown
+        : serverMarkdown,
+    transcript: note.transcript || defaultTranscript(),
+    audioMeta: { ...defaultAudioMeta(), ...(note.audio_meta || {}) },
+    platform: formData.platform || note.audio_meta?.platform || '',
+    createdAt: note.created_at || new Date().toISOString(),
+    formData,
+  }
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -75,7 +169,6 @@ export const useTaskStore = create<TaskStore>()(
       currentTaskId: null,
 
       addPendingTask: (taskId: string, platform: string, formData: any) =>
-
         set(state => ({
           tasks: [
             {
@@ -107,65 +200,65 @@ export const useTaskStore = create<TaskStore>()(
         })),
 
       updateTaskContent: (id, data) =>
-          set(state => ({
-            tasks: state.tasks.map(task => {
-              if (task.id !== id) return task
+        set(state => ({
+          tasks: state.tasks.map(task => {
+            if (task.id !== id) return task
 
-              if (task.status === 'SUCCESS' && data.status === 'SUCCESS') return task
+            if (task.status === 'SUCCESS' && data.status === 'SUCCESS') return task
 
-              // 如果是 markdown 字符串，封装为版本
-              if (typeof data.markdown === 'string') {
-                const prev = task.markdown
-                const newVersion: Markdown = {
-                  ver_id: `${task.id}-${uuidv4()}`,
-                  content: data.markdown,
-                  style: task.formData.style || '',
-                  model_name: task.formData.model_name || '',
-                  created_at: new Date().toISOString(),
-                }
+            // 如果是 markdown 字符串，封装为版本
+            if (typeof data.markdown === 'string') {
+              const prev = task.markdown
+              const newVersion: Markdown = {
+                ver_id: `${task.id}-${uuidv4()}`,
+                content: data.markdown,
+                style: task.formData.style || '',
+                model_name: task.formData.model_name || '',
+                created_at: new Date().toISOString(),
+              }
 
-                let updatedMarkdown: Markdown[]
-                if (Array.isArray(prev)) {
-                  updatedMarkdown = [newVersion, ...prev]
-                } else {
-                  updatedMarkdown = [
-                    newVersion,
-                    ...(typeof prev === 'string' && prev
-                        ? [{
+              let updatedMarkdown: Markdown[]
+              if (Array.isArray(prev)) {
+                updatedMarkdown = [newVersion, ...prev]
+              } else {
+                updatedMarkdown = [
+                  newVersion,
+                  ...(typeof prev === 'string' && prev
+                    ? [
+                        {
                           ver_id: `${task.id}-${uuidv4()}`,
                           content: prev,
                           style: task.formData.style || '',
                           model_name: task.formData.model_name || '',
                           created_at: new Date().toISOString(),
-                        }]
-                        : []),
-                  ]
-                }
-
-                return {
-                  ...task,
-                  ...data,
-                  markdown: updatedMarkdown,
-                }
+                        },
+                      ]
+                    : []),
+                ]
               }
 
-              return { ...task, ...data }
-            }),
-          })),
+              return {
+                ...task,
+                ...data,
+                markdown: updatedMarkdown,
+              }
+            }
 
+            return { ...task, ...data }
+          }),
+        })),
 
       getCurrentTask: () => {
         const currentTaskId = get().currentTaskId
         return get().tasks.find(task => task.id === currentTaskId) || null
       },
       retryTask: async (id: string, payload?: any) => {
-
-        if (!id){
+        if (!id) {
           toast.error('任务不存在')
           return
         }
         const task = get().tasks.find(task => task.id === id)
-        console.log('retry',task)
+        console.log('retry', task)
         if (!task) return
 
         const newFormData = payload || task.formData
@@ -181,7 +274,7 @@ export const useTaskStore = create<TaskStore>()(
             toast.error(
               e?.data?.downloading
                 ? '转写模型正在下载中，请稍候再重试'
-                : '转写模型尚未下载，请先去「设置 → 音频转写配置」页下载',
+                : '转写模型尚未下载，请先去「设置 → 音频转写配置」页下载'
             )
             return
           }
@@ -191,17 +284,16 @@ export const useTaskStore = create<TaskStore>()(
 
         set(state => ({
           tasks: state.tasks.map(t =>
-              t.id === id
-                  ? {
-                    ...t,
-                    formData: newFormData, // ✅ 显式更新 formData
-                    status: 'PENDING',
-                  }
-                  : t
+            t.id === id
+              ? {
+                  ...t,
+                  formData: newFormData, // ✅ 显式更新 formData
+                  status: 'PENDING',
+                }
+              : t
           ),
         }))
       },
-
 
       removeTask: async id => {
         const task = get().tasks.find(t => t.id === id)
@@ -217,11 +309,70 @@ export const useTaskStore = create<TaskStore>()(
           await delete_task({
             video_id: task.audioMeta.video_id,
             platform: task.platform,
+            task_id: task.id,
           })
         }
       },
 
       clearTasks: () => set({ tasks: [], currentTaskId: null }),
+
+      refreshTaskMetadata: async (id: string) => {
+        if (!id || isArtifactTaskId(id)) return
+        const now = Date.now()
+        if (refreshingMetadataIds.has(id)) return
+        if ((metadataRefreshedAt.get(id) || 0) + METADATA_REFRESH_TTL > now) return
+
+        refreshingMetadataIds.add(id)
+        try {
+          const data = await refreshNoteMetadata(id)
+          if (!data?.audio_meta) return
+          metadataRefreshedAt.set(id, Date.now())
+          set(state => ({
+            tasks: state.tasks.map(task =>
+              task.id === id
+                ? {
+                    ...task,
+                    audioMeta: { ...task.audioMeta, ...data.audio_meta },
+                    platform: data.audio_meta.platform || task.platform,
+                  }
+                : task
+            ),
+          }))
+        } catch (e) {
+          metadataRefreshedAt.set(id, Date.now())
+          console.warn('刷新视频元信息失败：', e)
+        } finally {
+          refreshingMetadataIds.delete(id)
+        }
+      },
+
+      syncNotes: async () => {
+        const notes = (await listNotes()).filter(note => !isArtifactTaskId(note.task_id))
+        set(state => {
+          const existingMap = new Map(state.tasks.map(task => [task.id, task]))
+          const synced = notes.map(note => normalizeServerTask(note, existingMap.get(note.task_id)))
+          const syncedIds = new Set(synced.map(task => task.id))
+          const localOnly = state.tasks.filter(
+            task =>
+              !isArtifactTaskId(task.id) &&
+              !syncedIds.has(task.id) &&
+              task.status !== 'SUCCESS' &&
+              task.status !== 'FAILED'
+          )
+          const tasks = [...synced, ...localOnly].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          const currentTaskId =
+            state.currentTaskId && tasks.some(task => task.id === state.currentTaskId)
+              ? state.currentTaskId
+              : tasks[0]?.id || null
+
+          return {
+            tasks,
+            currentTaskId,
+          }
+        })
+      },
 
       setCurrentTask: taskId => set({ currentTaskId: taskId }),
     }),

@@ -5,6 +5,7 @@ import tempfile
 from abc import ABC
 from typing import Union, Optional, List
 
+import requests
 import yt_dlp
 
 from app.downloaders.base import Downloader, DownloadQuality, QUALITY_MAP
@@ -41,6 +42,68 @@ class BilibiliDownloader(Downloader, ABC):
         logger.info("已生成 B站 Netscape Cookie 文件: %s (条目: %d)", tmp.name, len(lines) - 1)
         return tmp.name
 
+    def _bilibili_headers(self) -> dict:
+        headers = {
+            "Referer": "https://www.bilibili.com",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+        }
+        if self._cookie:
+            headers["Cookie"] = self._cookie
+        return headers
+
+    def _fetch_follower_count(self, mid: Union[str, int, None]) -> Optional[int]:
+        """通过 B 站关系统计接口补充 UP 主粉丝量。"""
+        if not mid:
+            return None
+
+        try:
+            response = requests.get(
+                "https://api.bilibili.com/x/relation/stat",
+                params={"vmid": mid},
+                headers=self._bilibili_headers(),
+                timeout=8,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("code") != 0:
+                logger.warning("获取 B站 UP 主粉丝量失败: mid=%s, resp=%s", mid, payload)
+                return None
+
+            follower = payload.get("data", {}).get("follower")
+            return int(follower) if follower is not None else None
+        except Exception as e:
+            logger.warning("获取 B站 UP 主粉丝量异常: mid=%s, err=%s", mid, e)
+            return None
+
+    def _enrich_info(self, info: dict) -> dict:
+        """规范化/补充前端需要展示的视频元信息。"""
+        if not isinstance(info, dict):
+            return info
+
+        owner = info.get("owner") if isinstance(info.get("owner"), dict) else {}
+        uploader_mid = (
+            info.get("uploader_id")
+            or info.get("channel_id")
+            or owner.get("mid")
+            or info.get("creator_id")
+        )
+        follower = self._fetch_follower_count(uploader_mid)
+
+        if follower is not None:
+            info["uploader_follower_count"] = follower
+            info["follower_count"] = follower
+            owner = {**owner, "mid": uploader_mid, "fans": follower}
+            info["owner"] = owner
+
+        if uploader_mid and not owner.get("mid"):
+            info["owner"] = {**owner, "mid": uploader_mid}
+
+        return info
+
     def download(
         self,
         video_url: str,
@@ -75,6 +138,7 @@ class BilibiliDownloader(Downloader, ABC):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
+            info = self._enrich_info(info)
             video_id = info.get("id")
             title = info.get("title")
             duration = info.get("duration", 0)
