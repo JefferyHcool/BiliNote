@@ -8,7 +8,7 @@ import logo from '@/assets/icon.svg'
 
 // 二维码统一走 GitHub 在线地址：后续在仓库替换图片后，已打包的 App 会自动更新，无需重新发版
 const GITHUB_DOC_RAW = 'https://raw.githubusercontent.com/JefferyHcool/BiliNote/master/doc'
-const wechatQr = `${GITHUB_DOC_RAW}/wechat-group-1.png`
+const wechatQr = `${GITHUB_DOC_RAW}/wechat-gzh.png`
 const remoteInstallQr = `${GITHUB_DOC_RAW}/remote-install-wechat.png`
 
 export default function AboutPage() {
@@ -204,11 +204,11 @@ export default function AboutPage() {
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center justify-center gap-10 md:flex-row md:items-start">
               <div className="text-center">
-                <h3 className="mb-3 text-xl font-semibold">BiliNote 交流微信群</h3>
+                <h3 className="mb-3 text-xl font-semibold">BiliNote 公众号</h3>
                 <div className="bg-muted mx-auto flex h-52 w-52 items-center justify-center rounded-md">
-                  <img src={wechatQr} alt="BiliNote 交流微信群" className="h-full w-full object-contain" />
+                  <img src={wechatQr} alt="BiliNote 公众号" className="h-full w-full object-contain" />
                 </div>
-                <p className="text-muted-foreground mt-3 text-sm">扫码加入交流群，一起讨论使用问题</p>
+                <p className="text-muted-foreground mt-3 text-sm">扫描公众号，回复「交流群」获取二维码</p>
               </div>
               <div className="text-center">
                 <h3 className="mb-3 text-xl font-semibold">BiliNote AI笔记系统一对一搭建服务</h3>
