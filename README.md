@@ -386,18 +386,11 @@ docker-compose -f docker-compose.gpu.yml up --build -d
 
 ### Contact and Join-联系和加入社区
 
-扫码加入 BiliNote 交流微信群（共 5 个群，任选一个即可；二维码会定期更新，如已失效请到 [Issues](https://github.com/JefferyHcool/BiliNote/issues) 反馈）：
+扫描下方公众号二维码，关注后回复 **「交流群」** 即可获取最新的微信交流群二维码（群码会自动更新，避免过期失效）：
 
 <table align="center">
   <tr>
-    <td align="center"><img src="./doc/wechat-group-1.png" alt="BiliNote 交流群 1" width="200" /><br/>交流群 1</td>
-    <td align="center"><img src="./doc/wechat-group-2.png" alt="BiliNote 交流群 2" width="200" /><br/>交流群 2</td>
-    <td align="center"><img src="./doc/wechat-group-3.png" alt="BiliNote 交流群 3" width="200" /><br/>交流群 3</td>
-  </tr>
-  <tr>
-    <td align="center"><img src="./doc/wechat-group-4.png" alt="BiliNote 交流群 4" width="200" /><br/>交流群 4</td>
-    <td align="center"><img src="./doc/wechat-group-5.png" alt="BiliNote 交流群 5" width="200" /><br/>交流群 5</td>
-    <td></td>
+    <td align="center"><img src="./doc/wechat-gzh.png" alt="BiliNote 公众号" width="200" /><br/>BiliNote 公众号</td>
   </tr>
 </table>
 
