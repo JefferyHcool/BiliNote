@@ -3,6 +3,7 @@ import type { Settings, TaskRecord } from '~/logic/types'
 import { DEFAULT_SETTINGS, MAX_TASKS, SETTINGS_KEY, TASKS_KEY } from '~/logic/constants'
 import { detectPlatform } from '~/logic/platform'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
+import { normalizeVideoTitle } from '~/logic/task-display'
 
 // only on dev mode
 if (import.meta.hot) {
@@ -58,6 +59,7 @@ async function upsertTask(record: TaskRecord) {
 
 async function startTask(url: string, title?: string): Promise<{ ok: boolean, taskId?: string, error?: string }> {
   const platform = detectPlatform(url)
+  const displayTitle = normalizeVideoTitle(title)
   if (!platform)
     return { ok: false, error: '当前链接不是支持的视频平台' }
 
@@ -107,7 +109,7 @@ async function startTask(url: string, title?: string): Promise<{ ok: boolean, ta
       message: '已提交',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      title,
+      title: displayTitle,
     })
     return { ok: true, taskId: body.data.task_id }
   }

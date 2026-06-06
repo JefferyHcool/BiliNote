@@ -3,14 +3,17 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getTaskStatus, resolveImageUrl } from '~/logic/api'
 import { tasks, tasksReady, settingsReady, upsertTask } from '~/logic/storage'
 import type { TaskRecord } from '~/logic/types'
+import { getTaskDisplayTitle } from '~/logic/task-display'
 
 type ViewMode = 'markdown' | 'mindmap' | 'chat'
 
 const activeTaskId = ref<string>('')
 const activeTask = computed<TaskRecord | undefined>(() => tasks.value?.find(t => t.taskId === activeTaskId.value))
 const errorMsg = ref('')
+const successMsg = ref('')
 const viewMode = ref<ViewMode>('markdown')
 const showHistory = ref(false)
+const mindMapRef = ref<{ toPngBlob: () => Promise<Blob> } | null>(null)
 
 const isDone = computed(() => activeTask.value?.status === 'SUCCESS')
 const isFailed = computed(() => activeTask.value?.status === 'FAILED')
@@ -41,7 +44,7 @@ async function poll(taskId: string) {
         message: res.message,
         result: res.result ?? cur.result,
         updatedAt: Date.now(),
-        title: cur.title,
+        title: cur.title || getTaskDisplayTitle(cur),
       })
     }
     if (res.status !== 'SUCCESS' && res.status !== 'FAILED')
@@ -75,11 +78,19 @@ async function copyMarkdown() {
     await navigator.clipboard.writeText(md)
 }
 
+function safeFilename(name: string): string {
+  return (name || 'bilinote')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120) || 'bilinote'
+}
+
 function downloadMarkdown() {
   const md = activeTask.value?.result?.markdown
   if (!md)
     return
-  const title = (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title || 'bilinote'
+  const title = safeFilename(getTaskDisplayTitle(activeTask.value))
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -89,11 +100,44 @@ function downloadMarkdown() {
   URL.revokeObjectURL(url)
 }
 
-const activeTitle = computed(() =>
-  (activeTask.value?.result?.audio_meta as { title?: string } | undefined)?.title
-  || activeTask.value?.title
-  || activeTask.value?.videoUrl
-  || '')
+async function copyMindMapImage() {
+  try {
+    errorMsg.value = ''
+    successMsg.value = ''
+    const blob = await mindMapRef.value?.toPngBlob()
+    if (!blob)
+      return
+    await navigator.clipboard.write([
+      new ClipboardItem({ [blob.type]: blob }),
+    ])
+    successMsg.value = '思维导图图片已复制'
+    setTimeout(() => { successMsg.value = '' }, 2000)
+  }
+  catch (e) {
+    errorMsg.value = (e as Error).message || '复制思维导图图片失败'
+  }
+}
+
+async function downloadMindMapImage() {
+  try {
+    errorMsg.value = ''
+    successMsg.value = ''
+    const blob = await mindMapRef.value?.toPngBlob()
+    if (!blob)
+      return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${safeFilename(getTaskDisplayTitle(activeTask.value))}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  catch (e) {
+    errorMsg.value = (e as Error).message || '下载思维导图图片失败'
+  }
+}
+
+const activeTitle = computed(() => getTaskDisplayTitle(activeTask.value))
 
 const activeCover = computed(() =>
   (activeTask.value?.result?.audio_meta as { cover_url?: string } | undefined)?.cover_url)
@@ -144,8 +188,8 @@ onUnmounted(() => {
           :class="{ 'bg-white border': t.taskId === activeTaskId }"
           @click="selectTask(t.taskId)"
         >
-          <span class="truncate flex-1" :title="t.title || t.videoUrl">
-            {{ (t.result?.audio_meta as { title?: string } | undefined)?.title || t.title || t.videoUrl }}
+          <span class="truncate flex-1" :title="getTaskDisplayTitle(t)">
+            {{ getTaskDisplayTitle(t) }}
           </span>
           <span class="text-gray-400 shrink-0">{{ STAGE_LABELS[t.status] || t.status }}</span>
         </li>
@@ -154,6 +198,9 @@ onUnmounted(() => {
 
     <div v-if="errorMsg" class="text-xs text-red-600 px-3 py-1 break-words bg-red-50 shrink-0">
       {{ errorMsg }}
+    </div>
+    <div v-if="successMsg" class="text-xs text-green-700 px-3 py-1 break-words bg-green-50 shrink-0">
+      {{ successMsg }}
     </div>
 
     <section v-if="!activeTask" class="flex-1 flex items-center justify-center text-gray-400 text-xs px-4 text-center">
@@ -228,6 +275,18 @@ onUnmounted(() => {
           title="下载 .md"
           @click="downloadMarkdown"
         >下载</button>
+        <button
+          v-if="viewMode === 'mindmap'"
+          class="text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-gray-100"
+          title="复制思维导图图片"
+          @click="copyMindMapImage"
+        >复制</button>
+        <button
+          v-if="viewMode === 'mindmap'"
+          class="text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded hover:bg-gray-100"
+          title="下载思维导图 PNG"
+          @click="downloadMindMapImage"
+        >下载</button>
       </div>
 
       <!-- 内容区：占满剩余空间 -->
@@ -240,6 +299,7 @@ onUnmounted(() => {
         />
         <MindMap
           v-else-if="isDone && activeTask.result?.markdown && viewMode === 'mindmap'"
+          ref="mindMapRef"
           :markdown="activeTask.result.markdown"
           class="h-full"
         />
