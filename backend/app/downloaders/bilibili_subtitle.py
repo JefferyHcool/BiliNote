@@ -3,12 +3,13 @@
 
 流程：
 1. 从 URL 提 BV id（已有 utils.url_parser.extract_video_id）
-2. GET /x/web-interface/view?bvid=BVxxx → 拿 cid
-3. GET /x/player/wbi/v2?bvid=...&cid=... → 返回 data.subtitle.subtitles[]
+2. 从 URL 提 p 参数（分 P 序号，已有 utils.url_parser.extract_bilibili_p_number）
+3. GET /x/web-interface/view?bvid=BVxxx&p=N → 拿第 N 集的 cid
+4. GET /x/player/wbi/v2?bvid=...&cid=... → 返回 data.subtitle.subtitles[]
    每条带 subtitle_url（B 站后端已经签好 auth_key 的完整地址）
-4. 按优先级（人工 zh-CN > AI zh-CN > 任意 zh > 任意非空）选一条
-5. fetch subtitle_url → JSON {body:[{from,to,content,...}]}
-6. 解析为 TranscriptResult
+5. 按优先级（人工 zh-CN > AI zh-CN > 任意 zh > 任意非空）选一条
+6. fetch subtitle_url → JSON {body:[{from,to,content,...}]}
+7. 解析为 TranscriptResult
 
 AI 字幕需要登录态 cookie（SESSDATA）；通过 CookieConfigManager 注入。
 """
@@ -20,7 +21,7 @@ import requests
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.cookie_manager import CookieConfigManager
 from app.utils.logger import get_logger
-from app.utils.url_parser import extract_video_id
+from app.utils.url_parser import extract_video_id, extract_bilibili_p_number
 
 logger = get_logger(__name__)
 
@@ -45,10 +46,13 @@ class BilibiliSubtitleFetcher:
             h["Cookie"] = self._cookie
         return h
 
-    def _get_cid(self, bvid: str) -> Optional[int]:
+    def _get_cid(self, bvid: str, p: Optional[int] = None) -> Optional[int]:
         url = "https://api.bilibili.com/x/web-interface/view"
+        params = {"bvid": bvid}
+        if p is not None and p >= 1:
+            params["p"] = p
         try:
-            resp = requests.get(url, params={"bvid": bvid}, headers=self._headers(), timeout=10)
+            resp = requests.get(url, params=params, headers=self._headers(), timeout=10)
             data = resp.json()
         except Exception as e:
             logger.warning(f"获取 cid 失败: {e}")
@@ -56,6 +60,19 @@ class BilibiliSubtitleFetcher:
         if data.get("code") != 0:
             logger.warning(f"view API 返回错误: code={data.get('code')}, msg={data.get('message')}")
             return None
+        # 分 P 视频：data.pages[N-1] 对应第 N 集
+        pages = data.get("data", {}).get("pages", [])
+        if pages:
+            if p is not None and 1 <= p <= len(pages):
+                cid = pages[p - 1].get("cid")
+                logger.info(f"分 P 视频: bvid={bvid} p={p} 共 {len(pages)} 集, 取第 {p} 集 cid={cid}")
+                return int(cid) if cid else None
+            else:
+                # 没有 p 参数或 p 超出范围，取第 1 集
+                cid = pages[0].get("cid")
+                logger.info(f"非分 P 或 p 无效: bvid={bvid} 取第 1 集 cid={cid}")
+                return int(cid) if cid else None
+        # 单集视频
         cid = data.get("data", {}).get("cid")
         return int(cid) if cid else None
 
@@ -114,9 +131,12 @@ class BilibiliSubtitleFetcher:
             logger.info("无法从 URL 提取 BV id")
             return None
 
-        cid = self._get_cid(bvid)
+        # 提取分 P 序号
+        p = extract_bilibili_p_number(video_url)
+
+        cid = self._get_cid(bvid, p)
         if not cid:
-            logger.info(f"{bvid} 没有取到 cid")
+            logger.info(f"{bvid} (p={p}) 没有取到 cid")
             return None
 
         subtitles = self._list_subtitles(bvid, cid)
@@ -149,7 +169,7 @@ class BilibiliSubtitleFetcher:
             return None
 
         full_text = " ".join(s.text for s in segments)
-        logger.info(f"B站直拉字幕成功: {bvid} lan={lan} 共 {len(segments)} 段")
+        logger.info(f"B站直拉字幕成功: {bvid} p={p} lan={lan} 共 {len(segments)} 段")
         return TranscriptResult(
             language=lan,
             full_text=full_text,
@@ -158,6 +178,7 @@ class BilibiliSubtitleFetcher:
                 "source": "bilibili_player_api",
                 "bvid": bvid,
                 "cid": cid,
+                "p": p,
                 "lan": lan,
                 "ai_type": track.get("ai_type"),
             },
