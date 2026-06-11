@@ -1,6 +1,9 @@
+import base64
 import os
 import json
 import logging
+import random
+import string
 import tempfile
 from abc import ABC
 from typing import Union, Optional, List
@@ -16,6 +19,54 @@ from app.utils.url_parser import extract_video_id
 from app.services.cookie_manager import CookieConfigManager
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_bilibili_extractor():
+    """
+    Monkey-patch yt-dlp's BilibiliBaseIE._download_playinfo to inject the
+    dm_img_* / web_location risk-control parameters that Bilibili's
+    wbi/playurl gateway started requiring (returns HTTP 412 without them).
+
+    The parameter format (string.printable source + [:-2] base64 truncation)
+    mirrors yt-dlp's own implementation for the same fields in the channel
+    search endpoint (yt_dlp/extractor/bilibili.py, BiliBiliSpaceIE).
+    """
+    try:
+        from yt_dlp.extractor.bilibili import BilibiliBaseIE
+
+        # Guard: skip if already patched (e.g. module reloaded in tests)
+        if getattr(BilibiliBaseIE._download_playinfo, '_bili_dm_patched', False):
+            return
+
+        _original_download_playinfo = BilibiliBaseIE._download_playinfo
+
+        def _patched_download_playinfo(self, bvid, cid, headers=None, query=None):
+            # Inject dummy risk-control fingerprints expected by Bilibili's gateway.
+            # The [:-2] truncation and string.printable source intentionally match
+            # yt-dlp's own pattern used for the x/space/wbi/arc/search endpoint.
+            extra = {
+                'web_location': 1550101,
+                'dm_img_list': '[]',
+                'dm_img_str': base64.b64encode(
+                    ''.join(random.choices(string.printable, k=random.randint(16, 64))).encode()
+                )[:-2].decode(),
+                'dm_cover_img_str': base64.b64encode(
+                    ''.join(random.choices(string.printable, k=random.randint(32, 128))).encode()
+                )[:-2].decode(),
+                'dm_img_inter': '{"ds":[],"wh":[6093,6631,31],"of":[430,760,380]}',
+            }
+            # Caller-supplied query params take precedence over the dummy values
+            merged_query = {**extra, **(query or {})}
+            return _original_download_playinfo(self, bvid, cid, headers=headers, query=merged_query)
+
+        _patched_download_playinfo._bili_dm_patched = True
+        BilibiliBaseIE._download_playinfo = _patched_download_playinfo
+        logger.info("Applied Bilibili wbi/playurl dm_img patch to yt-dlp BilibiliBaseIE")
+    except Exception as e:
+        logger.warning("Failed to apply Bilibili dm_img patch: %s", e)
+
+
+_patch_bilibili_extractor()
 
 
 class BilibiliDownloader(Downloader, ABC):
