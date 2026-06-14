@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube 播放列表批量处理 - BiliNote</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+.header { background: #1a1a2e; border-bottom: 1px solid #333; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+.header h1 { font-size: 18px; color: #fff; }
+.header a { color: #888; text-decoration: none; font-size: 13px; }
+.header a:hover { color: #fff; }
+.container { max-width: 1300px; margin: 0 auto; padding: 20px 24px; }
+.input-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.input-row input { flex: 1; padding: 10px 14px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; color: #fff; font-size: 14px; }
+.input-row input:focus { outline: none; border-color: #6c5ce7; }
+.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; }
+.btn-primary { background: #6c5ce7; color: #fff; }
+.btn-primary:hover { background: #5a4bd1; }
+.btn-primary:disabled { background: #444; cursor: not-allowed; }
+.btn-danger { background: #dc3545; color: #fff; }
+.btn-danger:hover { background: #c82333; }
+.btn-danger:disabled { background: #444; cursor: not-allowed; }
+.btn-outline { background: transparent; border: 1px solid #444; color: #ccc; }
+.btn-outline:hover { background: #2a2a2a; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.config-panel { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.config-row { display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; align-items: flex-end; }
+.config-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #888; }
+.config-row select, .config-row input { padding: 7px 10px; background: #1e1e1e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 13px; min-width: 100px; }
+.check-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.check-row label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #aaa; cursor: pointer; }
+.check-row input[type=checkbox] { accent-color: #6c5ce7; width: 15px; height: 15px; }
+.actions { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
+.actions .count { color: #888; font-size: 13px; }
+.actions .spacer { flex: 1; }
+.video-list { display: flex; flex-direction: column; gap: 3px; max-height: 60vh; overflow-y: auto; }
+.video-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #1a1a1a; border-radius: 6px; border: 1px solid #2a2a2a; transition: border-color .15s; }
+.video-item:hover { border-color: #444; }
+.video-item.sel { border-color: #6c5ce7; background: #1a1a2e; }
+.video-item.skip { opacity: .4; }
+.video-item .cb { width: 16px; height: 16px; accent-color: #6c5ce7; cursor: pointer; flex-shrink: 0; }
+.video-item .idx { color: #555; font-size: 12px; min-width: 26px; text-align: right; flex-shrink: 0; }
+.video-item .thumb { width: 88px; height: 50px; object-fit: cover; border-radius: 4px; background: #2a2a2a; flex-shrink: 0; }
+.video-item .info { flex: 1; min-width: 0; }
+.video-item .vtitle { font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.video-item .meta { font-size: 11px; color: #666; margin-top: 2px; }
+.video-item .stat { font-size: 11px; padding: 3px 8px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; min-width: 52px; text-align: center; }
+.stat-pending { background: #2a2a2a; color: #666; }
+.stat-parsing { background: #1a2744; color: #4a9eff; }
+.stat-downloading { background: #1a2744; color: #4a9eff; }
+.stat-transcribing { background: #2d1a44; color: #b44aff; }
+.stat-summarizing { background: #442a1a; color: #ff9f4a; }
+.stat-formatting { background: #442a1a; color: #ff9f4a; }
+.stat-saving { background: #2a2a2a; color: #aaa; }
+.stat-success { background: #1b4332; color: #52b788; }
+.stat-failed { background: #3d1a1a; color: #e74c3c; }
+.stat-cancelled { background: #2a2a2a; color: #888; }
+.bar { background: #1a1a2e; border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 13px; color: #888; display: none; }
+.bar .prog { color: #6c5ce7; font-weight: 600; }
+.bar .progbar { height: 4px; background: #2a2a2a; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.bar .progbar .fill { height: 100%; background: #6c5ce7; border-radius: 2px; transition: width .3s; }
+.err { padding: 12px; background: #3d1a1a; border: 1px solid #e74c3c; border-radius: 8px; color: #e74c3c; margin-bottom: 16px; font-size: 13px; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #444; border-top-color: #6c5ce7; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>&#x1F4CB; 播放列表批量处理</h1>
+  <a href="/">&#x2190; 返回 BiliNote</a>
+</div>
+<div class="container">
+  <div class="input-row">
+    <input type="text" id="playlistUrl" placeholder="粘贴 YouTube 播放列表链接">
+    <button class="btn btn-primary" id="loadBtn" onclick="loadPlaylist()">加载列表</button>
+  </div>
+  <div id="errorBox"></div>
+
+  <div id="configPanel" style="display:none">
+    <div class="config-panel">
+      <div class="config-row">
+        <label>模型供应商<select id="providerSelect"></select></label>
+        <label>模型<select id="modelSelect"></select></label>
+        <label>转写质量
+          <select id="qualitySelect">
+            <option value="fast">快速</option>
+            <option value="medium">中等</option>
+          </select>
+        </label>
+        <label>笔记风格
+          <select id="styleSelect">
+            <option value="">默认</option>
+            <option value="minimal">精简</option>
+            <option value="detailed">详细</option>
+            <option value="academic">学术</option>
+            <option value="tutorial">教程</option>
+            <option value="xiaohongshu">小红书</option>
+            <option value="life_journal">生活向</option>
+            <option value="task_oriented">任务导向</option>
+            <option value="business">商业风格</option>
+            <option value="meeting_minutes">会议纪要</option>
+          </select>
+        </label>
+      </div>
+      <div class="check-row">
+        <label><input type="checkbox" id="optScreenshot"> 截图</label>
+        <label><input type="checkbox" id="optLink"> 插入链接</label>
+        <label><input type="checkbox" id="optVideo"> 视频理解</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-outline btn-sm" onclick="selectAll()">全选</button>
+      <button class="btn btn-outline btn-sm" onclick="deselectAll()">取消全选</button>
+      <span class="count" id="selectedCount">已选 0 个</span>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" id="generateBtn" onclick="startBatch()">批量生成笔记</button>
+      <button class="btn btn-danger" id="cancelBtn" style="display:none" onclick="cancelBatch()">取消</button>
+      <button class="btn btn-primary" id="downloadAllBtn" style="display:none" onclick="downloadAll()">下载全部 ZIP</button>
+    </div>
+
+    <div class="video-list" id="videoList"></div>
+    <div class="bar" id="statusBar">
+      <span id="barText"></span>
+      <div class="progbar"><div class="fill" id="progFill" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = "/api";
+var playlistData = null;
+var batchId = null;
+var polling = [];
+
+var STAGE_CN = {
+  "PENDING": "排队",
+  "PARSING": "解析中",
+  "DOWNLOADING": "下载中",
+  "TRANSCRIBING": "转录中",
+  "SUMMARIZING": "总结中",
+  "FORMATTING": "格式化",
+  "SAVING": "保存中",
+  "SUCCESS": "完成",
+  "FAILED": "失败"
+};
+
+function stageClass(st) {
+  if (st === "SUCCESS") return "stat-success";
+  if (st === "FAILED") return "stat-failed";
+  if (!st || st === "PENDING") return "stat-pending";
+  if (st === "PARSING" || st === "DOWNLOADING") return "stat-downloading";
+  if (st === "TRANSCRIBING") return "stat-transcribing";
+  if (st === "SUMMARIZING" || st === "FORMATTING" || st === "SAVING") return "stat-summarizing";
+  return "stat-pending";
+}
+
+async function loadPlaylist() {
+  var url = document.getElementById("playlistUrl").value.trim();
+  if (!url) return;
+  var btn = document.getElementById("loadBtn");
+  btn.disabled = true; btn.textContent = "加载中...";
+  document.getElementById("errorBox").innerHTML = "";
+  try {
+    var resp = await fetch(API + "/playlist/info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playlist_url: url })
+    });
+    var json = await resp.json();
+    if (json.code !== 0) throw new Error(json.detail || "加载失败");
+    renderPlaylist(json.data);
+    document.getElementById("configPanel").style.display = "block";
+  } catch(e) {
+    document.getElementById("errorBox").innerHTML = "<div class=err>" + e.message + "</div>";
+  } finally {
+    btn.disabled = false; btn.textContent = "加载列表";
+  }
+}
+
+function renderPlaylist(data) {
+  playlistData = data;
+  playlistName = data.playlist_title || "playlist";
+  var html = "";
+  data.videos.forEach(function(v, i) {
+    var thumb = v.thumbnail
+      ? "<img class=thumb src=\"" + v.thumbnail + "\" onerror=\"this.style.display='none'\">"
+      : "<div class=thumb></div>";
+    var dur = v.duration ? Math.floor(v.duration/60) + ":" + String(v.duration%60).padStart(2,"0") : "?";
+    html += "<div class='video-item' id='item-" + i + "'>"
+      + "<input type=checkbox class=cb onchange='updateSelection()' data-index=" + i + " checked>"
+      + "<span class=idx>" + v.index + "</span>"
+      + thumb
+      + "<div class=info><div class=vtitle title=\"" + v.title.replace(/"/g,"&quot;") + "\">" + v.title + "</div><div class=meta>" + dur + "</div></div>"
+      + "<span class='stat stat-pending' id='status-" + i + "'>-</span>"
+      + "</div>";
+  });
+  document.getElementById("videoList").innerHTML = html;
+  loadConfig();
+  updateSelection();
+}
+
+function selectAll() {
+  document.querySelectorAll("#videoList .cb").forEach(function(cb) { cb.checked = true; });
+  updateSelection();
+}
+function deselectAll() {
+  document.querySelectorAll("#videoList .cb").forEach(function(cb) { cb.checked = false; });
+  updateSelection();
+}
+
+function updateSelection() {
+  var cbs = document.querySelectorAll("#videoList .cb:checked");
+  document.getElementById("selectedCount").textContent = "已选 " + cbs.length + " / " + (playlistData ? playlistData.video_count : 0) + " 个";
+  document.querySelectorAll("#videoList .video-item").forEach(function(el) { el.classList.remove("sel"); });
+  cbs.forEach(function(cb) {
+    document.getElementById("item-" + cb.dataset.index).classList.add("sel");
+  });
+}
+
+async function loadConfig() {
+  try {
+    var presp = await fetch(API + "/get_all_providers");
+    var mresp = await fetch(API + "/model_list");
+    var provs = await presp.json();
+    var models = await mresp.json();
+    var pSel = document.getElementById("providerSelect");
+    var mSel = document.getElementById("modelSelect");
+    pSel.innerHTML = (provs.data || []).map(function(p) {
+      return "<option value=\"" + p.id + "\">" + p.name + "</option>";
+    }).join("");
+    mSel.innerHTML = (models.data || []).map(function(m) {
+      return "<option value=\"" + m.model_name + "\">" + m.model_name + "</option>";
+    }).join("");
+  } catch(e) {}
+}
+
+async function startBatch() {
+  var cbs = document.querySelectorAll("#videoList .cb:checked");
+  if (!cbs.length) return alert("请选择视频");
+  var provId = document.getElementById("providerSelect").value;
+  var modelName = document.getElementById("modelSelect").value;
+  if (!provId || !modelName) return alert("请选择模型供应商和模型");
+
+  var urls = [];
+  cbs.forEach(function(cb) {
+    urls.push(playlistData.videos[parseInt(cb.dataset.index)].url);
+  });
+
+  // 禁用复选框，显示取消按钮
+  document.querySelectorAll("#videoList .cb").forEach(function(cb) { cb.disabled = true; });
+  document.getElementById("generateBtn").disabled = true;
+  document.getElementById("generateBtn").textContent = "提交中...";
+  document.getElementById("cancelBtn").style.display = "none";
+
+  try {
+    var resp = await fetch(API + "/playlist/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        video_urls: urls,
+        platform: "youtube",
+        quality: document.getElementById("qualitySelect").value,
+        model_name: modelName,
+        provider_id: provId,
+        style: document.getElementById("styleSelect").value || null,
+        screenshot: document.getElementById("optScreenshot").checked,
+        link: document.getElementById("optLink").checked,
+        video_understanding: document.getElementById("optVideo").checked,
+        video_interval: 5,
+        grid_size: [3, 3],
+        format: (function() {
+          var fmts = [];
+          if (document.getElementById("optScreenshot").checked) fmts.push("screenshot");
+          if (document.getElementById("optLink").checked) fmts.push("link");
+          return fmts;
+        })()
+      })
+    });
+    var json = await resp.json();
+    if (json.code !== 0) throw new Error(json.detail || "提交失败");
+    batchId = json.data.batch_id;
+    document.getElementById("cancelBtn").style.display = "inline-block";
+    document.getElementById("generateBtn").textContent = "处理中...";
+    pollTasks(json.data.tasks);
+  } catch(e) {
+    alert(e.message);
+    resetUI();
+  }
+}
+
+async function cancelBatch() {
+  if (!batchId) return;
+  document.getElementById("cancelBtn").disabled = true;
+  document.getElementById("cancelBtn").textContent = "取消中...";
+  try {
+    await fetch(API + "/playlist/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batch_id: batchId })
+    });
+  } catch(e) {}
+  // 停止所有轮询
+  polling.forEach(function(id) { clearTimeout(id); });
+  polling = [];
+  document.getElementById("barText").innerHTML = "<span style=color:#e74c3c>已取消</span>";
+  resetUI();
+}
+
+function resetUI() {
+  document.querySelectorAll("#videoList .cb").forEach(function(cb) { cb.disabled = false; });
+  document.getElementById("generateBtn").disabled = false;
+  document.getElementById("generateBtn").textContent = "批量生成笔记";
+  document.getElementById("cancelBtn").style.display = "none";
+  document.getElementById("cancelBtn").disabled = false;
+  document.getElementById("cancelBtn").textContent = "取消";
+}
+
+function pollTasks(tasks) {
+  var bar = document.getElementById("statusBar");
+  var barText = document.getElementById("barText");
+  var progFill = document.getElementById("progFill");
+  bar.style.display = "block";
+
+  var completed = 0;
+  var failed = 0;
+  var total = tasks.length;
+  var finished = {};
+  var successIds = [];
+
+  function updateBar() {
+    var pct = Math.round((completed + failed) / total * 100);
+    progFill.style.width = pct + "%";
+    barText.innerHTML = "<span class=prog>" + completed + "/" + total + " 完成</span>"
+      + (failed ? " <span style=color:#e74c3c>" + failed + " 失败</span>" : "")
+      + (completed + failed < total ? " <span class=spinner></span>" : "");
+    if (completed + failed >= total) {
+      progFill.style.background = failed ? "#e74c3c" : "#52b788";
+      document.getElementById("cancelBtn").style.display = "none";
+      document.getElementById("generateBtn").disabled = false;
+      document.getElementById("generateBtn").textContent = "批量生成笔记";
+      if (successIds.length > 0) {
+        document.getElementById("downloadAllBtn").style.display = "inline-block";
+      }
+    }
+  }
+
+  tasks.forEach(function(t) {
+    var idx = t.index - 1;
+
+    function check() {
+      if (finished[t.task_id]) return;
+      fetch(API + "/task_status/" + t.task_id)
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+          var st = "";
+          if (json.data && json.data.status) st = json.data.status;
+          else if (json.status) st = json.status;
+
+          var el = document.getElementById("status-" + idx);
+          if (!el) return;
+
+          if (st === "SUCCESS") {
+            el.innerHTML = "<a href='#' onclick='downloadOne(\"" + t.task_id + "\");return false' title='下载 Markdown'>OK &#x2B07;</a>";
+            el.className = "stat stat-success";
+            finished[t.task_id] = true;
+            successIds.push(t.task_id);
+            completed++;
+            updateBar();
+          } else if (st === "FAILED") {
+            el.textContent = STAGE_CN[st] || st;
+            el.className = "stat stat-failed";
+            finished[t.task_id] = true;
+            failed++;
+            updateBar();
+          } else {
+            el.textContent = STAGE_CN[st] || st || "...";
+            el.className = "stat " + stageClass(st);
+            var tid = setTimeout(check, 4000);
+            polling.push(tid);
+          }
+        })
+        .catch(function() {
+          var tid = setTimeout(check, 5000);
+          polling.push(tid);
+        });
+    }
+    check();
+  });
+
+  updateBar();
+}
+
+function downloadOne(taskId) {
+  downloadZip([taskId], playlistName || "note");
+}
+
+function downloadAll() {
+  // 收集所有视频列表中 SUCCESS 状态的 task
+  var ids = [];
+  document.querySelectorAll("#videoList .stat-success").forEach(function(el) {
+    var onclick = el.querySelector("a").getAttribute("onclick") || "";
+    var m = onclick.match(/downloadOne\("([^"]+)/);
+    if (m) ids.push(m[1]);
+  });
+  if (!ids.length) return alert("没有成功完成的笔记");
+  downloadZip(ids, playlistName || "playlist");
+}
+
+function downloadZip(taskIds, folderName) {
+  var btn = document.getElementById("downloadAllBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "打包中..."; }
+  fetch(API + "/playlist/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task_ids: taskIds, playlist_name: folderName })
+  }).then(function(r) {
+    if (!r.ok) throw new Error("导出失败");
+    return r.blob();
+  }).then(function(blob) {
+    var url = window.URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = folderName.replace(/[\\/*?:\"<>|]/g, "") + ".zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }).catch(function(e) { alert("下载失败: " + e.message); })
+  .finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = "下载全部 ZIP"; }
+  });
+}
+
+// 声明 playlistName 变量（renderPlaylist 中赋值）
+var playlistName = "";
+
+document.getElementById("playlistUrl").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") loadPlaylist();
+});
+</script>
+</body>
+</html>
