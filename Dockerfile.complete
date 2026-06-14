@@ -75,6 +75,11 @@ RUN set -ex && \
     apt-get install -y --no-install-recommends ffmpeg nginx supervisor procps && \
     rm -rf /var/lib/apt/lists/*
 
+# 安装 Node.js 22（yt-dlp EJS 挑战求解器需要）并升级 yt-dlp
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    pip install --upgrade yt-dlp
+
 ENV PATH="/usr/bin:${PATH}"
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV PYTHONUNBUFFERED=1
