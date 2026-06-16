@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Tuple
+from typing import Optional
 import requests
 
 
@@ -76,6 +76,8 @@ def extract_bilibili_p_number(url: str) -> Optional[int]:
     # 匹配 /pN 尾缀形式（较少见）
     match = re.search(r'/p(\d+)(?:/?$|\?|&)', url)
     if match:
-        return int(match.group(1))
+        p_val = int(match.group(1))
+        if p_val >= 1:
+            return p_val
 
     return None

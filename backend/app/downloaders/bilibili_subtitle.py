@@ -21,7 +21,7 @@ import requests
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.cookie_manager import CookieConfigManager
 from app.utils.logger import get_logger
-from app.utils.url_parser import extract_video_id, extract_bilibili_p_number
+from app.utils.url_parser import extract_video_id, extract_bilibili_p_number, resolve_bilibili_short_url
 
 logger = get_logger(__name__)
 
@@ -126,6 +126,10 @@ class BilibiliSubtitleFetcher:
             return None
 
     def fetch_subtitles(self, video_url: str) -> Optional[TranscriptResult]:
+        # 统一 resolve 短链，避免 extract_video_id 和 extract_bilibili_p_number 各 resolve 一次
+        if "b23.tv" in video_url:
+            video_url = resolve_bilibili_short_url(video_url) or video_url
+
         bvid = extract_video_id(video_url, "bilibili")
         if not bvid:
             logger.info("无法从 URL 提取 BV id")
