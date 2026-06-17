@@ -2,6 +2,17 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.1] - 2026-06-17
+
+### Added
+
+- **YouTube Shorts 链接支持**：后端 URL 校验与 video id 提取支持 `youtube.com/shorts/<id>` 形态，Shorts 链接可正常提交生成笔记（#381）。
+
+### Fixed
+
+- **B 站 412（wbi/playurl 风控）**：B 站 `x/player/wbi/playurl` 网关新增 `dm_img_list`/`dm_img_str`/`dm_cover_img_str`/`dm_img_inter` + `web_location` 风控校验，缺失即返回 HTTP 412。多数视频网页内嵌 playinfo、yt-dlp 不调此 API；而网页不内嵌 playinfo、必须走 API 的视频（如 BV1X9L16oEgB）会撞上风控，刷新 cookie 无效、yt-dlp（含最新版）上游尚未适配。现于 wbi 签名前注入哑值 dm_img 风控参数（形态对齐 yt-dlp 自身 arc/search 用法）恢复 200（#410）。
+- **B 站分 P 视频字幕取错集**：分 P 视频提交 `?p=N` 时，字幕优先链路未透传 p 参数，始终取第 1 集 cid，导致笔记内容与实际下载的 p=N 音频不一致。现从 `data.pages[N-1]` 取对应分 P 的 cid（#409）。
+
 ## [2.4.0] - 2026-06-07
 
 ### Added
