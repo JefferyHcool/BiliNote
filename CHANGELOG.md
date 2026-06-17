@@ -2,6 +2,12 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.2] - 2026-06-17
+
+### Fixed
+
+- **Docker 部署打开显示 nginx 欢迎页**：`nginx/default.conf` 被 docker-compose（多容器）与 `Dockerfile.complete`（单镜像）共用，但两种模式对 `location /` 的需求相反（多容器需反代独立的 frontend 容器，单镜像需直接服务本地静态文件），导致其中一种部署方式总会回退到 nginx 默认欢迎页。现拆分为两份配置：`nginx/default.conf`（compose，反代 frontend 容器）与新增的 `nginx/standalone.conf`（单镜像，静态前端 + 本地 backend 代理）；`Dockerfile.complete` 改用后者并删除 Debian 默认站点，两种部署方式均恢复正常。
+
 ## [2.4.1] - 2026-06-17
 
 ### Added
