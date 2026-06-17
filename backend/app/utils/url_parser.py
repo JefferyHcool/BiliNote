@@ -48,3 +48,36 @@ def resolve_bilibili_short_url(short_url: str) -> Optional[str]:
     except requests.RequestException as e:
         print(f"Error resolving short URL: {e}")
         return None
+
+
+def extract_bilibili_p_number(url: str) -> Optional[int]:
+    """
+    从 B 站分 P 视频 URL 中提取 p 参数（分 P 序号）。
+
+    支持格式：
+      - https://www.bilibili.com/video/BVxxx/?p=36
+      - https://www.bilibili.com/video/BVxxx?p=5
+      - https://b23.tv/xxxxx?p=10
+      - https://www.bilibili.com/video/BVxxx/pN (尾缀形式)
+
+    :param url: B 站视频链接
+    :return: 分 P 序号（从 1 开始），非分 P 视频返回 None
+    """
+    if "b23.tv" in url:
+        url = resolve_bilibili_short_url(url) or url
+
+    # 匹配 ?p=NNN 或 &p=NNN
+    match = re.search(r'[?&]p=(\d+)', url)
+    if match:
+        p = int(match.group(1))
+        if p >= 1:
+            return p
+
+    # 匹配 /pN 尾缀形式（较少见）
+    match = re.search(r'/p(\d+)(?:/?$|\?|&)', url)
+    if match:
+        p_val = int(match.group(1))
+        if p_val >= 1:
+            return p_val
+
+    return None
