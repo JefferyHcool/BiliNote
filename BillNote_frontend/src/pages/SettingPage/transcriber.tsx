@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,9 @@ export default function Transcriber() {
   const [newModelName, setNewModelName] = useState('')
   const [newModelTarget, setNewModelTarget] = useState('')
   const [addingModel, setAddingModel] = useState(false)
+  // 已提示过的下载失败 key（whisper 用 model_size，mlx 用 mlx-{size}）。
+  // null 表示尚未首次加载——首次加载只建立基线、不对历史失败弹窗。
+  const prevFailedRef = useRef<Set<string> | null>(null)
 
   // 重新拉取配置（不重置用户当前的选择），用于增删自定义模型后刷新下拉与列表
   const reloadConfig = useCallback(async () => {
@@ -56,6 +59,23 @@ export default function Transcriber() {
       setModelStatuses(data.whisper)
       setMlxModelStatuses(data.mlx_whisper)
       setMlxAvailable(data.mlx_available)
+
+      // 下载失败主动提示：只对「本次新出现的失败」弹一次，避免轮询期间反复弹窗
+      const failedNow = new Map<string, ModelStatus>()
+      data.whisper.forEach(m => m.failed && failedNow.set(m.model_size, m))
+      data.mlx_whisper.forEach(m => m.failed && failedNow.set(`mlx-${m.model_size}`, m))
+      if (prevFailedRef.current === null) {
+        // 首次加载：建立基线，不对进入页面前就已失败的项弹窗（仍会在列表里红字展示）
+        prevFailedRef.current = new Set(failedNow.keys())
+      } else {
+        failedNow.forEach((m, key) => {
+          if (!prevFailedRef.current!.has(key)) {
+            const detail = m.error ? `：${m.error.slice(0, 120)}` : ''
+            toast.error(`模型 ${m.model_size} 下载失败${detail}`, { duration: 6000 })
+          }
+        })
+        prevFailedRef.current = new Set(failedNow.keys())
+      }
     } catch {
       // 静默失败，不阻塞主流程
     }
@@ -290,32 +310,44 @@ export default function Transcriber() {
               {currentModels.map(model => (
                 <div
                   key={model.model_size}
-                  className="flex items-center justify-between rounded-md border px-4 py-3"
+                  className="rounded-md border px-4 py-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">{model.model_size}</span>
-                    {model.downloaded ? (
-                      <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                        已下载
-                      </Badge>
-                    ) : model.downloading ? (
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        下载中
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">未下载</Badge>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">{model.model_size}</span>
+                      {model.downloaded ? (
+                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                          已下载
+                        </Badge>
+                      ) : model.downloading ? (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          下载中
+                        </Badge>
+                      ) : model.failed ? (
+                        <Badge variant="destructive" className="flex items-center gap-1" title={model.error}>
+                          <XCircle className="h-3 w-3" />
+                          下载失败
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">未下载</Badge>
+                      )}
+                    </div>
+                    {!model.downloaded && !model.downloading && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(model.model_size, selectedType)}
+                      >
+                        <Download className="mr-1 h-4 w-4" />
+                        {model.failed ? '重试' : '下载'}
+                      </Button>
                     )}
                   </div>
-                  {!model.downloaded && !model.downloading && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownload(model.model_size, selectedType)}
-                    >
-                      <Download className="mr-1 h-4 w-4" />
-                      下载
-                    </Button>
+                  {model.failed && model.error && (
+                    <p className="mt-2 break-all text-xs text-red-500" title={model.error}>
+                      {model.error}
+                    </p>
                   )}
                 </div>
               ))}
@@ -368,10 +400,18 @@ export default function Transcriber() {
                           {status?.downloading && (
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
                           )}
+                          {status?.failed && (
+                            <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          )}
                         </div>
                         <div className="truncate text-xs text-neutral-400" title={target}>
                           {target}
                         </div>
+                        {status?.failed && status?.error && (
+                          <div className="truncate text-xs text-red-500" title={status.error}>
+                            {status.error}
+                          </div>
+                        )}
                       </div>
                       <Button
                         size="sm"
