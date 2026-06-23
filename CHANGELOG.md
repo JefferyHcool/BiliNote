@@ -2,6 +2,12 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.4] - 2026-06-23
+
+### Security
+
+- **升级 Starlette 0.46.1 → 0.47.2 修复 CVE-2025-54121**（[GHSA-2c2j-9gv5-cj73](https://github.com/advisories/GHSA-2c2j-9gv5-cj73)，#411）：旧版在解析 multipart 表单中的大文件时，`SpooledTemporaryFile` 从内存溢写到磁盘的 rollover 在事件循环线程内**同步执行**，攻击者可借大文件上传阻塞事件循环造成拒绝服务（DoS）。新版把该写入移到线程池。FastAPI 同步升级 0.115.12 → 0.116.2（其 starlette 约束由 `<0.47.0` 放宽，以容纳修复版本），与现有 pydantic / anyio / python-multipart 均兼容。
+
 ## [2.4.3] - 2026-06-23
 
 ### Fixed
