@@ -3,7 +3,7 @@
     <p align="center">
   <img src="./doc/icon.svg" alt="BiliNote Banner" width="50" height="50"  />
 </p>
-<h1 align="center" > BiliNote v2.4.3</h1>
+<h1 align="center" > BiliNote v2.4.4</h1>
 </div>
 
 <p align="center"><i>AI 视频笔记生成工具 让 AI 为你的视频做笔记</i></p>
