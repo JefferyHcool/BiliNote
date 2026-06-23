@@ -6,7 +6,8 @@
 检测三处，用户想用命名不符合该约定的模型（比如社区微调版、或自己下到本地的模型）就接不上。
 
 本模块把映射**显式化 + 可配置**（对齐 mlx_whisper_transcriber.MLX_MODEL_MAP 的模式）：
-  - 内置：size → Systran/faster-whisper-{size}
+  - 内置：size → faster-whisper 兼容的 CT2 repo_id（多数为 Systran/faster-whisper-{size}；
+    turbo 用社区维护版，见 BUILTIN_WHISPER_MODELS）
   - 自定义：用户在 config/whisper_models.json 登记 {名称: "<repo_id 或本地路径>"}
     （JSON 持久化；Docker 下随 config 卷持久化）
 
@@ -22,7 +23,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 内置模型：size → faster-whisper 兼容的 HF repo_id（CTranslate2 转换版，Systran 官方维护）。
+# 内置模型：size → faster-whisper 兼容的 HF repo_id（CTranslate2 转换版）。
+# 多数档位用 Systran 官方维护的转换版；turbo 例外见下。
 BUILTIN_WHISPER_MODELS: Dict[str, str] = {
     "tiny": "Systran/faster-whisper-tiny",
     "base": "Systran/faster-whisper-base",
@@ -31,7 +33,10 @@ BUILTIN_WHISPER_MODELS: Dict[str, str] = {
     "large-v1": "Systran/faster-whisper-large-v1",
     "large-v2": "Systran/faster-whisper-large-v2",
     "large-v3": "Systran/faster-whisper-large-v3",
-    "large-v3-turbo": "Systran/faster-whisper-large-v3-turbo",
+    # issue #402：Systran 没有 turbo 的 CT2 转换版（Systran/faster-whisper-large-v3-turbo
+    # 在 HF 上 401/404），点下载会静默失败、状态一直「未下载」。改用社区维护的 CT2 转换版
+    # （deepdml，直链可达、含 model.bin，与 faster-whisper 的 large-v3-turbo 等价）。
+    "large-v3-turbo": "deepdml/faster-whisper-large-v3-turbo-ct2",
 }
 
 # 前端下拉默认展示的内置档位（保持与历史 WHISPER_MODEL_SIZES 一致，不把 8 个全列出来）
