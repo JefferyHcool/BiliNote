@@ -50,7 +50,19 @@ class TestResolve(unittest.TestCase):
 
     def test_builtin_resolves_to_systran(self):
         self.assertEqual(self.reg.resolve("tiny"), "Systran/faster-whisper-tiny")
-        self.assertEqual(self.reg.resolve("large-v3-turbo"), "Systran/faster-whisper-large-v3-turbo")
+
+    def test_large_v3_turbo_resolves_to_live_repo(self):
+        # 回归 issue #402：Systran 从未发布 turbo 的 CT2 转换版，
+        # 原映射 Systran/faster-whisper-large-v3-turbo 在 HF 上 401/404，
+        # 导致下载静默失败、状态一直「未下载」。改用社区维护的 CT2 转换版。
+        self.assertEqual(
+            self.reg.resolve("large-v3-turbo"),
+            "deepdml/faster-whisper-large-v3-turbo-ct2",
+        )
+        self.assertNotEqual(
+            self.reg.resolve("large-v3-turbo"),
+            "Systran/faster-whisper-large-v3-turbo",
+        )
 
     def test_passthrough_repo_id(self):
         # 用户直接把 HF repo_id 当 model_size 传进来（含 "/"）

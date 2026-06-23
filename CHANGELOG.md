@@ -2,6 +2,13 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.3] - 2026-06-23
+
+### Fixed
+
+- **Whisper `large-v3-turbo` 模型无法下载**（#402）：内置映射指向的 `Systran/faster-whisper-large-v3-turbo` 仓库已从 HuggingFace 下架（返回 401/404），点击下载会静默失败、状态一直显示「未下载」。改用社区维护的 CT2 转换版 `deepdml/faster-whisper-large-v3-turbo-ct2`（直链可达、含 `model.bin`，与 faster-whisper 的 `large-v3-turbo` 等价）。
+- **模型下载失败时前端无任何提示**（#402 衍生）：`/transcriber_models_status` 此前只回传 `downloading`/`downloaded`，后台下载失败状态被丢弃。现新增 `model_download_state` 统一维护下载状态与失败原因，状态接口新增 `failed` 字段并透传 `error`；前端模型列表展示「下载失败」徽标 + 错误详情，按钮变为「重试」，并对新出现的失败弹出提示。
+
 ## [2.4.2] - 2026-06-17
 
 ### Fixed

@@ -16,6 +16,10 @@ export interface ModelStatus {
   model_size: string
   downloaded: boolean
   downloading: boolean
+  /** 后台下载失败（仓库 404、网络中断、本地路径缺 model.bin 等）。后端从此字段透传 */
+  failed?: boolean
+  /** 下载失败时的原因（仅 failed 时存在），用于前端提示 */
+  error?: string
 }
 
 export interface ModelsStatusResponse {
