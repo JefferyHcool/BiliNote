@@ -93,7 +93,7 @@ const SectionHeader = ({ title, tip }: { title: string; tip?: string }) => (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Info className="hover:text-primary h-4 w-4 cursor-pointer text-neutral-400" />
+            <Info className="hover:text-primary h-4 w-4 cursor-pointer text-muted-foreground" />
           </TooltipTrigger>
           <TooltipContent className="text-xs">{tip}</TooltipContent>
         </Tooltip>
@@ -354,7 +354,7 @@ const NoteForm = () => {
                 {platform === 'local' && (
                   <>
                     <div
-                      className="hover:border-primary mt-2 flex h-40 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-gray-300 transition-colors"
+                      className="hover:border-primary mt-2 flex h-40 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-border transition-colors"
                       onDragOver={e => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -380,9 +380,9 @@ const NoteForm = () => {
                       ) : uploadSuccess ? (
                         <p className="text-center text-sm text-green-500">上传成功！</p>
                       ) : (
-                        <p className="text-center text-sm text-gray-500">
+                        <p className="text-center text-sm text-muted-foreground">
                           拖拽文件到这里上传 <br />
-                          <span className="text-xs text-gray-400">或点击选择文件</span>
+                          <span className="text-xs text-muted-foreground">或点击选择文件</span>
                         </p>
                       )}
                     </div>

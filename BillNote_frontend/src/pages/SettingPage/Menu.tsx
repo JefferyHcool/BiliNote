@@ -57,7 +57,7 @@ const Menu = () => {
     <div className="flex h-full flex-col">
       <div className={'flex w-full flex-col gap-2'}>
         <div className="text-2xl font-medium">设置</div>
-        <div className="text-sm font-light text-gray-800">全局配置与模型设置</div>
+        <div className="text-sm font-light text-foreground">全局配置与模型设置</div>
       </div>
       <div className="mt-6 flex-1">
         {menuList &&
