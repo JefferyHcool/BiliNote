@@ -71,6 +71,7 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 - 支持多模态视频理解
 - 支持多版本记录保留
 - 支持自行配置 GPT 大模型（OpenAI、DeepSeek、Qwen 等）
+- 可选 TwelveLabs Pegasus 视频理解：直接「看」视频从画面 + 语音生成笔记（详见 [doc/twelvelabs.md](./doc/twelvelabs.md)）
 - 本地模型音频转写（支持 Fast-Whisper、MLX-Whisper、Groq、BCut）
 - GPT 大模型总结视频内容
 - 自动生成结构化 Markdown 笔记
