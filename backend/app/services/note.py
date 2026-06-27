@@ -211,6 +211,7 @@ class NoteGenerator:
                 style=style,
                 extras=extras,
                 video_img_urls=self.video_img_urls,
+                video_url=str(video_url),
             )
 
             # 4. 截图 & 链接替换
@@ -577,6 +578,7 @@ class NoteGenerator:
         style: Optional[str],
         extras: Optional[str],
             video_img_urls: List[str],
+        video_url: Optional[str] = None,
     ) -> str | None:
         """
         调用 GPT 对转写结果进行总结，生成 Markdown 文本并缓存。
@@ -606,6 +608,7 @@ class NoteGenerator:
             style=style,
             extras=extras,
             checkpoint_key=task_id,
+            video_url=video_url,
         )
 
         try:
