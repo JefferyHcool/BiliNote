@@ -240,6 +240,38 @@ class ModelDownloadRequest(BaseModel):
     transcriber_type: str = "fast-whisper"  # "fast-whisper" 或 "mlx-whisper"
 
 
+def _friendly_download_error(e: Exception) -> str:
+    """把 HuggingFace 的网络类报错翻译成用户能照着做的提示（issue #417）。
+
+    典型原文：'An error happened while trying to locate the file on the Hub and we
+    cannot find the requested files in the local cache...' —— 本质是连不上 Hub。
+    用户大概率不知道：默认走 hf-mirror.com 镜像，可配代理或改 HF_ENDPOINT。
+    """
+    raw = str(e)
+    lowered = raw.lower()
+    network_markers = (
+        "locate the file on the hub",
+        "couldn't connect",
+        "connection error",
+        "connecttimeout",
+        "read timed out",
+        "max retries exceeded",
+        "failed to establish",
+        "name or service not known",
+        "temporary failure in name resolution",
+    )
+    if any(m in lowered for m in network_markers):
+        endpoint = os.getenv("HF_ENDPOINT", "https://huggingface.co")
+        return (
+            f"{raw}\n"
+            f"——连不上模型仓库（当前 HF_ENDPOINT={endpoint}）。可尝试："
+            f"1) 在「设置」里配置可用代理；"
+            f"2) 设置环境变量 HF_ENDPOINT 切换镜像（国内可用 https://hf-mirror.com）；"
+            f"3) 确认容器能访问外网/镜像站后重试。"
+        )
+    return raw
+
+
 def _do_download_whisper(model_size: str):
     """后台下载 faster-whisper 模型（支持内置 size / 自定义 repo_id / 本地路径）。
 
@@ -250,9 +282,14 @@ def _do_download_whisper(model_size: str):
     """
     from huggingface_hub import snapshot_download
     from app.transcriber.whisper_models import resolve_whisper_model, is_local_target
+    from app.services.proxy_config_manager import ProxyConfigManager
 
     try:
         dl_state.mark_downloading(model_size)
+        # 让 UI 配的代理对 HuggingFace 下载也生效（issue #417：容器里代理没生效）
+        proxy = ProxyConfigManager().apply_to_env()
+        if proxy:
+            logger.info(f"whisper 下载走代理: {proxy}")
         model_dir = get_model_dir("whisper")
 
         # 已经下好就不重复下
@@ -289,8 +326,9 @@ def _do_download_whisper(model_size: str):
         logger.info(f"whisper 模型下载完成: {model_size}")
         dl_state.mark_done(model_size)
     except Exception as e:
+        msg = _friendly_download_error(e)
         logger.error(f"whisper 模型下载失败: {model_size}, {e}")
-        dl_state.mark_failed(model_size, str(e))
+        dl_state.mark_failed(model_size, msg)
 
 
 def _do_download_mlx_whisper(model_size: str):
@@ -300,6 +338,12 @@ def _do_download_mlx_whisper(model_size: str):
         dl_state.mark_downloading(key)
         from huggingface_hub import snapshot_download as hf_download
         from app.transcriber.mlx_whisper_transcriber import resolve_mlx_repo_id
+        from app.services.proxy_config_manager import ProxyConfigManager
+
+        # 让 UI 配的代理对 HuggingFace 下载也生效（issue #417）
+        proxy = ProxyConfigManager().apply_to_env()
+        if proxy:
+            logger.info(f"mlx-whisper 下载走代理: {proxy}")
 
         try:
             repo_id = resolve_mlx_repo_id(model_size)
@@ -319,8 +363,9 @@ def _do_download_mlx_whisper(model_size: str):
         logger.info(f"mlx-whisper 模型下载完成: {model_size}")
         dl_state.mark_done(key)
     except Exception as e:
+        msg = _friendly_download_error(e)
         logger.error(f"mlx-whisper 模型下载失败: {model_size}, {e}")
-        dl_state.mark_failed(key, str(e))
+        dl_state.mark_failed(key, msg)
 
 
 @router.post("/transcriber_download")

@@ -13,7 +13,8 @@
     "type": "built-in",
     "logo": "DeepSeek",
     "api_key": "",
-    "base_url": "https://api.deepseek.com"
+    "base_url": "https://api.deepseek.com",
+    "models": ["deepseek-chat", "deepseek-reasoner"]
   },
   {
     "id": "qwen",
@@ -21,7 +22,8 @@
     "type": "built-in",
     "logo": "Qwen",
     "api_key": "",
-    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "models": ["qwen-plus", "qwen-turbo", "qwen-max", "qwen-long"]
   },
     {
     "id": "Claude",

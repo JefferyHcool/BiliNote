@@ -60,6 +60,13 @@ async def lifespan(app: FastAPI):
         logger.info("[startup 4/5] seed_default_providers() — 初始化默认 LLM 供应商")
         seed_default_providers()
 
+        # 把已配置的代理 export 到环境变量，让 huggingface_hub（whisper 模型下载）
+        # 也能走代理——含转写时的按需下载（issue #417）。
+        from app.services.proxy_config_manager import ProxyConfigManager
+        _proxy = ProxyConfigManager().apply_to_env()
+        if _proxy:
+            logger.info(f"           已应用全局代理到环境变量: {_proxy}")
+
         logger.info("[startup 5/5] 启动完成，等待请求")
     except Exception:
         logger.exception("[startup FAILED] 后端启动期异常，详见堆栈；容器会退出并由 restart 策略决定是否重试")

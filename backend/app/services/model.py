@@ -83,22 +83,56 @@ class ModelService:
         return enabled_models
     @staticmethod
     def get_all_models_by_id(provider_id: str, verbose: bool = False):
+        """拉取某供应商的可选模型列表，用于设置页下拉。
+
+        历史坑（issue #417）：旧实现对 get_model_list 的返回值直接取 `.data`，但
+        get_model_list 在 /models 调用失败时会吞掉异常返回 `[]`，于是 `[].data`
+        触发 AttributeError，又被这里的 except 吞成 `[]` —— 最终接口返回
+        `{"code":0,"msg":"success","data":[]}`，把「DeepSeek /models 取不到」伪装成
+        成功的空列表，用户完全看不到原因。
+
+        现在：
+          1. 直接捕获 /models 的真实异常（不再二次吞）；
+          2. normalize_models 兼容 SyncPage / list / dict，绝不再 `.data` 崩；
+          3. 动态拿不到（失败或空）时退回内置已知清单，保证下拉非空；
+          4. 仍然为空且确有报错时，把报错带回去（前端可提示，不再假装成功）。
+        """
+        from app.services.model_fallback import (
+            builtin_fallback_models,
+            normalize_models,
+            as_model_dicts,
+        )
+
+        provider = ProviderService.get_provider_by_id(provider_id)
+        if not provider:
+            logger.warning(f"[{provider_id}] 供应商不存在")
+            return {"models": []}
+
+        models: list = []
+        error: str | None = None
         try:
-            provider = ProviderService.get_provider_by_id(provider_id)
-
-            models = ModelService.get_model_list(provider["id"], verbose=verbose)
-            print(type(models))
-            serializable_models = [m.dict() for m in models.data]
-            model_list = {
-                "models": serializable_models
-            }
-
-            logger.info(f"[{provider['name']}] 获取模型成功")
-            return model_list
+            config = ModelService._build_model_config(provider)
+            gpt = GPTFactory().from_config(config)
+            models = normalize_models(gpt.list_models())
+            if verbose:
+                print(f"[{provider['name']}] 动态模型列表: {models}")
         except Exception as e:
-            # print(f"[{provider_id}] 获取模型失败: {e}")
-            logger.error(f"[{provider_id}] 获取模型失败: {e}")
-            return []
+            error = str(e)
+            logger.warning(f"[{provider['name']}] 动态获取模型失败，尝试回退内置清单: {e}")
+
+        if not models:
+            fallback = builtin_fallback_models(provider)
+            if fallback:
+                logger.info(f"[{provider['name']}] /models 为空，回退内置清单: {fallback}")
+                models = as_model_dicts(fallback, owned_by=provider.get("name", ""))
+
+        result = {"models": models}
+        if not models and error:
+            # 既没动态结果也没兜底清单：把真实报错带回去，别再伪装成功
+            result["error"] = error
+        else:
+            logger.info(f"[{provider['name']}] 获取模型成功，共 {len(models)} 个")
+        return result
     @staticmethod
     def connect_test(id: str, model: str | None = None) -> bool:
         """连通性测试：发一条最小化 chat completion。
