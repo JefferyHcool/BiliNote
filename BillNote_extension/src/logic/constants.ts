@@ -1,9 +1,10 @@
 import type { Settings } from './types'
 
-export const DEFAULT_BACKEND_URL = 'http://localhost:8483'
+export const DEFAULT_BACKEND_URL = 'http://localhost:3015'
 
 export const DEFAULT_SETTINGS: Settings = {
   backendUrl: DEFAULT_BACKEND_URL,
+  authToken: '',
   providerId: '',
   modelName: '',
   quality: 'medium',

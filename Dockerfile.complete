@@ -110,7 +110,7 @@ nodaemon=true
 user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
-environment=BACKEND_PORT="8483",BACKEND_HOST="0.0.0.0",TRANSCRIBER_TYPE="fast-whisper",WHISPER_MODEL_SIZE="tiny",FFMPEG_BIN_PATH="",HF_ENDPOINT="https://hf-mirror.com",STATIC="/static",OUT_DIR="./static/screenshots",DATA_DIR="data",NOTE_OUTPUT_DIR="data/note_results",DATABASE_URL="sqlite:////app/backend/data/bili_note.db",IMAGE_BASE_URL="/static/screenshots",ENV="production",GROQ_TRANSCRIBER_MODEL="whisper-large-v3-turbo"
+environment=BACKEND_PORT="8483",BACKEND_HOST="0.0.0.0",TRANSCRIBER_TYPE="fast-whisper",WHISPER_MODEL_SIZE="tiny",FFMPEG_BIN_PATH="",HF_ENDPOINT="https://hf-mirror.com",STATIC="/static",OUT_DIR="./static/screenshots",DATA_DIR="data",NOTE_OUTPUT_DIR="data/note_results",DATABASE_URL="sqlite:////app/backend/data/bili_note.db",IMAGE_BASE_URL="/static/screenshots",ENV="production",GROQ_TRANSCRIBER_MODEL="whisper-large-v3-turbo",BILINOTE_AUTH_ENABLED="false",BILINOTE_AUTH_PASSWORD="",BILINOTE_AUTH_SECRET="",BILINOTE_AUTH_TOKEN_EXPIRE_DAYS="30"
 
 [program:nginx]
 command=nginx -g "daemon off;"
@@ -126,7 +126,7 @@ stdout_logfile=/var/log/supervisor/backend.log
 stderr_logfile=/var/log/supervisor/backend.log
 autorestart=true
 priority=20
-environment=BACKEND_PORT="%(ENV_BACKEND_PORT)s",BACKEND_HOST="%(ENV_BACKEND_HOST)s",TRANSCRIBER_TYPE="%(ENV_TRANSCRIBER_TYPE)s",WHISPER_MODEL_SIZE="%(ENV_WHISPER_MODEL_SIZE)s",FFMPEG_BIN_PATH="%(ENV_FFMPEG_BIN_PATH)s",HF_ENDPOINT="%(ENV_HF_ENDPOINT)s",STATIC="%(ENV_STATIC)s",OUT_DIR="%(ENV_OUT_DIR)s",DATA_DIR="%(ENV_DATA_DIR)s",NOTE_OUTPUT_DIR="%(ENV_NOTE_OUTPUT_DIR)s",DATABASE_URL="%(ENV_DATABASE_URL)s",IMAGE_BASE_URL="%(ENV_IMAGE_BASE_URL)s",ENV="%(ENV_ENV)s",GROQ_TRANSCRIBER_MODEL="%(ENV_GROQ_TRANSCRIBER_MODEL)s"
+environment=BACKEND_PORT="%(ENV_BACKEND_PORT)s",BACKEND_HOST="%(ENV_BACKEND_HOST)s",TRANSCRIBER_TYPE="%(ENV_TRANSCRIBER_TYPE)s",WHISPER_MODEL_SIZE="%(ENV_WHISPER_MODEL_SIZE)s",FFMPEG_BIN_PATH="%(ENV_FFMPEG_BIN_PATH)s",HF_ENDPOINT="%(ENV_HF_ENDPOINT)s",STATIC="%(ENV_STATIC)s",OUT_DIR="%(ENV_OUT_DIR)s",DATA_DIR="%(ENV_DATA_DIR)s",NOTE_OUTPUT_DIR="%(ENV_NOTE_OUTPUT_DIR)s",DATABASE_URL="%(ENV_DATABASE_URL)s",IMAGE_BASE_URL="%(ENV_IMAGE_BASE_URL)s",ENV="%(ENV_ENV)s",GROQ_TRANSCRIBER_MODEL="%(ENV_GROQ_TRANSCRIBER_MODEL)s",BILINOTE_AUTH_ENABLED="%(ENV_BILINOTE_AUTH_ENABLED)s",BILINOTE_AUTH_PASSWORD="%(ENV_BILINOTE_AUTH_PASSWORD)s",BILINOTE_AUTH_SECRET="%(ENV_BILINOTE_AUTH_SECRET)s",BILINOTE_AUTH_TOKEN_EXPIRE_DAYS="%(ENV_BILINOTE_AUTH_TOKEN_EXPIRE_DAYS)s"
 EOF
 
 # nginx/standalone.conf 已直接写好本地 backend(127.0.0.1:8483)与前端静态服务，无需再 sed 改写。

@@ -184,6 +184,8 @@ docker run -d -p 80:80 \
 
 > ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂上面这些数据子目录即可。
 
+公网部署建议开启自托管访问密码：`-e BILINOTE_AUTH_ENABLED=true -e BILINOTE_AUTH_PASSWORD=请改成强密码`。开启后 Web 端与浏览器插件都需要登录，同一后端的笔记历史会跨设备同步。
+
 访问：`http://localhost`
 
 也可以使用 docker-compose 本地构建：
@@ -239,21 +241,33 @@ docker logs -f bilinote-backend
 
 注意：**LLM API key 不要写 `.env`**，从前端「模型供应商」页面录入，会保存到 SQLite 数据库并持久化。
 
-**3. 数据存在哪？删容器会丢吗？**
+**3. 公网部署如何开启访问密码？**
+
+自托管实例默认不启用鉴权，公网部署建议在 `.env` 中开启单用户访问保护：
+
+```env
+BILINOTE_AUTH_ENABLED=true
+BILINOTE_AUTH_PASSWORD=请改成强密码
+```
+
+开启后 Web 端会显示访问密码登录页；浏览器插件需要在「插件设置 → 通用 → 访问鉴权」里输入同一个密码登录。登录后，同一后端里的 `note_results` 笔记历史会同步到不同设备的 Web / 插件历史列表。
+
+**4. 数据存在哪？删容器会丢吗？**
 
 `docker-compose` 用的是 `./backend:/app` 绑挂，下面这些文件都在宿主机的 `./backend/` 目录里、删容器不会丢：
 - `./backend/bili_note.db` —— SQLite 库（含 LLM 供应商配置、笔记历史）
+- `./backend/note_results/` —— 生成的 Markdown 笔记、转写结果、任务状态
 - `./backend/config/transcriber.json` —— 转写器运行时配置
 - `./backend/static/screenshots/` —— 视频截图
 - `./backend/uploads/` —— 上传的本地视频
 
 要彻底重置就 `docker-compose down && rm backend/bili_note.db backend/config/transcriber.json`。
 
-**4. 前端打开是空白页 / 报 502**
+**5. 前端打开是空白页 / 报 502**
 
 通常是 nginx 起来了但 backend 还没 healthy。`docker ps` 看 backend 容器 STATUS 是不是 `(healthy)`；若长期 `(unhealthy)`，按问题 1 排查后端日志。
 
-**5. 不要用 `restart: on-failure:N`**
+**6. 不要用 `restart: on-failure:N`**
 
 如果你 fork 后改过 compose 文件、把 restart 策略改成了 `on-failure:3`：任何 3 次连续崩溃都会让容器永远不再启动，之后改 `.env` 也没用。本项目自带的 compose 已经统一用 `unless-stopped`。
 

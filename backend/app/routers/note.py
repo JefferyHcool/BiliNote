@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel, validator, field_validator
-from dataclasses import asdict
 
 from app.db.video_task_dao import get_task_by_video
 from app.enmus.exception import NoteErrorEnum
@@ -23,6 +22,13 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import StreamingResponse
 import httpx
 from app.enmus.task_status_enums import TaskStatus
+from app.db.video_task_dao import delete_task_by_task_id
+from app.services.note_storage import (
+    delete_note_artifacts,
+    list_notes,
+    persist_task_request,
+    save_note_result,
+)
 
 # from app.services.downloader import download_raw_audio
 # from app.services.whisperer import transcribe_audio
@@ -31,8 +37,9 @@ router = APIRouter()
 
 
 class RecordRequest(BaseModel):
-    video_id: str
-    platform: str
+    video_id: str = ""
+    platform: str = ""
+    task_id: Optional[str] = None
 
 
 class VideoRequest(BaseModel):
@@ -72,10 +79,8 @@ NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
 UPLOAD_DIR = "uploads"
 
 
-def save_note_to_file(task_id: str, note):
-    os.makedirs(NOTE_OUTPUT_DIR, exist_ok=True)
-    with open(os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json"), "w", encoding="utf-8") as f:
-        json.dump(asdict(note), f, ensure_ascii=False, indent=2)
+def save_note_to_file(task_id: str, note, form_data: Optional[dict] = None):
+    save_note_result(task_id, note, form_data=form_data)
 
 
 def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
@@ -115,7 +120,7 @@ def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
 def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
                   link: bool = False, screenshot: bool = False, model_name: str = None, provider_id: str = None,
                   _format: list = None, style: str = None, extras: str = None, video_understanding: bool = False,
-                  video_interval=0, grid_size=[]
+                  video_interval=0, grid_size=[], form_data: Optional[dict] = None
                   ):
 
     if not model_name or not provider_id:
@@ -145,7 +150,7 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
     if not note or not note.markdown:
         logger.warning(f"任务 {task_id} 执行失败，跳过保存")
         return
-    save_note_to_file(task_id, note)
+    save_note_to_file(task_id, note, form_data=form_data)
 
     # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
     try:
@@ -158,10 +163,23 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
 @router.post('/delete_task')
 def delete_task(data: RecordRequest):
     try:
-        # TODO: 待持久化完成
-        # NoteGenerator().delete_note(video_id=data.video_id, platform=data.platform)
+        if data.task_id:
+            delete_note_artifacts(data.task_id)
+            delete_task_by_task_id(data.task_id)
+        elif data.video_id and data.platform:
+            # 兼容旧前端：没有 task_id 时只删除 DB 中 video/platform 记录
+            NoteGenerator().delete_note(video_id=data.video_id, platform=data.platform)
         return R.success(msg='删除成功')
     except Exception as e:
+        return R.error(msg=e)
+
+
+@router.get("/notes")
+def get_notes():
+    try:
+        return R.success(data=list_notes())
+    except Exception as e:
+        logger.error(f"获取笔记列表失败: {e}", exc_info=True)
         return R.error(msg=e)
 
 
@@ -216,6 +234,12 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
             # 正常新建任务
             task_id = str(uuid.uuid4())
 
+        request_meta = data.model_dump(mode="json", exclude={"prefetched_transcript"})
+        try:
+            persist_task_request(task_id, request_meta, video_id=video_id)
+        except Exception as e:
+            logger.warning(f"写入任务请求元数据失败 (task_id={task_id}): {e}")
+
         # 统一先写入 PENDING，表示已进入队列等待串行执行
         NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
 
@@ -228,7 +252,8 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
 
         background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
                                   data.screenshot, data.model_name, data.provider_id, data.format, data.style,
-                                  data.extras, data.video_understanding, data.video_interval, data.grid_size)
+                                  data.extras, data.video_understanding, data.video_interval, data.grid_size,
+                                  request_meta)
         return R.success({"task_id": task_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
