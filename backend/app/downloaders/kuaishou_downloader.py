@@ -32,11 +32,33 @@ class KuaiShouDownloader(Downloader, ABC):
         ks = KuaiShou()
         video_raw_info = ks.run(video_url)
         print(video_raw_info)
-        photo_info = video_raw_info['visionVideoDetail']['photo']
+        detail_info = video_raw_info['visionVideoDetail']
+        photo_info = detail_info['photo']
+        author_info = detail_info.get('author') or {}
+        tags = [tag['name'] for tag in detail_info.get('tags', []) if tag.get('name')]
         video_id = photo_info['id']
         title = photo_info['caption'].strip().replace('\n', '').replace(' ', '_')[:50]
         mp4_path = os.path.join(output_dir, f"{video_id}.mp4")
         mp3_path = os.path.join(output_dir, f"{video_id}.mp3")
+        raw_info = {
+            'tags': tags,
+            'description': photo_info.get('caption') or '',
+            'caption': photo_info.get('caption') or '',
+            'uploader': author_info.get('name') or '',
+            'author': {
+                'id': author_info.get('id') or '',
+                'name': author_info.get('name') or '',
+                'follower_count': author_info.get('followerCount') or author_info.get('fansCount'),
+            },
+            'follower_count': author_info.get('followerCount') or author_info.get('fansCount'),
+            'play_count': photo_info.get('viewCount'),
+            'view_count': photo_info.get('viewCount'),
+            'comment_count': photo_info.get('commentCount'),
+            'like_count': photo_info.get('realLikeCount') or photo_info.get('likeCount'),
+            'timestamp': photo_info.get('timestamp'),
+            'photo': photo_info,
+            'webpage_url': video_url,
+        }
 
         if os.path.exists(mp3_path):
             print(f"[已存在] 跳过下载: {mp3_path}")
@@ -47,9 +69,7 @@ class KuaiShouDownloader(Downloader, ABC):
                 cover_url=photo_info['coverUrl'],
                 platform="kuaishou",
                 video_id=video_id,
-                raw_info={
-                    'tags': ','.join(tag['name'] for tag in video_raw_info.get('tags', []) if tag.get('name'))
-                },
+                raw_info=raw_info,
                 video_path=mp4_path
             )
 
@@ -77,9 +97,7 @@ class KuaiShouDownloader(Downloader, ABC):
             cover_url=photo_info['coverUrl'],
             platform="kuaishou",
             video_id=video_id,
-            raw_info={
-                'tags': ','.join(tag['name'] for tag in video_raw_info.get('tags', []) if tag.get('name'))
-            },
+            raw_info=raw_info,
             video_path=mp4_path
         )
 

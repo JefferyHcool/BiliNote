@@ -7,8 +7,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form.tsx'
-import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useEffect, useState } from 'react'
+import { type FieldErrors, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -25,7 +25,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
-import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
   Select,
@@ -37,7 +36,6 @@ import {
 import { Input } from '@/components/ui/input.tsx'
 import { Textarea } from '@/components/ui/textarea.tsx'
 import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
-import { fetchModels } from '@/services/model.ts'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -65,18 +63,14 @@ const formSchema = z
       if (!video_url) {
         ctx.addIssue({ code: 'custom', message: '本地视频路径不能为空', path: ['video_url'] })
       }
-    }
-    else {
+    } else {
       if (!video_url) {
         ctx.addIssue({ code: 'custom', message: '视频链接不能为空', path: ['video_url'] })
-      }
-      else {
+      } else {
         try {
           const url = new URL(video_url)
-          if (!['http:', 'https:'].includes(url.protocol))
-            throw new Error()
-        }
-        catch {
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
+        } catch {
           ctx.addIssue({ code: 'custom', message: '请输入正确的视频链接', path: ['video_url'] })
         }
       }
@@ -111,7 +105,7 @@ const CheckboxGroup = ({
   onChange: (v: string[]) => void
   disabledMap: Record<string, boolean>
 }) => (
-  <div className="flex flex-wrap space-x-1.5">
+  <div className="flex flex-wrap gap-x-3 gap-y-2">
     {noteFormats.map(({ label, value: v }) => (
       <label key={v} className="flex items-center space-x-2">
         <Checkbox
@@ -129,13 +123,13 @@ const CheckboxGroup = ({
 
 /* -------------------- 主组件 -------------------- */
 const NoteForm = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
-  const { loadEnabledModels, modelList, showFeatureHint, setShowFeatureHint } = useModelStore()
+  const { loadEnabledModels, modelList } = useModelStore()
 
   /* ---- 表单 ---- */
   const form = useForm<NoteFormValues>({
@@ -158,8 +152,8 @@ const NoteForm = () => {
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
-    navigate("/settings/model");
-  };
+    navigate('/settings/model')
+  }
   /* ---- 副作用 ---- */
   useEffect(() => {
     loadEnabledModels()
@@ -205,10 +199,9 @@ const NoteForm = () => {
     setUploadSuccess(false)
 
     try {
-  
-      const  data  = await uploadFile(formData)
-        cb(data.url)
-        setUploadSuccess(true)
+      const data = await uploadFile(formData)
+      cb(data.url)
+      setUploadSuccess(true)
     } catch (err) {
       console.error('上传失败:', err)
       // message.error('上传失败，请重试')
@@ -233,15 +226,16 @@ const NoteForm = () => {
     try {
       const data = await generateNote(payload)
       addPendingTask(data.task_id, values.platform, payload)
-    } catch (e: any) {
+    } catch (e) {
+      const error = e as { data?: { reason?: string; downloading?: boolean } }
       // 就绪门禁：本地转写模型还没下载好。后端返回 reason='transcriber_model_not_ready'，
       // 引导用户去「设置 → 音频转写配置」下载，而不是留一个静默失败的任务。
-      if (e?.data?.reason === 'transcriber_model_not_ready') {
-        const downloading = e?.data?.downloading
+      if (error?.data?.reason === 'transcriber_model_not_ready') {
+        const downloading = error?.data?.downloading
         toast.error(
           downloading
             ? '转写模型正在下载中，请稍候再提交'
-            : '转写模型尚未下载，请先去「音频转写配置」页下载',
+            : '转写模型尚未下载，请先去「音频转写配置」页下载'
         )
         if (!downloading) navigate('/settings/transcriber')
         return
@@ -263,18 +257,14 @@ const NoteForm = () => {
     const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
 
     return (
-      <div className="flex gap-2">
-        <Button
-          type="submit"
-          className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
-          disabled={generating}
-        >
+      <div className={editing ? 'grid grid-cols-2 gap-2' : 'flex'}>
+        <Button type="submit" className="w-full" disabled={generating}>
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {label}
         </Button>
 
         {editing && (
-          <Button type="button" variant="outline" className="w-1/3" onClick={handleCreateNew}>
+          <Button type="button" variant="outline" className="w-full" onClick={handleCreateNew}>
             <Plus className="mr-2 h-4 w-4" />
             新建笔记
           </Button>
@@ -293,14 +283,14 @@ const NoteForm = () => {
 
           {/* 视频链接 & 平台 */}
           <SectionHeader title="视频链接" tip="支持 B 站、YouTube 等平台" />
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {/* 平台选择 */}
 
             <FormField
               control={form.control}
               name="platform"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="w-full sm:w-auto">
                   <Select
                     disabled={!!editing}
                     value={field.value}
@@ -308,7 +298,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-full sm:w-32">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -392,51 +382,56 @@ const NoteForm = () => {
               </FormItem>
             )}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {/* 模型选择 */}
-            {
-
-             modelList.length>0?(     <FormField
-               className="w-full"
-               control={form.control}
-               name="model_name"
-               render={({ field }) => (
-                 <FormItem>
-                   <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
-                   <Select
-                     onOpenChange={()=>{
-                       loadEnabledModels()
-                     }}
-                     value={field.value}
-                     onValueChange={field.onChange}
-                     defaultValue={field.value}
-                   >
-                     <FormControl>
-                       <SelectTrigger className="w-full min-w-0 truncate">
-                         <SelectValue />
-                       </SelectTrigger>
-                     </FormControl>
-                     <SelectContent>
-                       {modelList.map(m => (
-                         <SelectItem key={m.id} value={m.model_name}>
-                           {m.model_name}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />): (
-               <FormItem>
-                 <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
-                  <Button type={'button'} variant={
-                    'outline'
-                  } onClick={()=>{goModelAdd()}}>请先添加模型</Button>
-                 <FormMessage />
-               </FormItem>
-             )
-            }
+            {modelList.length > 0 ? (
+              <FormField
+                className="w-full"
+                control={form.control}
+                name="model_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
+                    <Select
+                      onOpenChange={() => {
+                        loadEnabledModels()
+                      }}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full min-w-0 truncate">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {modelList.map(m => (
+                          <SelectItem key={m.id} value={m.model_name}>
+                            {m.model_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormItem>
+                <SectionHeader title="模型选择" tip="不同模型效果不同，建议自行测试" />
+                <Button
+                  type={'button'}
+                  variant={'outline'}
+                  onClick={() => {
+                    goModelAdd()
+                  }}
+                >
+                  请先添加模型
+                </Button>
+                <FormMessage />
+              </FormItem>
+            )}
 
             {/* 笔记风格 */}
             <FormField
@@ -475,7 +470,7 @@ const NoteForm = () => {
             <FormField
               control={form.control}
               name="video_understanding"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
@@ -489,14 +484,16 @@ const NoteForm = () => {
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {/* 采样间隔 */}
               <FormField
                 control={form.control}
                 name="video_interval"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>采样间隔（秒）</FormLabel>
+                  <FormItem className="min-w-0">
+                    <FormLabel className="block truncate whitespace-nowrap">
+                      采样间隔（秒）
+                    </FormLabel>
                     <Input disabled={!videoUnderstandingEnabled} type="number" {...field} />
                     <FormMessage />
                   </FormItem>
@@ -507,23 +504,25 @@ const NoteForm = () => {
                 control={form.control}
                 name="grid_size"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>拼图尺寸（列 × 行）</FormLabel>
-                    <div className="flex items-center space-x-2">
+                  <FormItem className="min-w-0">
+                    <FormLabel className="block truncate whitespace-nowrap">
+                      拼图尺寸（列×行）
+                    </FormLabel>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                       <Input
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[0] || 3}
                         onChange={e => field.onChange([+e.target.value, field.value?.[1] || 3])}
-                        className="w-16"
+                        className="min-w-0 text-center"
                       />
-                      <span>x</span>
+                      <span className="text-center text-neutral-600">x</span>
                       <Input
                         disabled={!videoUnderstandingEnabled}
                         type="number"
                         value={field.value?.[1] || 3}
                         onChange={e => field.onChange([field.value?.[0] || 3, +e.target.value])}
-                        className="w-16"
+                        className="min-w-0 text-center"
                       />
                     </div>
                     <FormMessage />
@@ -531,9 +530,9 @@ const NoteForm = () => {
                 )}
               />
             </div>
-            <Alert variant="warning" className="text-sm">
-              <AlertDescription>
-                <strong>提示：</strong>视频理解功能必须使用多模态模型。
+            <Alert variant="warning" className="overflow-hidden px-3 py-2 text-xs">
+              <AlertDescription className="block truncate text-xs whitespace-nowrap">
+                <strong>提示：</strong>需使用多模态模型。
               </AlertDescription>
             </Alert>
           </div>
