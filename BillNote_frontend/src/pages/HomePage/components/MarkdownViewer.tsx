@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
+import JSZip from 'jszip'
 import { Button } from '@/components/ui/button.tsx'
 import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -49,6 +50,11 @@ const steps = [
 
 const remarkPlugins = [gfm, remarkMath]
 const rehypePlugins = [rehypeKatex, rehypeSlug]
+const LOCAL_SCREENSHOT_PATTERN = /!\[[^\]]*\]\((\/static\/screenshots\/[^\s)]+)(?:\s+['"][^'"]*['"])?\)/g
+
+function safeFileName(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, '_').trim() || 'note'
+}
 
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。
@@ -403,16 +409,48 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
       URL.revokeObjectURL(url)
     },
   }
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const task = getCurrentTask()
-    const name = task?.audioMeta.title || 'note'
-    const blob = new Blob([selectedContent], { type: 'text/markdown;charset=utf-8' })
+    const name = safeFileName(task?.audioMeta.title || 'note')
+    const zip = new JSZip()
+    const screenshotUrls = [...new Set(
+      Array.from(selectedContent.matchAll(LOCAL_SCREENSHOT_PATTERN), match => match[1])
+    )]
+    let markdown = selectedContent
+    let failedImages = 0
+
+    for (let index = 0; index < screenshotUrls.length; index += 1) {
+      const screenshotUrl = screenshotUrls[index]
+      try {
+        const response = await fetch(`${baseURL}${screenshotUrl}`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+        const sourceName = decodeURIComponent(
+          screenshotUrl.split('/').pop()?.split('?')[0] || `screenshot_${index + 1}.jpg`
+        )
+        const assetPath = `assets/${sourceName}`
+        zip.file(assetPath, await response.blob())
+        markdown = markdown.split(screenshotUrl).join(assetPath)
+      } catch {
+        failedImages += 1
+      }
+    }
+
+    zip.file(`${name}.md`, markdown)
+    const blob = await zip.generateAsync({ type: 'blob' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `${name}.md`
+    link.download = `${name}.zip`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
+
+    if (failedImages) {
+      toast.error(`${failedImages} 张图片未能打包，已保留原始链接`)
+    } else {
+      toast.success(screenshotUrls.length ? 'Markdown 和图片已导出为 ZIP' : 'Markdown 已导出为 ZIP')
+    }
   }
 
   if (status === 'loading') {

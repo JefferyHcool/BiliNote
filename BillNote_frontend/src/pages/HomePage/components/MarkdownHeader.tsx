@@ -163,10 +163,10 @@ export function MarkdownHeader({
             <TooltipTrigger asChild>
               <Button onClick={onDownload} variant="ghost" size="sm" className="h-8 px-2">
                 <Download className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">导出 Markdown</span>
+                <span className="text-sm">导出 Markdown ZIP</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>下载为 Markdown 文件</TooltipContent>
+            <TooltipContent>下载 Markdown 和本地截图</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         <TooltipProvider>
