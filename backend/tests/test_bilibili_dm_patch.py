@@ -4,10 +4,11 @@ TDD coverage for the Bilibili wbi/playurl dm_img risk-control patch.
 Background: around 2026-06, Bilibili's `x/player/wbi/playurl` gateway began
 rejecting requests that omit the browser fingerprint params
 (dm_img_list / dm_img_str / dm_cover_img_str / dm_img_inter + web_location)
-with HTTP 412. yt-dlp (incl. latest) does not yet send these for playurl, so
-videos whose web page does not inline playinfo (forcing the API call) fail.
+with HTTP 412. Older yt-dlp versions did not send these for playurl, so videos
+whose web page does not inline playinfo (forcing the API call) failed.
 
-These tests verify our yt-dlp monkey-patch injects those params *before* wbi
+These tests verify the active implementation (native support in current
+yt-dlp, local fallback in older releases) injects those params before wbi
 signing, and that caller-supplied query params still win.
 """
 import importlib.util
@@ -71,7 +72,7 @@ class ApplyPatchTest(unittest.TestCase):
 
         def fake_download_json(url, video_id, **kwargs):
             # Avoid any network; the real playurl call would 412 without dm_*.
-            return {"data": {"ok": True}}
+            return {"code": 0, "data": {"ok": True}}
 
         ie = BilibiliBaseIE(YoutubeDL({"quiet": True}))
         ie._sign_wbi = fake_sign_wbi

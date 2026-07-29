@@ -7,9 +7,10 @@ Background
 Around 2026-06 Bilibili's ``x/player/wbi/playurl`` gateway began rejecting
 requests that omit the browser fingerprint params
 ``dm_img_list`` / ``dm_img_str`` / ``dm_cover_img_str`` / ``dm_img_inter`` +
-``web_location`` with **HTTP 412**. Current yt-dlp (incl. the latest release)
-does not send these for the playurl endpoint, so any video whose web page does
-*not* inline ``playinfo`` — forcing yt-dlp onto the API path — fails with 412.
+``web_location`` with **HTTP 412**. Older yt-dlp versions did not send these
+for the playurl endpoint, so videos without inline ``playinfo`` failed with
+412. Newer versions provide the ``dm_img_*`` parameters natively, but this
+patch is retained for ``web_location`` and compatibility with older versions.
 Refreshing cookies does not help; the params themselves are missing.
 
 We inject dummy-but-well-formed values *before* wbi signing. The value shapes
@@ -58,12 +59,12 @@ def apply_bilibili_dm_img_patch() -> bool:
     if getattr(original, '_bili_dm_patched', False):
         return True
 
-    def _patched_download_playinfo(self, bvid, cid, headers=None, query=None):
+    def _patched_download_playinfo(self, bvid, cid, headers=None, query=None, *args, **kwargs):
         # dm_* are merged into the query that the original method signs via
         # _sign_wbi; caller-supplied query params (e.g. try_look/qn) take
         # precedence over the injected dummies.
         merged_query = {**build_dm_img_params(), **(query or {})}
-        return original(self, bvid, cid, headers=headers, query=merged_query)
+        return original(self, bvid, cid, headers, merged_query, *args, **kwargs)
 
     _patched_download_playinfo._bili_dm_patched = True
     BilibiliBaseIE._download_playinfo = _patched_download_playinfo
