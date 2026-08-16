@@ -432,4 +432,4 @@ MIT License
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=JefferyHcool/BiliNote&type=Date)](https://www.star-history.com/#JefferyHcool/BiliNote&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=JefferyHcool/BiliNote&type=Date)](https://star-history.dera.page/#JefferyHcool/BiliNote&Date)
