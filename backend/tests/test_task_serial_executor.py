@@ -12,12 +12,12 @@ if spec is None or spec.loader is None:
     raise ImportError("task_serial_executor module spec not found")
 task_serial_executor = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(task_serial_executor)
-SerialTaskExecutor = task_serial_executor.SerialTaskExecutor
+ConcurrentTaskExecutor = task_serial_executor.ConcurrentTaskExecutor
 
 
 class TestTaskSerialExecutor(unittest.TestCase):
-    def test_executor_runs_tasks_one_by_one(self):
-        executor = SerialTaskExecutor()
+    def test_executor_runs_tasks_in_parallel_with_a_hard_limit(self):
+        executor = ConcurrentTaskExecutor(max_workers=2)
         state_lock = threading.Lock()
         state = {"active": 0, "peak_active": 0}
 
@@ -29,13 +29,13 @@ class TestTaskSerialExecutor(unittest.TestCase):
             with state_lock:
                 state["active"] -= 1
 
-        threads = [threading.Thread(target=lambda: executor.run(critical_work)) for _ in range(2)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        futures = [executor.submit(critical_work) for _ in range(4)]
+        for future in futures:
+            future.result()
 
-        self.assertEqual(state["peak_active"], 1)
+        self.assertEqual(state["peak_active"], 2)
+        self.assertEqual(executor.max_workers, 2)
+        executor.shutdown()
 
 
 if __name__ == "__main__":

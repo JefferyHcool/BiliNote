@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
-import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
+import { AlertTriangle, Copy, ArrowRight, Play, ExternalLink, RotateCcw } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
@@ -18,13 +18,16 @@ import rehypeSlug from 'rehype-slug'
 import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown-light.css'
 import { ScrollArea } from '@/components/ui/scroll-area.tsx'
-import { useTaskStore } from '@/store/taskStore'
+import { useTaskStore, type Task } from '@/store/taskStore'
 import { noteStyles } from '@/constant/note.ts'
 import { MarkdownHeader } from '@/pages/HomePage/components/MarkdownHeader.tsx'
 import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
+import MarkdownEditor from '@/pages/HomePage/components/MarkdownEditor.tsx'
+import FloatingToc from '@/pages/HomePage/components/FloatingToc.tsx'
+import { get_task_status } from '@/services/note.ts'
 
 interface VersionNote {
   ver_id: string
@@ -49,6 +52,31 @@ const steps = [
 
 const remarkPlugins = [gfm, remarkMath]
 const rehypePlugins = [rehypeKatex, rehypeSlug]
+
+const extractPageFromUrl = (value?: string) => {
+  const page = value?.match(/[?&]p=(\d+)/i)?.[1]
+  return page ? Number(page) : undefined
+}
+
+const extractContentSourcePage = (content: string) => {
+  const sourceUrl = content.match(/^>\s*来源链接：([^\n]+)/m)?.[1]
+  return extractPageFromUrl(sourceUrl)
+}
+
+// 老版本批量任务没有 batch_page，因此同时从 URL、视频 ID 和标题推断分集。
+const inferExpectedPage = (task?: Task | null) => {
+  if (!task) return undefined
+  if (task.formData.batch_page) return task.formData.batch_page
+
+  const urlPage = extractPageFromUrl(task.formData.video_url)
+  if (urlPage) return urlPage
+
+  const videoIdPage = task.audioMeta?.video_id?.match(/(?:_|-)p(\d+)$/i)?.[1]
+  if (videoIdPage) return Number(videoIdPage)
+
+  const titlePage = task.audioMeta?.title?.match(/(?:^|[\s_-])P(\d+)(?=$|[\s_-])/i)?.[1]
+  return titlePage ? Number(titlePage) : undefined
+}
 
 /**
  * 构建 ReactMarkdown components 对象，baseURL 用于修正图片路径。
@@ -314,12 +342,7 @@ function createMarkdownComponents(baseURL: string) {
 }
 
 const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
-  const [copied, setCopied] = useState(false)
   const [currentVerId, setCurrentVerId] = useState<string>('')
-  const [selectedContent, setSelectedContent] = useState<string>('')
-  const [modelName, setModelName] = useState<string>('')
-  const [style, setStyle] = useState<string>('')
-  const [createTime, setCreateTime] = useState<string>('')
   // 确保baseURL没有尾部斜杠
   const baseURL = (String(import.meta.env.VITE_API_BASE_URL || '').replace('/api','') || '').replace(/\/$/, '')
   const getCurrentTask = useTaskStore.getState().getCurrentTask
@@ -329,79 +352,64 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
-  const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
-  const svgRef = useRef<SVGSVGElement>(null)
+  const [viewMode, setViewMode] = useState<'map' | 'preview' | 'edit'>('preview')
+  const updateTaskMarkdown = useTaskStore(state => state.updateTaskMarkdown)
+  const markdownContentRef = useRef<HTMLDivElement>(null)
+  const [floatingTocExpanded, setFloatingTocExpanded] = useState(false)
+  const [restoringOriginal, setRestoringOriginal] = useState(false)
+  const automaticRestoreAttempts = useRef(new Set<string>())
 
   // 缓存 ReactMarkdown components，仅在 baseURL 变化时重建
   const markdownComponents = useMemo(() => createMarkdownComponents(baseURL), [baseURL])
 
-  // 多版本内容处理
+  // 直接从当前任务推导正文，绝不在任务切换时复用上一篇笔记的 selectedContent。
+  // currentVerId 如果属于上一篇任务，会立刻回退到新任务的最新版本。
+  const sortedVersions = useMemo(() => (
+    Array.isArray(currentTask?.markdown)
+      ? [...currentTask.markdown].sort(
+        (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+      )
+      : []
+  ), [currentTask?.markdown])
+  const latestVersion = sortedVersions[0]
+  const selectedVersion = sortedVersions.find(version => version.ver_id === currentVerId)
+    || latestVersion
+  const effectiveVerId = selectedVersion?.ver_id || ''
+  const selectedContent = typeof currentTask?.markdown === 'string'
+    ? currentTask.markdown
+    : selectedVersion?.content || ''
+  const modelName = selectedVersion?.model_name || currentTask?.formData.model_name || ''
+  const style = selectedVersion?.style || currentTask?.formData.style || ''
+  const createTime = selectedVersion?.created_at || currentTask?.createdAt || ''
+  const expectedBatchPage = inferExpectedPage(currentTask)
+  const contentSourcePage = extractContentSourcePage(selectedContent)
+  const batchPageMismatch = Boolean(
+    expectedBatchPage
+    && contentSourcePage
+    && expectedBatchPage !== contentSourcePage,
+  )
+
   useEffect(() => {
-    if (!currentTask) return
+    setCurrentVerId(latestVersion?.ver_id || '')
+    setViewMode('preview')
+    setShowChat(false)
+    setShowTranscribe(false)
+  }, [currentTask?.id, latestVersion?.ver_id, taskStatus])
 
-    if (!isMultiVersion) {
-      setCurrentVerId('') // 清空旧版本 ID
-      setModelName(currentTask.formData.model_name)
-      setStyle(currentTask.formData.style)
-      setCreateTime(currentTask.createdAt)
-      setSelectedContent(currentTask?.markdown)
-    } else {
-      const latestVersion = [...currentTask.markdown].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0]
-
-      if (latestVersion) {
-        setCurrentVerId(latestVersion.ver_id)
-      }
-    }
-  }, [currentTask?.id, taskStatus])
-  useEffect(() => {
-    if (!currentTask || !isMultiVersion) return
-
-    const currentVer = currentTask.markdown.find(v => v.ver_id === currentVerId)
-    if (currentVer) {
-      setModelName(currentVer.model_name)
-      setStyle(currentVer.style)
-      setCreateTime(currentVer.created_at || '')
-      setSelectedContent(currentVer.content)
-    }
-  }, [currentVerId, currentTask?.id])
+  useLayoutEffect(() => {
+    if (viewMode !== 'preview') return
+    const viewport = markdownContentRef.current
+      ?.closest('[data-slot="scroll-area"]')
+      ?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    viewport?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [currentTask?.id, effectiveVerId, taskStatus, viewMode])
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
-      setCopied(true)
       toast.success('已复制到剪贴板')
-      setTimeout(() => setCopied(false), 2000)
-    } catch (e) {
+    } catch {
       toast.error('复制失败')
     }
-  }
-  const alertButton = {
-    id: 'alert',
-    title: '测试警告',
-    content: '⚠️',
-    onClick: () => alert('你点击了自定义按钮！'),
-  }
-  const exportButton = {
-    id: 'export',
-    title: '导出思维导图',
-    content: '⤓',
-    onClick: () => {
-      const svgEl = svgRef.current
-      if (!svgEl) return
-      // 同上面的序列化逻辑
-      const serializer = new XMLSerializer()
-      const source = serializer.serializeToString(svgEl)
-      const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>', source], {
-        type: 'image/svg+xml;charset=utf-8',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'mindmap.svg'
-      a.click()
-      URL.revokeObjectURL(url)
-    },
   }
   const handleDownload = () => {
     const task = getCurrentTask()
@@ -414,6 +422,76 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
     link.click()
     document.body.removeChild(link)
   }
+
+  const handleSaveEdit = (taskId: string, versionId: string, content: string) => {
+    const stillCurrent = useTaskStore.getState().currentTaskId === taskId
+    if (!stillCurrent) {
+      toast.error('当前笔记已切换，已阻止将内容保存到其他笔记')
+      return false
+    }
+    const saved = updateTaskMarkdown(taskId, content, versionId || undefined)
+    if (saved) {
+      setViewMode('preview')
+    }
+    return saved
+  }
+
+  const loadOriginalGeneratedContent = async (taskId: string) => {
+    const response = await get_task_status(taskId)
+    if (response?.status !== 'SUCCESS' || typeof response?.result?.markdown !== 'string') {
+      return null
+    }
+    return response.result.markdown as string
+  }
+
+  const restoreOriginalContent = useCallback(async (askForConfirmation: boolean) => {
+    if (!currentTask || !batchPageMismatch) return
+    if (askForConfirmation && !window.confirm(
+      `当前是 P${expectedBatchPage}，但正文来源是 P${contentSourcePage}。是否从后端缓存恢复 P${expectedBatchPage} 的原始生成稿？`,
+    )) return
+
+    const taskId = currentTask.id
+    const versionId = effectiveVerId
+    setRestoringOriginal(true)
+    try {
+      const original = await loadOriginalGeneratedContent(taskId)
+      const originalPage = original ? extractContentSourcePage(original) : undefined
+      if (!original || (originalPage && originalPage !== expectedBatchPage)) {
+        toast.error('后端原始生成稿与当前分集不匹配，已停止恢复')
+        return
+      }
+      if (useTaskStore.getState().currentTaskId !== taskId) return
+      if (!updateTaskMarkdown(taskId, original, versionId || undefined)) {
+        toast.error('恢复失败，当前任务或版本已变化')
+        return
+      }
+      toast.success(`P${expectedBatchPage} 原始生成稿已恢复，覆盖前内容已自动备份`)
+    } catch {
+      toast.error('读取后端原始生成稿失败')
+    } finally {
+      setRestoringOriginal(false)
+    }
+  }, [batchPageMismatch, contentSourcePage, currentTask, effectiveVerId, expectedBatchPage, updateTaskMarkdown])
+
+  const restoreOriginalImmediately = () => restoreOriginalContent(true)
+
+  useEffect(() => {
+    if (!currentTask || !batchPageMismatch) return
+    const attemptKey = `${currentTask.id}:${effectiveVerId || 'legacy'}`
+    if (automaticRestoreAttempts.current.has(attemptKey)) return
+    automaticRestoreAttempts.current.add(attemptKey)
+    void restoreOriginalContent(false)
+  }, [batchPageMismatch, currentTask, effectiveVerId, restoreOriginalContent])
+
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={markdownComponents}
+    >
+      {content.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
+    </ReactMarkdown>
+  )
 
   if (status === 'loading') {
     return (
@@ -458,26 +536,41 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
-      <MarkdownHeader
-        currentTask={currentTask}
-        isMultiVersion={isMultiVersion}
-        currentVerId={currentVerId}
-        setCurrentVerId={setCurrentVerId}
-        modelName={modelName}
-        style={style}
-        noteStyles={noteStyles}
-        onCopy={handleCopy}
-        onDownload={handleDownload}
-        createAt={createTime}
-        showTranscribe={showTranscribe}
-        setShowTranscribe={setShowTranscribe}
-        showChat={showChat}
-        setShowChat={setShowChat}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-      />
+      {viewMode !== 'edit' && (
+        <MarkdownHeader
+          currentTask={currentTask}
+          isMultiVersion={isMultiVersion}
+          currentVerId={effectiveVerId}
+          setCurrentVerId={setCurrentVerId}
+          modelName={modelName}
+          style={style}
+          noteStyles={noteStyles}
+          onCopy={handleCopy}
+          onDownload={handleDownload}
+          createAt={createTime}
+          showTranscribe={showTranscribe}
+          setShowTranscribe={setShowTranscribe}
+          showChat={showChat}
+          setShowChat={setShowChat}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+        />
+      )}
 
-      {viewMode === 'map' ? (
+      {viewMode === 'edit' && currentTask ? (
+        <MarkdownEditor
+          key={`${currentTask.id}-${effectiveVerId || 'legacy'}`}
+          value={selectedContent}
+          onSave={content => handleSaveEdit(currentTask.id, effectiveVerId, content)}
+          onCancel={() => setViewMode('preview')}
+          renderPreview={renderMarkdown}
+          onRestoreOriginal={
+            !selectedVersion || selectedVersion.ver_id === latestVersion?.ver_id
+              ? () => loadOriginalGeneratedContent(currentTask.id)
+              : undefined
+          }
+        />
+      ) : viewMode === 'map' ? (
         <div className="flex w-full flex-1 overflow-hidden bg-white">
           <div className={'w-full'}>
             <MarkmapEditor
@@ -498,23 +591,47 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                 </div>
               ) : (
               <>
-              <ScrollArea className="min-w-0 flex-1">
-                <div className="px-2">
-                  <VideoBanner
-                    audioMeta={currentTask?.audioMeta}
-                    videoUrl={currentTask?.formData?.video_url}
-                  />
-                </div>
-                <div className={'markdown-body w-full px-2'}>
-                  <ReactMarkdown
-                    remarkPlugins={remarkPlugins}
-                    rehypePlugins={rehypePlugins}
-                    components={markdownComponents}
+              <div className="relative min-w-0 flex-1">
+                <ScrollArea className="h-full w-full">
+                  {batchPageMismatch && (
+                    <div className="mx-2 mb-2 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        检测到当前任务是 P{expectedBatchPage}，但正文来源是 P{contentSourcePage}。
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={restoringOriginal}
+                        onClick={restoreOriginalImmediately}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        {restoringOriginal ? '恢复中…' : '恢复正确原稿'}
+                      </Button>
+                    </div>
+                  )}
+                  <div className="px-2">
+                    <VideoBanner
+                      audioMeta={currentTask?.audioMeta}
+                      videoUrl={currentTask?.formData?.video_url}
+                    />
+                  </div>
+                  <div
+                    ref={markdownContentRef}
+                    className={`markdown-body w-full py-0 pl-2 transition-[padding] duration-200 ${
+                      floatingTocExpanded ? 'pr-[13rem] xl:pr-[15rem]' : 'pr-2'
+                    }`}
                   >
-                    {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
-                  </ReactMarkdown>
-                </div>
-              </ScrollArea>
+                    {renderMarkdown(selectedContent)}
+                  </div>
+                </ScrollArea>
+                <FloatingToc
+                  contentRootRef={markdownContentRef}
+                  contentKey={`${currentTask?.id || ''}-${effectiveVerId}-${selectedContent}`}
+                  onExpandedChange={setFloatingTocExpanded}
+                />
+              </div>
               {showTranscribe && (
                 <div className={'ml-2 w-2/4'}>
                   <TranscriptViewer />

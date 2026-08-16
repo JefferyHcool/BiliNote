@@ -81,3 +81,18 @@ def extract_bilibili_p_number(url: str) -> Optional[int]:
             return p_val
 
     return None
+
+
+def build_bilibili_page_url(url: str, page_number: int) -> str:
+    """把任意 B 站视频链接规范化为指定分 P 的稳定链接。
+
+    批量任务不保留 ``spm_id_from``、``vd_source`` 等跟踪参数，避免相同分集
+    因查询参数不同被当成不同资源。短链接会先解析到 BV 号。
+    """
+    if page_number < 1:
+        raise ValueError("B 站分集序号必须大于等于 1")
+
+    bvid = extract_video_id(url, "bilibili")
+    if not bvid:
+        raise ValueError(f"无法从 Bilibili 链接提取 BV 号: {url}")
+    return f"https://www.bilibili.com/video/{bvid}?p={page_number}"

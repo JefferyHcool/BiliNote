@@ -443,6 +443,10 @@ class NoteGenerator:
                         unit_width=960,
                         unit_height=540,
                         save_quality=80,
+                        # 并行任务必须使用各自目录。VideoReader.run 会清空目录，
+                        # 如果共享默认目录，会互相删除对方刚截取的帧。
+                        frame_dir=str(NOTE_OUTPUT_DIR / f"{task_id}_frames"),
+                        grid_dir=str(NOTE_OUTPUT_DIR / f"{task_id}_grids"),
                     ).run()
                 else:
                     logger.info("未指定 grid_size，跳过缩略图生成")
@@ -592,7 +596,10 @@ class NoteGenerator:
         :param extras: GPT 额外参数
         :return: 生成的 Markdown 字符串
         """
-        task_id = markdown_cache_file.stem
+        # markdown 文件名是 <task_id>_markdown.md；此前直接使用 stem 会把
+        # 总结状态写到 <task_id>_markdown.status.json，前端轮询的原任务状态
+        # 因而一直停在 TRANSCRIBING。这里还原真正的任务 ID。
+        task_id = markdown_cache_file.stem.removesuffix("_markdown")
         self._update_status(task_id, TaskStatus.SUMMARIZING)
 
         source = GPTSource(

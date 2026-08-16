@@ -11,8 +11,16 @@ class ConcurrentTaskExecutor:
         self._pool = ThreadPoolExecutor(max_workers=self._max_workers)
 
     def run(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        future: Future = self._pool.submit(fn, *args, **kwargs)
+        future = self.submit(fn, *args, **kwargs)
         return future.result()
+
+    def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Future:
+        """提交任务但不阻塞，供批量任务共享同一个全局并发上限。"""
+        return self._pool.submit(fn, *args, **kwargs)
+
+    @property
+    def max_workers(self) -> int:
+        return self._max_workers
 
     def shutdown(self, wait: bool = True):
         self._pool.shutdown(wait=wait)
