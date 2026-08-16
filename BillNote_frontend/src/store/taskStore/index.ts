@@ -54,6 +54,7 @@ export interface Markdown {
   style: string
   model_name: string
   created_at: string
+  edited_at?: string
 }
 
 export interface TaskFormData extends GenerateNotePayload {
@@ -71,6 +72,7 @@ export interface Task {
   audioMeta: AudioMeta
   createdAt: string
   lastGeneratedAt?: string
+  lastEditedAt?: string
   formData: TaskFormData
 }
 
@@ -88,6 +90,7 @@ interface TaskStore {
     title?: string
   }>) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
+  updateTaskMarkdown: (id: string, content: string, versionId?: string) => boolean
   removeTask: (id: string) => void
   clearTasks: () => void
   setCurrentTask: (taskId: string | null) => void
@@ -234,6 +237,38 @@ export const useTaskStore = create<TaskStore>()(
               return { ...task, ...data, ...generationUpdate }
             }),
           })),
+
+      updateTaskMarkdown: (id, content, versionId) => {
+        const task = get().tasks.find(item => item.id === id)
+        if (!task) return false
+
+        const editedAt = new Date().toISOString()
+        if (Array.isArray(task.markdown)) {
+          const targetVersionId = versionId || task.markdown[0]?.ver_id
+          if (!targetVersionId || !task.markdown.some(note => note.ver_id === targetVersionId)) {
+            return false
+          }
+          set(state => ({
+            tasks: state.tasks.map(item => item.id === id
+              ? {
+                ...item,
+                lastEditedAt: editedAt,
+                markdown: (item.markdown as Markdown[]).map(note => note.ver_id === targetVersionId
+                  ? { ...note, content, edited_at: editedAt }
+                  : note),
+              }
+              : item),
+          }))
+          return true
+        }
+
+        set(state => ({
+          tasks: state.tasks.map(item => item.id === id
+            ? { ...item, markdown: content, lastEditedAt: editedAt }
+            : item),
+        }))
+        return true
+      },
 
 
       getCurrentTask: () => {

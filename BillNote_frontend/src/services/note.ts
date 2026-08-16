@@ -34,6 +34,19 @@ export interface GenerateNoteBatchResult {
   tasks: BatchTaskItem[]
 }
 
+export interface NoteImageConfig {
+  default_directory: string
+  max_size_mb: number
+}
+
+export interface UploadedNoteImage {
+  id: string
+  url: string
+  filename: string
+  directory: string
+  size: number
+}
+
 export const generateNote = async (data: GenerateNotePayload) => {
   try {
     console.log('generateNote', data)
@@ -104,4 +117,25 @@ export const get_task_status = async (task_id: string) => {
 
     throw e // 抛出错误以便调用方处理
   }
+}
+
+export const getNoteImageConfig = async (): Promise<NoteImageConfig> => {
+  return await request.get('/note_images/config')
+}
+
+export const uploadNoteImage = async (
+  file: File,
+  saveDirectory?: string,
+): Promise<UploadedNoteImage> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (saveDirectory?.trim()) formData.append('save_directory', saveDirectory.trim())
+  return await request.post('/note_images', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  })
+}
+
+export const deleteNoteImage = async (imageId: string): Promise<void> => {
+  await request.delete(`/note_images/${imageId}`, { suppressToast: true })
 }

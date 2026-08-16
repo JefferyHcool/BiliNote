@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Download, BrainCircuit, MessageSquare } from 'lucide-react'
+import { Copy, Download, BrainCircuit, MessageSquare, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -27,9 +27,12 @@ interface NoteHeaderProps {
   onCopy: () => void
   onDownload: () => void
   createAt?: string | Date
+  showTranscribe: boolean
   setShowTranscribe: (show: boolean) => void
   showChat?: false | 'half' | 'full'
   setShowChat?: (mode: false | 'half' | 'full') => void
+  viewMode: 'map' | 'preview' | 'edit'
+  setViewMode: (mode: 'map' | 'preview' | 'edit') => void
 }
 
 export function MarkdownHeader({
@@ -67,10 +70,6 @@ export function MarkdownHeader({
 
   const styleName = noteStyles.find(v => v.value === style)?.label || style
 
-  const reversedMarkdown: VersionNote[] = Array.isArray(currentTask?.markdown)
-    ? [...currentTask!.markdown].reverse()
-    : []
-
   const formatDate = (date: string | Date | undefined) => {
     if (!date) return ''
     const d = typeof date === 'string' ? new Date(date) : date
@@ -102,7 +101,7 @@ export function MarkdownHeader({
             </SelectTrigger>
 
             <SelectContent>
-              {(currentTask?.markdown || []).map((v, idx) => {
+              {(currentTask?.markdown || []).map(v => {
                 const shortId = v.ver_id.slice(-6)
                 return (
                   <SelectItem key={v.ver_id} value={v.ver_id}>
@@ -132,15 +131,31 @@ export function MarkdownHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                onClick={() => setViewMode('edit')}
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+              >
+                <Pencil className="mr-1.5 h-4 w-4" />
+                <span className="text-sm">编辑笔记</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>编辑 Markdown 正文</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
                 onClick={() => {
-                  setViewMode(viewMode == 'preview' ? 'map' : 'preview')
+                  setViewMode(viewMode === 'preview' ? 'map' : 'preview')
                 }}
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2"
               >
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
-                <span className="text-sm">{viewMode == 'preview' ? '思维导图' : 'markdown'}</span>
+                <span className="text-sm">{viewMode === 'preview' ? '思维导图' : 'Markdown'}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>思维导图</TooltipContent>

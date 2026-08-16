@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
+import { useState, useEffect, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
-import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
+import { Copy, ArrowRight, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
@@ -25,6 +25,7 @@ import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
+import MarkdownEditor from '@/pages/HomePage/components/MarkdownEditor.tsx'
 
 interface VersionNote {
   ver_id: string
@@ -314,7 +315,6 @@ function createMarkdownComponents(baseURL: string) {
 }
 
 const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
-  const [copied, setCopied] = useState(false)
   const [currentVerId, setCurrentVerId] = useState<string>('')
   const [selectedContent, setSelectedContent] = useState<string>('')
   const [modelName, setModelName] = useState<string>('')
@@ -329,8 +329,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const isMultiVersion = Array.isArray(currentTask?.markdown)
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
-  const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
-  const svgRef = useRef<SVGSVGElement>(null)
+  const [viewMode, setViewMode] = useState<'map' | 'preview' | 'edit'>('preview')
+  const updateTaskMarkdown = useTaskStore(state => state.updateTaskMarkdown)
 
   // 缓存 ReactMarkdown components，仅在 baseURL 变化时重建
   const markdownComponents = useMemo(() => createMarkdownComponents(baseURL), [baseURL])
@@ -369,39 +369,10 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
-      setCopied(true)
       toast.success('已复制到剪贴板')
-      setTimeout(() => setCopied(false), 2000)
-    } catch (e) {
+    } catch {
       toast.error('复制失败')
     }
-  }
-  const alertButton = {
-    id: 'alert',
-    title: '测试警告',
-    content: '⚠️',
-    onClick: () => alert('你点击了自定义按钮！'),
-  }
-  const exportButton = {
-    id: 'export',
-    title: '导出思维导图',
-    content: '⤓',
-    onClick: () => {
-      const svgEl = svgRef.current
-      if (!svgEl) return
-      // 同上面的序列化逻辑
-      const serializer = new XMLSerializer()
-      const source = serializer.serializeToString(svgEl)
-      const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>', source], {
-        type: 'image/svg+xml;charset=utf-8',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'mindmap.svg'
-      a.click()
-      URL.revokeObjectURL(url)
-    },
   }
   const handleDownload = () => {
     const task = getCurrentTask()
@@ -414,6 +385,26 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
     link.click()
     document.body.removeChild(link)
   }
+
+  const handleSaveEdit = (content: string) => {
+    if (!currentTask) return false
+    const saved = updateTaskMarkdown(currentTask.id, content, currentVerId || undefined)
+    if (saved) {
+      setSelectedContent(content)
+      setViewMode('preview')
+    }
+    return saved
+  }
+
+  const renderMarkdown = (content: string) => (
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={markdownComponents}
+    >
+      {content.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
+    </ReactMarkdown>
+  )
 
   if (status === 'loading') {
     return (
@@ -458,26 +449,36 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
-      <MarkdownHeader
-        currentTask={currentTask}
-        isMultiVersion={isMultiVersion}
-        currentVerId={currentVerId}
-        setCurrentVerId={setCurrentVerId}
-        modelName={modelName}
-        style={style}
-        noteStyles={noteStyles}
-        onCopy={handleCopy}
-        onDownload={handleDownload}
-        createAt={createTime}
-        showTranscribe={showTranscribe}
-        setShowTranscribe={setShowTranscribe}
-        showChat={showChat}
-        setShowChat={setShowChat}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-      />
+      {viewMode !== 'edit' && (
+        <MarkdownHeader
+          currentTask={currentTask}
+          isMultiVersion={isMultiVersion}
+          currentVerId={currentVerId}
+          setCurrentVerId={setCurrentVerId}
+          modelName={modelName}
+          style={style}
+          noteStyles={noteStyles}
+          onCopy={handleCopy}
+          onDownload={handleDownload}
+          createAt={createTime}
+          showTranscribe={showTranscribe}
+          setShowTranscribe={setShowTranscribe}
+          showChat={showChat}
+          setShowChat={setShowChat}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+        />
+      )}
 
-      {viewMode === 'map' ? (
+      {viewMode === 'edit' && currentTask ? (
+        <MarkdownEditor
+          key={`${currentTask.id}-${currentVerId || 'legacy'}`}
+          value={selectedContent}
+          onSave={handleSaveEdit}
+          onCancel={() => setViewMode('preview')}
+          renderPreview={renderMarkdown}
+        />
+      ) : viewMode === 'map' ? (
         <div className="flex w-full flex-1 overflow-hidden bg-white">
           <div className={'w-full'}>
             <MarkmapEditor
@@ -506,13 +507,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                   />
                 </div>
                 <div className={'markdown-body w-full px-2'}>
-                  <ReactMarkdown
-                    remarkPlugins={remarkPlugins}
-                    rehypePlugins={rehypePlugins}
-                    components={markdownComponents}
-                  >
-                    {selectedContent.replace(/^>\s*来源链接：[^\n]*\n*/m, '')}
-                  </ReactMarkdown>
+                  {renderMarkdown(selectedContent)}
                 </div>
               </ScrollArea>
               {showTranscribe && (

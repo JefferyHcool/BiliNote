@@ -6,7 +6,8 @@ from concurrent.futures import as_completed
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from dataclasses import asdict
 
@@ -15,6 +16,7 @@ from app.enmus.exception import NoteErrorEnum
 from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
+from app.services.note_image import MAX_IMAGE_BYTES, NoteImageError, note_image_manager
 from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.task_serial_executor import task_serial_executor
 from app.utils.response import ResponseWrapper as R
@@ -241,6 +243,68 @@ async def upload(file: UploadFile = File(...)):
 
     # 假设你静态目录挂载了 /uploads
     return R.success({"url": f"/uploads/{file.filename}"})
+
+
+@router.get("/note_images/config")
+def get_note_image_config():
+    return R.success({
+        "default_directory": note_image_manager.get_default_directory(),
+        "max_size_mb": MAX_IMAGE_BYTES // (1024 * 1024),
+    })
+
+
+@router.post("/note_images")
+async def upload_note_image(
+    file: UploadFile = File(...),
+    save_directory: Optional[str] = Form(default=None),
+):
+    try:
+        record = note_image_manager.save_image(
+            # Read one byte beyond the limit so oversized uploads are rejected
+            # without buffering an arbitrarily large file in memory.
+            content=await file.read(MAX_IMAGE_BYTES + 1),
+            original_name=file.filename or "image",
+            content_type=file.content_type,
+            save_directory=save_directory,
+        )
+        return R.success({
+            "id": record["id"],
+            "url": f"/api/note_images/{record['id']}",
+            "filename": record["filename"],
+            "directory": str(os.path.dirname(record["path"])),
+            "size": record["size"],
+        }, msg="图片上传成功")
+    except NoteImageError as exc:
+        return R.error(msg=str(exc), code=400101)
+
+
+@router.get("/note_images/{image_id}")
+def read_note_image(image_id: str):
+    try:
+        record = note_image_manager.get_image(image_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        path=record["path"],
+        media_type=record["content_type"],
+        filename=record["filename"],
+        content_disposition_type="inline",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        },
+    )
+
+
+@router.delete("/note_images/{image_id}")
+def delete_note_image(image_id: str):
+    try:
+        deleted = note_image_manager.delete_image(image_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="图片不存在或已被删除")
+    return R.success(msg="图片已删除")
 
 
 @router.post("/generate_note")
