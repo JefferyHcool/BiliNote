@@ -55,6 +55,12 @@ export interface Markdown {
   model_name: string
   created_at: string
   edited_at?: string
+  edit_history?: MarkdownEditBackup[]
+}
+
+export interface MarkdownEditBackup {
+  content: string
+  saved_at: string
 }
 
 export interface TaskFormData extends GenerateNotePayload {
@@ -73,6 +79,7 @@ export interface Task {
   createdAt: string
   lastGeneratedAt?: string
   lastEditedAt?: string
+  legacyEditHistory?: MarkdownEditBackup[]
   formData: TaskFormData
 }
 
@@ -245,16 +252,26 @@ export const useTaskStore = create<TaskStore>()(
         const editedAt = new Date().toISOString()
         if (Array.isArray(task.markdown)) {
           const targetVersionId = versionId || task.markdown[0]?.ver_id
-          if (!targetVersionId || !task.markdown.some(note => note.ver_id === targetVersionId)) {
+          const targetVersion = task.markdown.find(note => note.ver_id === targetVersionId)
+          if (!targetVersionId || !targetVersion) {
             return false
           }
+          if (targetVersion.content === content) return true
           set(state => ({
             tasks: state.tasks.map(item => item.id === id
               ? {
                 ...item,
                 lastEditedAt: editedAt,
                 markdown: (item.markdown as Markdown[]).map(note => note.ver_id === targetVersionId
-                  ? { ...note, content, edited_at: editedAt }
+                  ? {
+                    ...note,
+                    content,
+                    edited_at: editedAt,
+                    edit_history: [
+                      { content: note.content, saved_at: editedAt },
+                      ...(note.edit_history || []),
+                    ].slice(0, 20),
+                  }
                   : note),
               }
               : item),
@@ -262,9 +279,19 @@ export const useTaskStore = create<TaskStore>()(
           return true
         }
 
+        if (task.markdown === content) return true
+
         set(state => ({
           tasks: state.tasks.map(item => item.id === id
-            ? { ...item, markdown: content, lastEditedAt: editedAt }
+            ? {
+              ...item,
+              markdown: content,
+              lastEditedAt: editedAt,
+              legacyEditHistory: [
+                { content: item.markdown as string, saved_at: editedAt },
+                ...(item.legacyEditHistory || []),
+              ].slice(0, 20),
+            }
             : item),
         }))
         return true

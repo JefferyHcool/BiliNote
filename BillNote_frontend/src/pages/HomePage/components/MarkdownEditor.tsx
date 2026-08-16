@@ -11,6 +11,7 @@ import {
   List,
   ListOrdered,
   Quote,
+  RotateCcw,
   Save,
   Trash2,
   X,
@@ -45,6 +46,7 @@ interface MarkdownEditorProps {
   onSave: (content: string) => boolean | Promise<boolean>
   onCancel: () => void
   renderPreview: (content: string) => ReactNode
+  onRestoreOriginal?: () => Promise<string | null>
 }
 
 interface MarkdownImage {
@@ -74,7 +76,13 @@ const parseMarkdownImages = (content: string): MarkdownImage[] => {
   return images
 }
 
-const MarkdownEditor = ({ value, onSave, onCancel, renderPreview }: MarkdownEditorProps) => {
+const MarkdownEditor = ({
+  value,
+  onSave,
+  onCancel,
+  renderPreview,
+  onRestoreOriginal,
+}: MarkdownEditorProps) => {
   const [draft, setDraft] = useState(value)
   const [showPreview, setShowPreview] = useState(true)
   const [imageDialogOpen, setImageDialogOpen] = useState(false)
@@ -87,6 +95,7 @@ const MarkdownEditor = ({ value, onSave, onCancel, renderPreview }: MarkdownEdit
   const [uploading, setUploading] = useState(false)
   const [pasteUploadCount, setPasteUploadCount] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [pendingFileDeletes, setPendingFileDeletes] = useState<Set<string>>(new Set())
   const newlyUploadedIds = useRef<Set<string>>(new Set())
   const preserveUploadedFiles = useRef(false)
@@ -317,6 +326,27 @@ const MarkdownEditor = ({ value, onSave, onCancel, renderPreview }: MarkdownEdit
     }
   }
 
+  const handleRestoreOriginal = async () => {
+    if (!onRestoreOriginal) return
+    if (!window.confirm('用后端保存的原始生成稿替换当前编辑内容吗？替换后仍需点击“保存”才会生效。')) {
+      return
+    }
+    setRestoring(true)
+    try {
+      const original = await onRestoreOriginal()
+      if (!original) {
+        toast.error('未找到原始生成稿')
+        return
+      }
+      setDraft(original)
+      toast.success('已载入原始生成稿，请确认后保存')
+    } catch {
+      toast.error('读取原始生成稿失败')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
       <div className="flex flex-wrap items-center gap-1 border-b bg-neutral-50 px-3 py-2">
@@ -358,6 +388,18 @@ const MarkdownEditor = ({ value, onSave, onCancel, renderPreview }: MarkdownEdit
           {pasteUploadCount > 0 ? `正在上传 ${pasteUploadCount} 张…` : '可直接 Ctrl+V 粘贴图片'}
         </span>
         <div className="ml-auto flex items-center gap-1">
+          {onRestoreOriginal && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={restoring || pasteUploadCount > 0}
+              onClick={handleRestoreOriginal}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {restoring ? '读取中…' : '恢复生成稿'}
+            </Button>
+          )}
           <Button type="button" variant={showPreview ? 'secondary' : 'ghost'} size="sm" onClick={() => setShowPreview(value => !value)}>
             <Eye className="h-4 w-4" />
             实时预览
