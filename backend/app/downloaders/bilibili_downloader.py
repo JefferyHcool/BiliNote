@@ -1,10 +1,12 @@
 import os
 import json
 import logging
+import subprocess
 import tempfile
 from abc import ABC
 from typing import Union, Optional, List
 
+import requests
 import yt_dlp
 
 from app.downloaders.base import Downloader, DownloadQuality, QUALITY_MAP
@@ -13,10 +15,15 @@ from app.downloaders.bilibili_subtitle import BilibiliSubtitleFetcher
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.utils.path_helper import get_data_dir
-from app.utils.url_parser import extract_video_id
+from app.utils.url_parser import extract_video_id, extract_bilibili_p_number
 from app.services.cookie_manager import CookieConfigManager
 
 logger = logging.getLogger(__name__)
+
+BILIBILI_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
 
 # Inject the dm_img_* / web_location risk-control params Bilibili's wbi/playurl
 # gateway now requires; without them the API path returns HTTP 412. See
@@ -30,6 +37,159 @@ class BilibiliDownloader(Downloader, ABC):
         self._cookie_mgr = CookieConfigManager()
         self._cookie = self._cookie_mgr.get('bilibili')
         self._cookiefile = self._write_netscape_cookie_file()
+
+    def _headers(self) -> dict:
+        headers = {
+            'User-Agent': BILIBILI_UA,
+            'Referer': 'https://www.bilibili.com/',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+        if self._cookie:
+            headers['Cookie'] = self._cookie
+        return headers
+
+    def _direct_info(self, video_url: str) -> dict:
+        """通过 Bilibili 官方 API 获取分集元数据，避开易触发 412 的网页。"""
+        bvid = extract_video_id(video_url, "bilibili")
+        if not bvid:
+            raise ValueError(f"无法从 Bilibili 链接提取 BV 号: {video_url}")
+        p = extract_bilibili_p_number(video_url)
+        response = requests.get(
+            "https://api.bilibili.com/x/web-interface/view",
+            params={"bvid": bvid},
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("code") != 0:
+            raise RuntimeError(
+                f"Bilibili view API 失败: {payload.get('message') or payload.get('code')}"
+            )
+
+        data = payload.get("data") or {}
+        pages = data.get("pages") or []
+        page_number = p or 1
+        if pages:
+            if page_number < 1 or page_number > len(pages):
+                raise ValueError(f"分集 p={page_number} 超出范围（共 {len(pages)} 集）")
+            page = pages[page_number - 1]
+        else:
+            page = data
+
+        cid = page.get("cid") or data.get("cid")
+        if not cid:
+            raise RuntimeError("Bilibili view API 未返回 cid")
+
+        title = data.get("title") or bvid
+        part_title = page.get("part")
+        if len(pages) > 1 and part_title:
+            title = f"{title} - P{page_number} {part_title}"
+        return {
+            "id": f"{bvid}_p{page_number}" if p else bvid,
+            "bvid": bvid,
+            "cid": int(cid),
+            "p": page_number,
+            "title": title,
+            "duration": float(page.get("duration") or data.get("duration") or 0),
+            "thumbnail": data.get("pic"),
+            "raw_view": data,
+        }
+
+    def get_series_info(self, video_url: str) -> dict:
+        """返回多 P 视频的分集清单，供批量生成入口做一次性范围校验。"""
+        info = self._direct_info(video_url)
+        data = info["raw_view"]
+        raw_pages = data.get("pages") or [data]
+        pages = []
+        for index, page in enumerate(raw_pages, start=1):
+            pages.append({
+                "p": index,
+                "title": page.get("part") or f"P{index}",
+                "duration": float(page.get("duration") or 0),
+            })
+        return {
+            "bvid": info["bvid"],
+            "title": data.get("title") or info["bvid"],
+            "total": len(pages),
+            "pages": pages,
+        }
+
+    def _direct_media_urls(self, info: dict) -> List[str]:
+        """获取带音轨的渐进式 MP4 地址；匿名访问通常可获得 720p。"""
+        response = requests.get(
+            "https://api.bilibili.com/x/player/playurl",
+            params={
+                "bvid": info["bvid"],
+                "cid": info["cid"],
+                "qn": 64,
+                "fnval": 1,
+                "platform": "html5",
+                "high_quality": 1,
+            },
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("code") != 0:
+            raise RuntimeError(
+                f"Bilibili playurl API 失败: {payload.get('message') or payload.get('code')}"
+            )
+        durl = (payload.get("data") or {}).get("durl") or []
+        urls: List[str] = []
+        for item in durl:
+            if item.get("url"):
+                urls.append(item["url"])
+            urls.extend(item.get("backup_url") or [])
+        if not urls:
+            raise RuntimeError("Bilibili playurl API 未返回可下载的 MP4 地址")
+        return urls
+
+    def _direct_download_video(self, video_url: str, output_dir: str) -> tuple[str, dict]:
+        info = self._direct_info(video_url)
+        video_path = os.path.join(output_dir, f"{info['id']}.mp4")
+        if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
+            return video_path, info
+
+        part_path = video_path + ".part"
+        last_error: Optional[Exception] = None
+        for media_url in self._direct_media_urls(info):
+            try:
+                with requests.get(
+                    media_url,
+                    headers=self._headers(),
+                    stream=True,
+                    timeout=(15, 60),
+                ) as response:
+                    response.raise_for_status()
+                    with open(part_path, "wb") as output:
+                        for chunk in response.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                output.write(chunk)
+                if os.path.getsize(part_path) == 0:
+                    raise RuntimeError("Bilibili CDN 返回了空文件")
+                os.replace(part_path, video_path)
+                logger.info("Bilibili 官方 API 下载完成: %s", video_path)
+                return video_path, info
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Bilibili CDN 地址下载失败，尝试备用地址: %s", exc)
+                if os.path.exists(part_path):
+                    os.unlink(part_path)
+        raise RuntimeError(f"Bilibili 官方 API 下载失败: {last_error}")
+
+    @staticmethod
+    def _extract_audio(video_path: str, audio_path: str, bitrate: str) -> None:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", video_path, "-vn",
+                "-acodec", "libmp3lame", "-b:a", f"{bitrate}k", audio_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
 
     def _write_netscape_cookie_file(self) -> Optional[str]:
         """将 Cookie 写入 Netscape 格式临时文件，返回文件路径（供 yt-dlp cookiefile 使用）"""
@@ -52,7 +212,8 @@ class BilibiliDownloader(Downloader, ABC):
         video_url: str,
         output_dir: Union[str, None] = None,
         quality: DownloadQuality = "fast",
-        need_video:Optional[bool]=False
+        need_video:Optional[bool]=False,
+        skip_download: bool = False,
     ) -> AudioDownloadResult:
         if output_dir is None:
             output_dir = get_data_dir()
@@ -60,42 +221,24 @@ class BilibiliDownloader(Downloader, ABC):
             output_dir=self.cache_data
         os.makedirs(output_dir, exist_ok=True)
 
-        output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
-
-        ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
-            'outtmpl': output_path,
-            'http_headers': {'Referer': 'https://www.bilibili.com'},
-            'postprocessors': [
-                {
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '64',
-                }
-            ],
-            'noplaylist': True,
-            'quiet': False,
-        }
-        if self._cookiefile:
-            ydl_opts['cookiefile'] = self._cookiefile
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            video_id = info.get("id")
-            title = info.get("title")
-            duration = info.get("duration", 0)
-            cover_url = info.get("thumbnail")
-            audio_path = os.path.join(output_dir, f"{video_id}.mp3")
+        # Bilibili 网页端会按 IP/指纹返回 HTTP 412。官方 view/playurl API
+        # 不依赖网页解析，也能准确保留多 P 视频的 p 参数，优先使用该路径。
+        direct_info = self._direct_info(video_url)
+        audio_path = os.path.join(output_dir, f"{direct_info['id']}.mp3")
+        video_path = os.path.join(output_dir, f"{direct_info['id']}.mp4")
+        if not skip_download and not os.path.exists(audio_path):
+            video_path, direct_info = self._direct_download_video(video_url, output_dir)
+            self._extract_audio(video_path, audio_path, QUALITY_MAP.get(quality, "64"))
 
         return AudioDownloadResult(
-            file_path=audio_path,
-            title=title,
-            duration=duration,
-            cover_url=cover_url,
+            file_path=audio_path if not skip_download else "",
+            title=direct_info["title"],
+            duration=direct_info["duration"],
+            cover_url=direct_info["thumbnail"],
             platform="bilibili",
-            video_id=video_id,
-            raw_info=info,
-            video_path=None  # ❗音频下载不包含视频路径
+            video_id=direct_info["id"],
+            raw_info=direct_info,
+            video_path=video_path if need_video and os.path.exists(video_path) else None,
         )
 
     def download_video(
@@ -110,36 +253,7 @@ class BilibiliDownloader(Downloader, ABC):
         if output_dir is None:
             output_dir = get_data_dir()
         os.makedirs(output_dir, exist_ok=True)
-        print("video_url",video_url)
-        video_id=extract_video_id(video_url, "bilibili")
-        video_path = os.path.join(output_dir, f"{video_id}.mp4")
-        if os.path.exists(video_path):
-            return video_path
-
-        # 检查是否已经存在
-
-
-        output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
-
-        ydl_opts = {
-            'format': 'bv*[ext=mp4]/bestvideo+bestaudio/best',
-            'outtmpl': output_path,
-            'http_headers': {'Referer': 'https://www.bilibili.com'},
-            'noplaylist': True,
-            'quiet': False,
-            'merge_output_format': 'mp4',  # 确保合并成 mp4
-        }
-        if self._cookiefile:
-            ydl_opts['cookiefile'] = self._cookiefile
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            video_id = info.get("id")
-            video_path = os.path.join(output_dir, f"{video_id}.mp4")
-
-        if not os.path.exists(video_path):
-            raise FileNotFoundError(f"视频文件未找到: {video_path}")
-
+        video_path, _ = self._direct_download_video(video_url, output_dir)
         return video_path
 
     def delete_video(self, video_path: str) -> str:

@@ -45,6 +45,23 @@ class TestVideoUrlSupport(unittest.TestCase):
 
         self.assertTrue(video_url_validator.is_supported_video_url(url))
 
+    def test_build_bilibili_page_url_removes_tracking_parameters(self):
+        source = (
+            "https://www.bilibili.com/video/BV1YY4y1i7SN"
+            "?spm_id_from=333.788&vd_source=test&p=2"
+        )
+
+        self.assertEqual(
+            url_parser.build_bilibili_page_url(source, 34),
+            "https://www.bilibili.com/video/BV1YY4y1i7SN?p=34",
+        )
+
+    def test_build_bilibili_page_url_rejects_zero(self):
+        with self.assertRaises(ValueError):
+            url_parser.build_bilibili_page_url(
+                "https://www.bilibili.com/video/BV1YY4y1i7SN", 0
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

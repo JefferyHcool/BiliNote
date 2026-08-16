@@ -8,13 +8,13 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { type FieldErrors, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
 import { Info, Loader2, Plus } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
-import { generateNote } from '@/services/note.ts'
+import { generateNote, generateNoteBatch, type GenerateNotePayload } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
 import { useTaskStore } from '@/store/taskStore'
 import { useModelStore } from '@/store/modelStore'
@@ -59,8 +59,11 @@ const formSchema = z
       .tuple([z.coerce.number().min(1).max(10), z.coerce.number().min(1).max(10)])
       .default([2, 2])
       .optional(),
+    batch_enabled: z.boolean().default(false),
+    p_start: z.coerce.number().int().min(1).max(9999).default(1),
+    p_end: z.coerce.number().int().min(1).max(9999).default(1),
   })
-  .superRefine(({ video_url, platform }, ctx) => {
+  .superRefine(({ video_url, platform, batch_enabled, p_start, p_end }, ctx) => {
     if (platform === 'local') {
       if (!video_url) {
         ctx.addIssue({ code: 'custom', message: '本地视频路径不能为空', path: ['video_url'] })
@@ -79,6 +82,29 @@ const formSchema = z
         catch {
           ctx.addIssue({ code: 'custom', message: '请输入正确的视频链接', path: ['video_url'] })
         }
+      }
+    }
+    if (batch_enabled) {
+      if (platform !== 'bilibili') {
+        ctx.addIssue({
+          code: 'custom',
+          message: '批量分集目前仅支持哔哩哔哩',
+          path: ['batch_enabled'],
+        })
+      }
+      if (p_end < p_start) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '结束 P 不能小于起始 P',
+          path: ['p_end'],
+        })
+      }
+      if (p_end - p_start + 1 > 100) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '单次最多生成 100 集',
+          path: ['p_end'],
+        })
       }
     }
   })
@@ -133,7 +159,7 @@ const NoteForm = () => {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   /* ---- 全局状态 ---- */
-  const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
+  const { addPendingTask, addPendingTasks, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
   const { loadEnabledModels, modelList, showFeatureHint, setShowFeatureHint } = useModelStore()
 
@@ -148,13 +174,25 @@ const NoteForm = () => {
       video_interval: 6,
       grid_size: [2, 2],
       format: [],
+      batch_enabled: false,
+      p_start: 1,
+      p_end: 1,
     },
   })
   const currentTask = getCurrentTask()
 
   /* ---- 派生状态（只 watch 一次，提高性能） ---- */
   const platform = useWatch({ control: form.control, name: 'platform' }) as string
+  const selectedModel = useWatch({ control: form.control, name: 'model_name' }) as string
   const videoUnderstandingEnabled = useWatch({ control: form.control, name: 'video_understanding' })
+  const batchEnabled = useWatch({ control: form.control, name: 'batch_enabled' })
+  const videoUrl = useWatch({ control: form.control, name: 'video_url' })
+  const pStart = useWatch({ control: form.control, name: 'p_start' }) || 1
+  const pEnd = useWatch({ control: form.control, name: 'p_end' }) || 1
+  const selectedModelConfig = modelList.find(m => m.model_name === selectedModel)
+  const deepSeekSelected =
+    selectedModel?.toLowerCase().startsWith('deepseek-')
+    || selectedModelConfig?.provider_id?.toLowerCase() === 'deepseek'
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
@@ -169,22 +207,30 @@ const NoteForm = () => {
   useEffect(() => {
     if (!currentTask) return
     const { formData } = currentTask
+    const savedModelIsAvailable = modelList.some(m => m.model_name === formData.model_name)
+    const restoredModel = savedModelIsAvailable
+      ? formData.model_name
+      : modelList[0]?.model_name || formData.model_name || ''
+    const restoredIsDeepSeek = restoredModel.toLowerCase().startsWith('deepseek-')
 
     console.log('currentTask.formData.platform:', formData.platform)
 
     form.reset({
       platform: formData.platform || 'bilibili',
       video_url: formData.video_url || '',
-      model_name: formData.model_name || modelList[0]?.model_name || '',
+      model_name: restoredModel,
       style: formData.style || 'minimal',
       quality: formData.quality || 'medium',
       extras: formData.extras || '',
       screenshot: formData.screenshot ?? false,
       link: formData.link ?? false,
-      video_understanding: formData.video_understanding ?? false,
+      video_understanding: restoredIsDeepSeek ? false : formData.video_understanding ?? false,
       video_interval: formData.video_interval ?? 6,
       grid_size: formData.grid_size ?? [2, 2],
       format: formData.format ?? [],
+      batch_enabled: false,
+      p_start: 1,
+      p_end: 1,
     })
   }, [
     // 当下面任意一个变了，就重新 reset
@@ -194,6 +240,25 @@ const NoteForm = () => {
     // 还要加上 formData 的各字段，或者直接 currentTask
     currentTask?.formData,
   ])
+  useEffect(() => {
+    if (!deepSeekSelected || !videoUnderstandingEnabled) return
+    form.setValue('video_understanding', false)
+    const formats = form.getValues('format') || []
+    if (formats.includes('screenshot')) {
+      form.setValue('format', formats.filter(item => item !== 'screenshot'))
+    }
+  }, [deepSeekSelected, videoUnderstandingEnabled])
+  useEffect(() => {
+    if (!batchEnabled || platform !== 'bilibili' || !videoUrl) return
+    try {
+      const page = Number(new URL(videoUrl).searchParams.get('p'))
+      if (!Number.isInteger(page) || page < 1) return
+      form.setValue('p_start', page)
+      if ((form.getValues('p_end') || 1) < page) form.setValue('p_end', page)
+    } catch {
+      // 链接尚未输入完整时不打扰用户，提交时会由 schema 给出提示。
+    }
+  }, [batchEnabled, platform, videoUrl])
 
   /* ---- 帮助函数 ---- */
   const isGenerating = () => !['SUCCESS', 'FAILED', undefined].includes(getCurrentTask()?.status)
@@ -219,10 +284,22 @@ const NoteForm = () => {
 
   const onSubmit = async (values: NoteFormValues) => {
     console.log('Not even go here')
-    const payload: NoteFormValues = {
-      ...values,
-      provider_id: modelList.find(m => m.model_name === values.model_name)!.provider_id,
-      task_id: currentTaskId || '',
+    const selected = modelList.find(m => m.model_name === values.model_name)
+    if (!selected) {
+      toast.error('当前模型已不可用，请重新选择模型')
+      return
+    }
+    if (values.video_understanding && (
+      values.model_name.toLowerCase().startsWith('deepseek-')
+      || selected?.provider_id?.toLowerCase() === 'deepseek'
+    )) {
+      toast.error('DeepSeek API 不支持图片输入，请关闭「视频理解」后重试')
+      return
+    }
+    const { batch_enabled, p_start, p_end, ...noteValues } = values
+    const payload: GenerateNotePayload = {
+      ...noteValues,
+      provider_id: selected!.provider_id,
     }
     if (currentTaskId) {
       retryTask(currentTaskId, payload)
@@ -231,6 +308,28 @@ const NoteForm = () => {
 
     // message.success('已提交任务')
     try {
+      if (batch_enabled) {
+        const batch = await generateNoteBatch({
+          ...payload,
+          p_start,
+          p_end,
+        })
+        addPendingTasks(batch.tasks.map(item => ({
+          taskId: item.task_id,
+          platform: values.platform,
+          title: item.title,
+          formData: {
+            ...payload,
+            video_url: item.video_url,
+            batch_id: batch.batch_id,
+            batch_page: item.p,
+          },
+        })))
+        toast.success(
+          `已创建 ${batch.total} 集笔记任务，最多并行处理 ${batch.max_parallel} 集`,
+        )
+        return
+      }
       const data = await generateNote(payload)
       addPendingTask(data.task_id, values.platform, payload)
     } catch (e: any) {
@@ -244,6 +343,10 @@ const NoteForm = () => {
             : '转写模型尚未下载，请先去「音频转写配置」页下载',
         )
         if (!downloading) navigate('/settings/transcriber')
+        return
+      }
+      if (e?.data?.reason === 'vision_model_required') {
+        toast.error('当前模型不支持视频理解，请关闭该功能或更换多模态模型')
         return
       }
       // 其余错误：axios 拦截器已经弹过 toast，这里只兜底不让 promise 变成未处理 rejection
@@ -260,7 +363,14 @@ const NoteForm = () => {
     setCurrentTask(null)
   }
   const FormButton = () => {
-    const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
+    const batchCount = Math.max(0, pEnd - pStart + 1)
+    const label = generating
+      ? '正在生成…'
+      : editing
+        ? '重新生成'
+        : batchEnabled
+          ? `生成 ${batchCount} 集笔记`
+          : '生成笔记'
 
     return (
       <div className="flex gap-2">
@@ -345,6 +455,61 @@ const NoteForm = () => {
               )}
             />
           </div>
+
+          {platform === 'bilibili' && (
+            <div className="space-y-3 rounded-lg border border-neutral-200 p-3">
+              <FormField
+                control={form.control}
+                name="batch_enabled"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={field.value}
+                        disabled={!!editing}
+                        onCheckedChange={value => field.onChange(Boolean(value))}
+                      />
+                      <FormLabel className="cursor-pointer">批量生成多 P 分集</FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {batchEnabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="p_start"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>起始 P</FormLabel>
+                          <Input type="number" min={1} {...field} />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="p_end"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>结束 P</FormLabel>
+                          <Input type="number" min={1} {...field} />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <p className="text-xs leading-5 text-neutral-500">
+                    将为 P{pStart}–P{pEnd} 创建 {Math.max(0, pEnd - pStart + 1)} 个独立笔记任务；
+                    后端默认最多同时处理 3 集，其余任务自动排队。
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <FormField
             control={form.control}
@@ -481,7 +646,14 @@ const NoteForm = () => {
                     <FormLabel>启用</FormLabel>
                     <Checkbox
                       checked={videoUnderstandingEnabled}
-                      onCheckedChange={v => form.setValue('video_understanding', v)}
+                      disabled={deepSeekSelected}
+                      onCheckedChange={v => {
+                        if (v && deepSeekSelected) {
+                          toast.error('DeepSeek API 不支持图片输入，无法开启视频理解')
+                          return
+                        }
+                        form.setValue('video_understanding', Boolean(v))
+                      }}
                     />
                   </div>
                   <FormMessage />
@@ -533,7 +705,10 @@ const NoteForm = () => {
             </div>
             <Alert variant="warning" className="text-sm">
               <AlertDescription>
-                <strong>提示：</strong>视频理解功能必须使用多模态模型。
+                <strong>提示：</strong>
+                {deepSeekSelected
+                  ? 'DeepSeek API 当前不支持图片输入，已禁用视频理解。'
+                  : '视频理解功能必须使用多模态模型。'}
               </AlertDescription>
             </Alert>
           </div>

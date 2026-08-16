@@ -2,12 +2,12 @@
 import json
 import os
 import uuid
-from pathlib import Path
+from concurrent.futures import as_completed
 from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
-from pydantic import BaseModel, validator, field_validator
+from pydantic import BaseModel, Field, field_validator
 from dataclasses import asdict
 
 from app.db.video_task_dao import get_task_by_video
@@ -15,9 +15,10 @@ from app.enmus.exception import NoteErrorEnum
 from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
+from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.task_serial_executor import task_serial_executor
 from app.utils.response import ResponseWrapper as R
-from app.utils.url_parser import extract_video_id
+from app.utils.url_parser import extract_video_id, build_bilibili_page_url
 from app.validators.video_url_validator import is_supported_video_url
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import StreamingResponse
@@ -68,8 +69,15 @@ class VideoRequest(BaseModel):
         return v
 
 
+class BatchVideoRequest(VideoRequest):
+    """B 站多 P 批量生成请求。每一集仍会创建独立任务和独立笔记。"""
+    p_start: int = Field(ge=1)
+    p_end: int = Field(ge=1)
+
+
 NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
 UPLOAD_DIR = "uploads"
+BATCH_MAX_EPISODES = int(os.getenv("BATCH_MAX_EPISODES", "100"))
 
 
 def save_note_to_file(task_id: str, note):
@@ -112,35 +120,31 @@ def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
     logger.info(f"已写入客户端预取字幕缓存: {target} ({len(cleaned_segments)} 段)")
 
 
-def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
-                  link: bool = False, screenshot: bool = False, model_name: str = None, provider_id: str = None,
-                  _format: list = None, style: str = None, extras: str = None, video_understanding: bool = False,
-                  video_interval=0, grid_size=[]
-                  ):
-
+def execute_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
+                      link: bool = False, screenshot: bool = False, model_name: str = None,
+                      provider_id: str = None, _format: list = None, style: str = None,
+                      extras: str = None, video_understanding: bool = False,
+                      video_interval: int = 0, grid_size: Optional[list] = None):
+    """实际执行一条笔记任务；单任务和批量任务共用这一实现。"""
     if not model_name or not provider_id:
         raise HTTPException(status_code=400, detail="请选择模型和提供者")
 
-    def _execute_note_task():
-        return NoteGenerator().generate(
-            video_url=video_url,
-            platform=platform,
-            quality=quality,
-            task_id=task_id,
-            model_name=model_name,
-            provider_id=provider_id,
-            link=link,
-            _format=_format,
-            style=style,
-            extras=extras,
-            screenshot=screenshot,
-            video_understanding=video_understanding,
-            video_interval=video_interval,
-            grid_size=grid_size,
-        )
-
-    logger.info(f"任务进入执行队列 (task_id={task_id})")
-    note = task_serial_executor.run(_execute_note_task)
+    note = NoteGenerator().generate(
+        video_url=video_url,
+        platform=platform,
+        quality=quality,
+        task_id=task_id,
+        model_name=model_name,
+        provider_id=provider_id,
+        link=link,
+        _format=_format,
+        style=style,
+        extras=extras,
+        screenshot=screenshot,
+        video_understanding=video_understanding,
+        video_interval=video_interval,
+        grid_size=grid_size or [],
+    )
     logger.info(f"Note generated: {task_id}")
     if not note or not note.markdown:
         logger.warning(f"任务 {task_id} 执行失败，跳过保存")
@@ -153,6 +157,68 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
         VectorStoreManager().index_task(task_id)
     except Exception as e:
         logger.warning(f"向量索引失败（不影响笔记）: {e}")
+
+
+def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
+                  link: bool = False, screenshot: bool = False, model_name: str = None,
+                  provider_id: str = None, _format: list = None, style: str = None,
+                  extras: str = None, video_understanding: bool = False,
+                  video_interval: int = 0, grid_size: Optional[list] = None):
+    logger.info(f"任务进入执行队列 (task_id={task_id})")
+    return task_serial_executor.run(
+        execute_note_task, task_id, video_url, platform, quality, link, screenshot,
+        model_name, provider_id, _format, style, extras, video_understanding,
+        video_interval, grid_size,
+    )
+
+
+def run_note_batch(task_specs: list[dict]) -> None:
+    """把整批任务提交到全局线程池，和普通单任务共享并发上限。"""
+    futures = {
+        task_serial_executor.submit(execute_note_task, **spec): spec["task_id"]
+        for spec in task_specs
+    }
+    logger.info(
+        "批量任务已进入执行队列: total=%s, max_workers=%s",
+        len(futures), task_serial_executor.max_workers,
+    )
+    for future in as_completed(futures):
+        task_id = futures[future]
+        try:
+            future.result()
+        except Exception as exc:
+            logger.error("批量子任务异常 (task_id=%s): %s", task_id, exc, exc_info=True)
+            NoteGenerator()._update_status(task_id, TaskStatus.FAILED, message=str(exc))
+
+
+def _submission_gate(data: VideoRequest):
+    """单任务与批量任务共用的模型能力和转写模型就绪检查。"""
+    if data.video_understanding and (
+        str(data.provider_id).lower() == "deepseek"
+        or str(data.model_name).lower().startswith("deepseek-")
+    ):
+        return R.error(
+            msg="DeepSeek API 当前不支持图片输入，请关闭「视频理解」，或改用支持视觉的多模态模型",
+            code=300103,
+            data={"reason": "vision_model_required"},
+        )
+
+    if not data.prefetched_transcript:
+        from app.services.transcriber_config_manager import TranscriberConfigManager
+        readiness = TranscriberConfigManager().is_model_ready()
+        if not readiness["ready"]:
+            logger.warning(f"拒绝笔记任务：{readiness['reason']}")
+            return R.error(
+                msg=readiness["reason"],
+                code=300102,
+                data={
+                    "reason": "transcriber_model_not_ready",
+                    "transcriber_type": readiness["transcriber_type"],
+                    "model_size": readiness["model_size"],
+                    "downloading": readiness["downloading"],
+                },
+            )
+    return None
 
 
 @router.post('/delete_task')
@@ -180,26 +246,10 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
-        # 就绪门禁：本地转写引擎（fast-whisper / mlx-whisper）必须等模型下载完才能跑视频，
-        # 否则任务会卡在首次下载（慢 / OOM / 截断），用户只看到一个静默失败的任务。
-        # 客户端已抓好字幕（prefetched_transcript）则不需要转写，跳过检查。
-        if not data.prefetched_transcript:
-            from app.services.transcriber_config_manager import TranscriberConfigManager
-            readiness = TranscriberConfigManager().is_model_ready()
-            if not readiness["ready"]:
-                logger.warning(f"拒绝 generate_note：{readiness['reason']}")
-                return R.error(
-                    msg=readiness["reason"],
-                    code=300102,
-                    data={
-                        "reason": "transcriber_model_not_ready",
-                        "transcriber_type": readiness["transcriber_type"],
-                        "model_size": readiness["model_size"],
-                        "downloading": readiness["downloading"],
-                    },
-                )
+        gate_error = _submission_gate(data)
+        if gate_error:
+            return gate_error
 
-        video_id = extract_video_id(data.video_url, data.platform)
         # if not video_id:
         #     raise HTTPException(status_code=400, detail="无法提取视频 ID")
         # existing = get_task_by_video(video_id, data.platform)
@@ -232,6 +282,119 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         return R.success({"task_id": task_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate_note_batch")
+def generate_note_batch(data: BatchVideoRequest, background_tasks: BackgroundTasks):
+    """按 B 站分 P 范围创建独立笔记任务，并受控并发执行。"""
+    try:
+        if data.platform != "bilibili":
+            return R.error(
+                msg="批量分集生成目前仅支持哔哩哔哩多 P 视频",
+                code=300104,
+                data={"reason": "batch_platform_not_supported"},
+            )
+        if data.task_id:
+            return R.error(
+                msg="批量任务不支持复用单个 task_id，请新建批量任务",
+                code=300104,
+                data={"reason": "batch_retry_not_supported"},
+            )
+        if data.prefetched_transcript:
+            return R.error(
+                msg="批量任务不能为所有分集共用同一份预取字幕",
+                code=300104,
+                data={"reason": "batch_transcript_not_supported"},
+            )
+        if data.p_end < data.p_start:
+            return R.error(
+                msg="结束 P 必须大于或等于起始 P",
+                code=300104,
+                data={"reason": "invalid_page_range"},
+            )
+
+        count = data.p_end - data.p_start + 1
+        if count > BATCH_MAX_EPISODES:
+            return R.error(
+                msg=f"单次最多生成 {BATCH_MAX_EPISODES} 集笔记",
+                code=300104,
+                data={"reason": "batch_too_large", "limit": BATCH_MAX_EPISODES},
+            )
+
+        gate_error = _submission_gate(data)
+        if gate_error:
+            return gate_error
+
+        downloader = SUPPORT_PLATFORM_MAP["bilibili"]
+        try:
+            series = downloader.get_series_info(data.video_url)
+        except Exception as exc:
+            logger.warning("解析 B 站分集列表失败: %s", exc)
+            return R.error(
+                msg=f"无法读取 B 站分集列表：{exc}",
+                code=300105,
+                data={"reason": "series_parse_failed"},
+            )
+
+        if data.p_end > series["total"]:
+            return R.error(
+                msg=f"分集范围超出课程总集数（共 {series['total']} 集）",
+                code=300104,
+                data={
+                    "reason": "page_range_exceeded",
+                    "total": series["total"],
+                },
+            )
+
+        batch_id = str(uuid.uuid4())
+        task_specs = []
+        response_tasks = []
+        status_writer = NoteGenerator()
+        for page_number in range(data.p_start, data.p_end + 1):
+            task_id = str(uuid.uuid4())
+            page = series["pages"][page_number - 1]
+            page_url = build_bilibili_page_url(data.video_url, page_number)
+            display_title = f"{series['title']} - P{page_number} {page['title']}"
+
+            status_writer._update_status(task_id, TaskStatus.PENDING)
+            task_specs.append({
+                "task_id": task_id,
+                "video_url": page_url,
+                "platform": data.platform,
+                "quality": data.quality,
+                "link": bool(data.link),
+                "screenshot": bool(data.screenshot),
+                "model_name": data.model_name,
+                "provider_id": data.provider_id,
+                "_format": list(data.format or []),
+                "style": data.style,
+                "extras": data.extras,
+                "video_understanding": bool(data.video_understanding),
+                "video_interval": data.video_interval or 0,
+                "grid_size": list(data.grid_size or []),
+            })
+            response_tasks.append({
+                "task_id": task_id,
+                "p": page_number,
+                "video_url": page_url,
+                "title": display_title,
+            })
+
+        background_tasks.add_task(run_note_batch, task_specs)
+        logger.info(
+            "创建批量笔记任务 batch_id=%s, range=P%s-P%s, total=%s",
+            batch_id, data.p_start, data.p_end, len(task_specs),
+        )
+        return R.success({
+            "batch_id": batch_id,
+            "total": len(response_tasks),
+            "max_parallel": task_serial_executor.max_workers,
+            "series_title": series["title"],
+            "tasks": response_tasks,
+        })
+    except Exception as exc:
+        logger.error("创建批量笔记任务失败: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/task_status/{task_id}")

@@ -6,7 +6,16 @@ import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
 
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
+export type TaskStatus =
+  | 'PENDING'
+  | 'PARSING'
+  | 'DOWNLOADING'
+  | 'TRANSCRIBING'
+  | 'SUMMARIZING'
+  | 'FORMATTING'
+  | 'SAVING'
+  | 'SUCCESS'
+  | 'FAILED'
 
 export interface AudioMeta {
   cover_url: string
@@ -40,6 +49,7 @@ export interface Markdown {
 
 export interface Task {
   id: string
+  platform: string
   markdown: string|Markdown [] //为了兼容之前的笔记
   transcript: Transcript
   status: TaskStatus
@@ -59,7 +69,13 @@ export interface Task {
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (taskId: string, platform: string, formData: any, title?: string) => void
+  addPendingTasks: (items: Array<{
+    taskId: string
+    platform: string
+    formData: any
+    title?: string
+  }>) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
@@ -74,7 +90,7 @@ export const useTaskStore = create<TaskStore>()(
       tasks: [],
       currentTaskId: null,
 
-      addPendingTask: (taskId: string, platform: string, formData: any) =>
+      addPendingTask: (taskId: string, platform: string, formData: any, title = '') =>
 
         set(state => ({
           tasks: [
@@ -97,7 +113,7 @@ export const useTaskStore = create<TaskStore>()(
                 file_path: '',
                 platform: '',
                 raw_info: null,
-                title: '',
+                title,
                 video_id: '',
               },
             },
@@ -105,6 +121,39 @@ export const useTaskStore = create<TaskStore>()(
           ],
           currentTaskId: taskId, // 默认设置为当前任务
         })),
+
+      addPendingTasks: items =>
+        set(state => {
+          if (items.length === 0) return state
+          const createdAt = new Date().toISOString()
+          const pendingTasks: Task[] = items.map(item => ({
+            formData: item.formData,
+            id: item.taskId,
+            status: 'PENDING',
+            markdown: '',
+            platform: item.platform,
+            transcript: {
+              full_text: '',
+              language: '',
+              raw: null,
+              segments: [],
+            },
+            createdAt,
+            audioMeta: {
+              cover_url: '',
+              duration: 0,
+              file_path: '',
+              platform: item.platform,
+              raw_info: null,
+              title: item.title || '',
+              video_id: '',
+            },
+          }))
+          return {
+            tasks: [...pendingTasks, ...state.tasks],
+            currentTaskId: pendingTasks[0].id,
+          }
+        }),
 
       updateTaskContent: (id, data) =>
           set(state => ({
