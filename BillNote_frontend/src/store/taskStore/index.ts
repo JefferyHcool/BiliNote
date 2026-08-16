@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { delete_task, generateNote } from '@/services/note.ts'
+import { delete_task, generateNote, type GenerateNotePayload } from '@/services/note.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
@@ -17,12 +17,21 @@ export type TaskStatus =
   | 'SUCCESS'
   | 'FAILED'
 
+export type HistorySort = 'latest' | 'earliest' | 'title'
+
+export interface NoteProject {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AudioMeta {
   cover_url: string
   duration: number
   file_path: string
   platform: string
-  raw_info: any
+  raw_info: unknown
   title: string
   video_id: string
 }
@@ -36,7 +45,7 @@ export interface Segment {
 export interface Transcript {
   full_text: string
   language: string
-  raw: any
+  raw: unknown
   segments: Segment[]
 }
 export interface Markdown {
@@ -47,33 +56,35 @@ export interface Markdown {
   created_at: string
 }
 
+export interface TaskFormData extends GenerateNotePayload {
+  batch_id?: string
+  batch_page?: number
+}
+
 export interface Task {
   id: string
   platform: string
+  projectId?: string | null
   markdown: string|Markdown [] //为了兼容之前的笔记
   transcript: Transcript
   status: TaskStatus
   audioMeta: AudioMeta
   createdAt: string
-  formData: {
-    video_url: string
-    link: undefined | boolean
-    screenshot: undefined | boolean
-    platform: string
-    quality: string
-    model_name: string
-    provider_id: string
-  }
+  lastGeneratedAt?: string
+  formData: TaskFormData
 }
 
 interface TaskStore {
   tasks: Task[]
+  projects: NoteProject[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string, formData: any, title?: string) => void
+  selectedProjectId: string
+  historySort: HistorySort
+  addPendingTask: (taskId: string, platform: string, formData: TaskFormData, title?: string) => void
   addPendingTasks: (items: Array<{
     taskId: string
     platform: string
-    formData: any
+    formData: TaskFormData
     title?: string
   }>) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
@@ -81,46 +92,61 @@ interface TaskStore {
   clearTasks: () => void
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
-  retryTask: (id: string) => void
+  retryTask: (id: string, payload?: TaskFormData) => void
+  createProject: (name: string) => NoteProject | null
+  renameProject: (id: string, name: string) => boolean
+  deleteProject: (id: string) => void
+  moveTaskToProject: (taskId: string, projectId: string | null) => void
+  moveTasksToProject: (taskIds: string[], projectId: string | null) => void
+  setSelectedProject: (projectId: string) => void
+  setHistorySort: (sort: HistorySort) => void
 }
 
 export const useTaskStore = create<TaskStore>()(
   persist(
     (set, get) => ({
       tasks: [],
+      projects: [],
       currentTaskId: null,
+      selectedProjectId: 'all',
+      historySort: 'latest',
 
-      addPendingTask: (taskId: string, platform: string, formData: any, title = '') =>
+      addPendingTask: (taskId: string, platform: string, formData: TaskFormData, title = '') =>
 
-        set(state => ({
-          tasks: [
-            {
-              formData: formData,
-              id: taskId,
-              status: 'PENDING',
-              markdown: '',
-              platform: platform,
-              transcript: {
-                full_text: '',
-                language: '',
-                raw: null,
-                segments: [],
+        set(state => {
+          const createdAt = new Date().toISOString()
+          return {
+            tasks: [
+              {
+                formData,
+                id: taskId,
+                status: 'PENDING',
+                markdown: '',
+                platform,
+                projectId: null,
+                transcript: {
+                  full_text: '',
+                  language: '',
+                  raw: null,
+                  segments: [],
+                },
+                createdAt,
+                lastGeneratedAt: createdAt,
+                audioMeta: {
+                  cover_url: '',
+                  duration: 0,
+                  file_path: '',
+                  platform: '',
+                  raw_info: null,
+                  title,
+                  video_id: '',
+                },
               },
-              createdAt: new Date().toISOString(),
-              audioMeta: {
-                cover_url: '',
-                duration: 0,
-                file_path: '',
-                platform: '',
-                raw_info: null,
-                title,
-                video_id: '',
-              },
-            },
-            ...state.tasks,
-          ],
-          currentTaskId: taskId, // 默认设置为当前任务
-        })),
+              ...state.tasks,
+            ],
+            currentTaskId: taskId, // 默认设置为当前任务
+          }
+        }),
 
       addPendingTasks: items =>
         set(state => {
@@ -132,6 +158,7 @@ export const useTaskStore = create<TaskStore>()(
             status: 'PENDING',
             markdown: '',
             platform: item.platform,
+            projectId: null,
             transcript: {
               full_text: '',
               language: '',
@@ -139,6 +166,7 @@ export const useTaskStore = create<TaskStore>()(
               segments: [],
             },
             createdAt,
+            lastGeneratedAt: createdAt,
             audioMeta: {
               cover_url: '',
               duration: 0,
@@ -161,6 +189,10 @@ export const useTaskStore = create<TaskStore>()(
               if (task.id !== id) return task
 
               if (task.status === 'SUCCESS' && data.status === 'SUCCESS') return task
+              const generationUpdate =
+                data.status === 'SUCCESS'
+                  ? { lastGeneratedAt: new Date().toISOString() }
+                  : {}
 
               // 如果是 markdown 字符串，封装为版本
               if (typeof data.markdown === 'string') {
@@ -194,11 +226,12 @@ export const useTaskStore = create<TaskStore>()(
                 return {
                   ...task,
                   ...data,
+                  ...generationUpdate,
                   markdown: updatedMarkdown,
                 }
               }
 
-              return { ...task, ...data }
+              return { ...task, ...data, ...generationUpdate }
             }),
           })),
 
@@ -207,7 +240,7 @@ export const useTaskStore = create<TaskStore>()(
         const currentTaskId = get().currentTaskId
         return get().tasks.find(task => task.id === currentTaskId) || null
       },
-      retryTask: async (id: string, payload?: any) => {
+      retryTask: async (id: string, payload?: TaskFormData) => {
 
         if (!id){
           toast.error('任务不存在')
@@ -223,12 +256,13 @@ export const useTaskStore = create<TaskStore>()(
             ...newFormData,
             task_id: id,
           })
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const error = e as { data?: { reason?: string; downloading?: boolean } }
           // 就绪门禁：转写模型未下载好。不要把任务标成 PENDING（会一直转），
           // 给提示让用户先去下载。
-          if (e?.data?.reason === 'transcriber_model_not_ready') {
+          if (error.data?.reason === 'transcriber_model_not_ready') {
             toast.error(
-              e?.data?.downloading
+              error.data.downloading
                 ? '转写模型正在下载中，请稍候再重试'
                 : '转写模型尚未下载，请先去「设置 → 音频转写配置」页下载',
             )
@@ -270,12 +304,109 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
+      createProject: name => {
+        const cleanName = name.trim().slice(0, 50)
+        if (!cleanName) return null
+        const duplicate = get().projects.some(
+          project => project.name.toLocaleLowerCase() === cleanName.toLocaleLowerCase()
+        )
+        if (duplicate) return null
+
+        const now = new Date().toISOString()
+        const project: NoteProject = {
+          id: uuidv4(),
+          name: cleanName,
+          createdAt: now,
+          updatedAt: now,
+        }
+        set(state => ({ projects: [...state.projects, project] }))
+        return project
+      },
+
+      renameProject: (id, name) => {
+        const cleanName = name.trim().slice(0, 50)
+        if (!cleanName) return false
+        const duplicate = get().projects.some(
+          project =>
+            project.id !== id
+            && project.name.toLocaleLowerCase() === cleanName.toLocaleLowerCase()
+        )
+        if (duplicate || !get().projects.some(project => project.id === id)) return false
+
+        set(state => ({
+          projects: state.projects.map(project =>
+            project.id === id
+              ? { ...project, name: cleanName, updatedAt: new Date().toISOString() }
+              : project
+          ),
+        }))
+        return true
+      },
+
+      deleteProject: id =>
+        set(state => ({
+          projects: state.projects.filter(project => project.id !== id),
+          tasks: state.tasks.map(task =>
+            task.projectId === id ? { ...task, projectId: null } : task
+          ),
+          selectedProjectId: state.selectedProjectId === id ? 'all' : state.selectedProjectId,
+        })),
+
+      moveTaskToProject: (taskId, projectId) => {
+        const target = projectId && get().projects.some(project => project.id === projectId)
+          ? projectId
+          : null
+        set(state => ({
+          tasks: state.tasks.map(task =>
+            task.id === taskId ? { ...task, projectId: target } : task
+          ),
+        }))
+      },
+
+      moveTasksToProject: (taskIds, projectId) => {
+        const ids = new Set(taskIds)
+        const target = projectId && get().projects.some(project => project.id === projectId)
+          ? projectId
+          : null
+        set(state => ({
+          tasks: state.tasks.map(task =>
+            ids.has(task.id) ? { ...task, projectId: target } : task
+          ),
+        }))
+      },
+
+      setSelectedProject: selectedProjectId => set({ selectedProjectId }),
+      setHistorySort: historySort => set({ historySort }),
+
       clearTasks: () => set({ tasks: [], currentTaskId: null }),
 
       setCurrentTask: taskId => set({ currentTaskId: taskId }),
     }),
     {
       name: 'task-storage',
+      version: 2,
+      migrate: persistedState => {
+        const state = (persistedState || {}) as Partial<TaskStore>
+        const projects = Array.isArray(state.projects) ? state.projects : []
+        const projectIds = new Set(projects.map(project => project.id))
+        const selectedProjectId =
+          state.selectedProjectId === 'unfiled'
+          || state.selectedProjectId === 'all'
+          || projectIds.has(state.selectedProjectId || '')
+            ? state.selectedProjectId || 'all'
+            : 'all'
+        return {
+          ...state,
+          projects,
+          selectedProjectId,
+          historySort: state.historySort || 'latest',
+          tasks: (state.tasks || []).map(task => ({
+            ...task,
+            projectId: task.projectId && projectIds.has(task.projectId) ? task.projectId : null,
+            lastGeneratedAt: task.lastGeneratedAt || task.createdAt,
+          })),
+        }
+      },
       storage: createJSONStorage(() => ({
         getItem: async (name: string): Promise<string | null> => {
           const value = await get(name)
