@@ -30,7 +30,7 @@ logger=get_logger(__name__)
 # 在线请求失败 → fallback local_files_only=True → HF cache 找不到（因为是
 # modelscope 目录布局不是 HF）→ LocalEntryNotFoundError，误导说"离线模式"。
 # 解法：彻底让 faster-whisper 自己处理下载——传 size name，配 download_root
-# 作为 HF cache 根目录，HF_ENDPOINT 已经在 Dockerfile 里指到 hf-mirror.com，
+# 作为 HF cache 根目录，HF_ENDPOINT 已经在 Dockerfile 里指到 huggingface.co，
 # 国内能用。删掉 modelscope 那一套，避免布局不匹配。
 class WhisperTranscriber(Transcriber):
     def __init__(

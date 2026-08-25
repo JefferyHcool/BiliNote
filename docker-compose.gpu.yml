@@ -15,9 +15,12 @@ services:
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
+      - HF_ENDPOINT=https://huggingface.co
     volumes:
       # 同 docker-compose.yml：./backend 绑到 /app，DB / 转写器配置 / 截图 / 上传都持久化
       - ./backend:/app
+      # whisper 模型缓存单独持久化，避免重建容器重新下载
+      - whisper-models:/app/models/whisper
     expose:
       - "${BACKEND_PORT}"  # 不再对外暴露，用于 nginx 内部通信
     # 用 unless-stopped 避免短暂崩溃把容器永久打死后再也读不到 .env 修改
@@ -66,3 +69,6 @@ services:
         condition: service_started
     restart: unless-stopped
     mem_limit: 256m
+
+volumes:
+  whisper-models:

@@ -17,7 +17,7 @@ RUN rm -f /etc/apt/sources.list && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/usr/bin:${PATH}"
-ENV HF_ENDPOINT=https://hf-mirror.com
+ENV HF_ENDPOINT=https://huggingface.co
 
 WORKDIR /app
 

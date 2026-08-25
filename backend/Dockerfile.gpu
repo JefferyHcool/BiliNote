@@ -14,7 +14,7 @@ RUN rm -f /etc/apt/sources.list && \
     apt-get install -y --no-install-recommends ffmpeg python3-pip curl && \
     rm -rf /var/lib/apt/lists/*
 
-ENV HF_ENDPOINT=https://hf-mirror.com
+ENV HF_ENDPOINT=https://huggingface.co
 
 WORKDIR /app
 
