@@ -30,6 +30,14 @@ API_QUERY_RESULT = API_BASE_URL + "/task/result"
 
 logger = get_logger(__name__)
 
+# —— 临时性错误处理（被三个上传/任务/查询接口共用）——
+# B 站 ASR 偶发返回 code=139201 / 业务 -400 / 业务 -500，等几秒重试通常恢复；
+# 此外网关层常返 412（wbi 链路风控抖动）和 5xx。详见 issue #433。
+RETRYABLE_BUSINESS_CODES = {139201, -400, -500}
+RETRYABLE_HTTP_STATUSES = {412, 500, 502, 503, 504}
+DEFAULT_MAX_RETRIES = 3  # 含首次共 3 次请求，指数退避 1s / 2s / 4s
+
+
 class BcutTranscriber(Transcriber):
     """必剪 语音识别接口"""
     headers = {
@@ -124,7 +132,7 @@ class BcutTranscriber(Transcriber):
             logger.info(f"分片{clip}上传成功: {etag}")
 
     def __commit_upload(self) -> None:
-        """提交上传数据"""
+        """提交上传数据（含重试：应对 B 站 139201 等临时服务异常）"""
         data = json.dumps({
             "InBossKey": self.__in_boss_key,
             "ResourceId": self.__resource_id,
@@ -132,53 +140,182 @@ class BcutTranscriber(Transcriber):
             "UploadId": self.__upload_id,
             "model_id": "8",
         })
-        resp = self.session.post(
-            API_COMMIT_UPLOAD,
-            data=data,
-            headers=self.headers
-        )
-        resp.raise_for_status()
-        resp = resp.json()
-        print('Bili',resp)
-        if resp.get("code") != 0:
-            error_msg = f"上传提交失败: {resp.get('message', '未知错误')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-            
-        self.__download_url = resp["data"]["download_url"]
-        logger.info(f"提交成功，下载链接: {self.__download_url}")
+
+        last_error = None
+        for attempt in range(DEFAULT_MAX_RETRIES):
+            try:
+                resp = self.session.post(
+                    API_COMMIT_UPLOAD,
+                    data=data,
+                    headers=self.headers,
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                resp_data = resp.json()
+
+                if resp_data.get("code") == 0:
+                    self.__download_url = resp_data["data"]["download_url"]
+                    logger.info(f"提交成功，下载链接: {self.__download_url}")
+                    return
+
+                code = resp_data.get("code")
+                msg = resp_data.get("message", "未知错误")
+
+                if code in RETRYABLE_BUSINESS_CODES:
+                    if attempt < DEFAULT_MAX_RETRIES - 1:
+                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        logger.warning(
+                            f"提交上传返回 code={code} msg={msg}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                        )
+                        time.sleep(wait)
+                        last_error = Exception(f"上传提交失败: {msg}")
+                        continue
+                    error_msg = (
+                        f"上传提交失败（重试 {DEFAULT_MAX_RETRIES} 次后仍返回 code={code}）: {msg}"
+                    )
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+
+                error_msg = f"上传提交失败: {msg}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(f"提交上传网络错误: {e}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})")
+                    time.sleep(wait)
+                    last_error = e
+                    continue
+                raise
+            except requests.exceptions.HTTPError as e:
+                # 网关层风控抖动（412）或临时 5xx：重试可绕过。
+                status = e.response.status_code if e.response is not None else None
+                if status in RETRYABLE_HTTP_STATUSES and attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"提交上传 HTTP {status}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                    )
+                    time.sleep(wait)
+                    last_error = e
+                    continue
+                raise
+
+        raise last_error or Exception("上传提交失败: 重试次数已用完")
 
     def _create_task(self) -> str:
-        """开始创建转换任务"""
-        resp = self.session.post(
-            API_CREATE_TASK, json={"resource": self.__download_url, "model_id": "8"}, headers=self.headers
-        )
-        resp.raise_for_status()
-        resp = resp.json()
-        if resp.get("code") != 0:
-            error_msg = f"创建任务失败: {resp.get('message', '未知错误')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-            
-        self.task_id = resp["data"]["task_id"]
-        logger.info(f"任务已创建: {self.task_id}")
-        return self.task_id
+        """开始创建转换任务（含重试）"""
+        for attempt in range(DEFAULT_MAX_RETRIES):
+            try:
+                resp = self.session.post(
+                    API_CREATE_TASK,
+                    json={"resource": self.__download_url, "model_id": "8"},
+                    headers=self.headers,
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                resp_data = resp.json()
+
+                if resp_data.get("code") == 0:
+                    self.task_id = resp_data["data"]["task_id"]
+                    logger.info(f"任务已创建: {self.task_id}")
+                    return self.task_id
+
+                code = resp_data.get("code")
+                msg = resp_data.get("message", "未知错误")
+                if code in RETRYABLE_BUSINESS_CODES:
+                    if attempt < DEFAULT_MAX_RETRIES - 1:
+                        wait = 2 ** attempt
+                        logger.warning(
+                            f"创建任务返回 code={code} msg={msg}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                        )
+                        time.sleep(wait)
+                        continue
+                    error_msg = (
+                        f"创建任务失败（重试 {DEFAULT_MAX_RETRIES} 次后仍返回 code={code}）: {msg}"
+                    )
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+
+                error_msg = f"创建任务失败: {msg}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(f"创建任务网络错误: {e}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})")
+                    time.sleep(wait)
+                    continue
+                raise
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else None
+                if status in RETRYABLE_HTTP_STATUSES and attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"创建任务 HTTP {status}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                    )
+                    time.sleep(wait)
+                    continue
+                raise
+
+        raise Exception("创建任务失败: 重试次数已用完")
 
     def _query_result(self) -> dict:
-        """查询转换结果"""
-        resp = self.session.get(
-            API_QUERY_RESULT, 
-            params={"model_id": 7, "task_id": self.task_id}, 
-            headers=self.headers
-        )
-        resp.raise_for_status()
-        resp = resp.json()
-        if resp.get("code") != 0:
-            error_msg = f"查询结果失败: {resp.get('message', '未知错误')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-            
-        return resp["data"]
+        """查询转换结果（含重试）"""
+        for attempt in range(DEFAULT_MAX_RETRIES):
+            try:
+                resp = self.session.get(
+                    API_QUERY_RESULT,
+                    params={"model_id": 7, "task_id": self.task_id},
+                    headers=self.headers,
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                resp_data = resp.json()
+
+                if resp_data.get("code") == 0:
+                    return resp_data["data"]
+
+                code = resp_data.get("code")
+                msg = resp_data.get("message", "未知错误")
+                if code in RETRYABLE_BUSINESS_CODES:
+                    if attempt < DEFAULT_MAX_RETRIES - 1:
+                        wait = 2 ** attempt
+                        logger.warning(
+                            f"查询结果返回 code={code} msg={msg}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                        )
+                        time.sleep(wait)
+                        continue
+                    error_msg = (
+                        f"查询结果失败（重试 {DEFAULT_MAX_RETRIES} 次后仍返回 code={code}）: {msg}"
+                    )
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+
+                error_msg = f"查询结果失败: {msg}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(f"查询结果网络错误: {e}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})")
+                    time.sleep(wait)
+                    continue
+                raise
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else None
+                if status in RETRYABLE_HTTP_STATUSES and attempt < DEFAULT_MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"查询结果 HTTP {status}，{wait}s 后重试 ({attempt + 1}/{DEFAULT_MAX_RETRIES})"
+                    )
+                    time.sleep(wait)
+                    continue
+                raise
+
+        raise Exception("查询结果失败: 重试次数已用完")
 
     @timeit
     def transcript(self, file_path: str) -> TranscriptResult:

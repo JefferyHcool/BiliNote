@@ -25,7 +25,7 @@ class _FakeSession:
         self.upload_urls_count = upload_urls_count
         self.commit_payloads = []
 
-    def post(self, url, data=None, headers=None):
+    def post(self, url, data=None, headers=None, timeout=None):
         if url == bcut_module.API_REQ_UPLOAD:
             body = json.loads(data)
             return _FakeResp({

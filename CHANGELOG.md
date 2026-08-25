@@ -2,6 +2,12 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- **bcut（必剪）ASR 上传/任务/查询接口在风控抖动时整任务失败**（#433）：网关层 412、5xx 与业务码 139201 / -400 / -500 在短时间窗口内通常自动恢复，原实现失败即放弃，导致桌面端首次成功后再发起任务持续失败。三个接口（`__commit_upload` / `_create_task` / `_query_result`）现在统一最多 3 次重试 + 指数退避（1s / 2s / 4s），并新增 `RETRYABLE_BUSINESS_CODES` / `RETRYABLE_HTTP_STATUSES` / `DEFAULT_MAX_RETRIES` 三个模块常量便于测试与扩展；重试用尽时附带明确错误消息。
+
 ## [2.4.4] - 2026-06-23
 
 ### Security
