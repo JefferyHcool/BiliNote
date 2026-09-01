@@ -2,6 +2,13 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- **Docker / Dockerfile 默认 `HF_ENDPOINT` 改回 `huggingface.co`**：`2.4.x` 期间 `Dockerfile` / `docker-compose.yml` / `Dockerfile.complete` 三处默认 `ENV HF_ENDPOINT=https://hf-mirror.com`。`hf-mirror.com` 为中国大陆镜像，**境外网络常不可达或不稳定**——`#417`（Docker 部署下 Whisper 模型下载失败）就是命中了这条路径；同时与 `whisper.py` 顶部说明注释「HF_ENDPOINT 已经在 Dockerfile 里指到 huggingface.co」自相矛盾。三处默认改为 `https://huggingface.co`。**国内用户**只需在 `.env` 中设 `HF_ENDPOINT=https://hf-mirror.com` 即可保留旧行为。
+- **Whisper 模型缓存不再随容器重建丢失**：`docker-compose.yml` / `docker-compose.gpu.yml` 顶层新增命名卷 `whisper-models`，挂载到 `/app/models/whisper`，重建容器后 Whisper / Faster Whisper 已下载模型不会重下。
+
 ## [2.4.4] - 2026-06-23
 
 ### Security

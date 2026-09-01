@@ -15,6 +15,7 @@ services:
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
+      - HF_ENDPOINT=https://huggingface.co
     volumes:
       # 把整个 backend/ 目录绑到 /app，意味着这些都持久化到宿主机、删容器不丢：
       #   ./backend/bili_note.db                — SQLite 数据库（含 LLM 供应商配置、笔记历史）
@@ -22,6 +23,8 @@ services:
       #   ./backend/static/screenshots/         — 视频截图
       #   ./backend/uploads/                    — 上传的本地视频
       - ./backend:/app
+      # whisper 模型缓存单独持久化，避免重建容器重新下载
+      - whisper-models:/app/models/whisper
     expose:
       - "${BACKEND_PORT}"  # 不再对外暴露，用于 nginx 内部通信
     # 用 unless-stopped 而非 on-failure:N，避免任何短暂崩溃把容器永久打死后
@@ -65,3 +68,6 @@ services:
         condition: service_started
     restart: unless-stopped
     mem_limit: 256m
+
+volumes:
+  whisper-models:

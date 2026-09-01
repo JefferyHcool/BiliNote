@@ -19,7 +19,7 @@ RUN set -ex && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/usr/bin:${PATH}"
-ENV HF_ENDPOINT=https://hf-mirror.com
+ENV HF_ENDPOINT=https://huggingface.co
 
 WORKDIR /tmp/backend
 
@@ -76,7 +76,7 @@ RUN set -ex && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/usr/bin:${PATH}"
-ENV HF_ENDPOINT=https://hf-mirror.com
+ENV HF_ENDPOINT=https://huggingface.co
 ENV PYTHONUNBUFFERED=1
 
 # 复制 Python 依赖
@@ -110,7 +110,7 @@ nodaemon=true
 user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
-environment=BACKEND_PORT="8483",BACKEND_HOST="0.0.0.0",TRANSCRIBER_TYPE="fast-whisper",WHISPER_MODEL_SIZE="tiny",FFMPEG_BIN_PATH="",HF_ENDPOINT="https://hf-mirror.com",STATIC="/static",OUT_DIR="./static/screenshots",DATA_DIR="data",NOTE_OUTPUT_DIR="data/note_results",DATABASE_URL="sqlite:////app/backend/data/bili_note.db",IMAGE_BASE_URL="/static/screenshots",ENV="production",GROQ_TRANSCRIBER_MODEL="whisper-large-v3-turbo"
+environment=BACKEND_PORT="8483",BACKEND_HOST="0.0.0.0",TRANSCRIBER_TYPE="fast-whisper",WHISPER_MODEL_SIZE="tiny",FFMPEG_BIN_PATH="",HF_ENDPOINT="https://huggingface.co",STATIC="/static",OUT_DIR="./static/screenshots",DATA_DIR="data",NOTE_OUTPUT_DIR="data/note_results",DATABASE_URL="sqlite:////app/backend/data/bili_note.db",IMAGE_BASE_URL="/static/screenshots",ENV="production",GROQ_TRANSCRIBER_MODEL="whisper-large-v3-turbo"
 
 [program:nginx]
 command=nginx -g "daemon off;"
