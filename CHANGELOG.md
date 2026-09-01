@@ -2,6 +2,12 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- **快手 ASR 接口下线后用户看到无信息量的「未知错误」**：快手官方已永久关闭 `ai.kuaishou.com/api/effects/subtitle_generate`（返回 `code=501, msg=效果subtitle_generate禁用`），旧实现默默地把这条 501 错误冒泡出去，前端只能展示「快手 API 返回错误: 未知错误」之类的笼统提示，用户无从得知是该接口本身已下线。`KuaishouTranscriber._submit` 现在直接在入口处抛 `RuntimeError` 并提示用户切换到 bcut 或 Faster Whisper，避免无谓的上传带宽消耗。
+
 ## [2.4.4] - 2026-06-23
 
 ### Security

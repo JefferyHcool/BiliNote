@@ -26,39 +26,12 @@ class KuaishouTranscriber(Transcriber):
 
     def _submit(self, file_path: str) -> dict:
         """提交识别请求"""
-        try:
-            file_binary = self._load_file(file_path)
-            
-            payload = {
-                "typeId": "1"
-            }
-            
-            # 使用文件名作为上传文件名
-            file_name = os.path.basename(file_path)
-            files = [('file', (file_name, file_binary, 'audio/mpeg'))]
-            
-            logger.info(f"开始向快手API提交请求，文件: {file_name}")
-            response = requests.post(self.API_URL, data=payload, files=files, timeout=300)
-            response.raise_for_status()  # 检查HTTP错误
-            
-            result = response.json()
-            print('result',result)
-            # 检查快手API返回是否包含错误
-            if "data" not in result or result.get("code", 0) != 0:
-                error_msg = f"快手API返回错误: {result.get('message', '未知错误')}"
-                logger.error(error_msg)
-                raise Exception(error_msg)
-                
-            return result
-            
-        except requests.exceptions.RequestException as e:
-            error_msg = f"快手ASR请求网络错误: {str(e)}"
-            logger.error(error_msg)
-            raise
-        except Exception as e:
-            error_msg = f"快手ASR请求处理错误: {str(e)}"
-            logger.error(error_msg)
-            raise
+        # 快手 ASR API 已于 2025 年永久关停 (code=501, msg="效果subtitle_generate禁用")，
+        # 请使用 bcut（B站必剪）或 fast-whisper（本地）替代。
+        raise RuntimeError(
+            "快手 ASR 转写接口已永久关停（快手官方已禁用 subtitle_generate API）。"
+            "请在「设置 → 音频转写配置」中将转写引擎切换为「必剪(bcut)」或「Faster Whisper(本地)」。"
+        )
 
     @timeit
     def transcript(self, file_path: str) -> TranscriptResult:
