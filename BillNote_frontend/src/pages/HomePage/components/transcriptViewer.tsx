@@ -49,7 +49,7 @@ const TranscriptViewer = () => {
   }
 
   return (
-      <div className="transcript-viewer flex h-full w-full flex-col  rounded-md border bg-white p-4 shadow-sm">
+      <div className="transcript-viewer flex h-full w-full flex-col  rounded-md border bg-card p-4 shadow-sm">
         <h2 className="mb-4 text-lg font-medium">转写结果</h2>
         {!task?.transcript?.segments?.length ? (
             <div className="flex h-full items-center justify-center text-muted-foreground">暂无转写内容</div>

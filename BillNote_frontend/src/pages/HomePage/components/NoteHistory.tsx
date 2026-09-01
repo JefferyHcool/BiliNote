@@ -50,13 +50,13 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
             <input
                 type="text"
                 placeholder="搜索笔记标题..."
-                className="w-full rounded border border-neutral-300 px-3 py-1 text-sm outline-none focus:border-primary"
+                className="w-full rounded border border-border px-3 py-1 text-sm outline-none focus:border-primary"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div className="rounded-md border border-neutral-200 bg-neutral-50 py-6 text-center">
-            <p className="text-sm text-neutral-500">暂无记录</p>
+          <div className="rounded-md border border-border bg-muted py-6 text-center">
+            <p className="text-sm text-muted-foreground">暂无记录</p>
           </div>
         </>
 
@@ -70,7 +70,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
         <input
             type="text"
             placeholder="搜索笔记标题..."
-            className="w-full rounded border border-neutral-300 px-3 py-1 text-sm outline-none focus:border-primary"
+            className="w-full rounded border border-border px-3 py-1 text-sm outline-none focus:border-primary"
             value={search}
             onChange={e => setSearch(e.target.value)}
         />
@@ -81,7 +81,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
             key={task.id}
             onClick={() => onSelect(task.id)}
             className={cn(
-              'flex cursor-pointer flex-col rounded-md border border-neutral-200 p-3',
+              'flex cursor-pointer flex-col rounded-md border border-border p-3',
               selectedId === task.id && 'border-primary bg-primary-light'
             )}
           >

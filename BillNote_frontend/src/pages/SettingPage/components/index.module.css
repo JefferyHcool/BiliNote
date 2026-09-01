@@ -3,5 +3,5 @@
   transition: all 0.2s ease-in-out;
 }
 .menuBar:hover {
-  background-color: #f7f7f7;
+  background-color: var(--muted);
 }

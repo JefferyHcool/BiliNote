@@ -294,7 +294,7 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       <div className="flex max-w-xl flex-col gap-4">
         <div className="flex flex-col gap-2">
           <span className="font-bold">模型列表</span>
-          <div className={'flex flex-col gap-2 rounded bg-[#FEF0F0] p-2.5'}>
+          <div className={'flex flex-col gap-2 rounded bg-destructive/10 p-2.5'}>
             <h2 className={'font-bold'}>注意!</h2>
             <span>请确保已经保存供应商信息,以及通过测试连通性.</span>
           </div>

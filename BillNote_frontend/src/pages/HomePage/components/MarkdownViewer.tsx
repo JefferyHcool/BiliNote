@@ -417,12 +417,12 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 text-neutral-500">
+      <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 text-muted-foreground">
         <StepBar steps={steps} currentStep={taskStatus} />
         <Loading className="h-5 w-5" />
         <div className="text-center text-sm">
           <p className="text-lg font-bold">正在生成笔记，请稍候…</p>
-          <p className="mt-2 text-xs text-neutral-500">这可能需要几秒钟时间，取决于视频长度</p>
+          <p className="mt-2 text-xs text-muted-foreground">这可能需要几秒钟时间，取决于视频长度</p>
         </div>
       </div>
     )
@@ -430,11 +430,11 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'idle') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-3 text-neutral-500">
+      <div className="flex h-screen w-full flex-col items-center justify-center space-y-3 text-muted-foreground">
         <Idle />
         <div className="text-center">
           <p className="text-lg font-bold">输入视频链接并点击"生成笔记"</p>
-          <p className="mt-2 text-xs text-neutral-500">支持哔哩哔哩、YouTube 、抖音等视频平台</p>
+          <p className="mt-2 text-xs text-muted-foreground">支持哔哩哔哩、YouTube 、抖音等视频平台</p>
         </div>
       </div>
     )
@@ -478,7 +478,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
       />
 
       {viewMode === 'map' ? (
-        <div className="flex w-full flex-1 overflow-hidden bg-white">
+        <div className="flex w-full flex-1 overflow-hidden bg-card">
           <div className={'w-full'}>
             <MarkmapEditor
               value={selectedContent}
@@ -489,7 +489,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 overflow-hidden bg-white py-2">
+        <div className="flex flex-1 overflow-hidden bg-card py-2">
           {selectedContent && selectedContent !== 'loading' && selectedContent !== 'empty' ? (
             <>
               {showChat === 'full' && currentTask ? (
@@ -535,8 +535,8 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
                 <div className="bg-primary-light mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                   <ArrowRight className="text-primary h-8 w-8" />
                 </div>
-                <p className="mb-2 text-neutral-600">输入视频链接并点击"生成笔记"按钮</p>
-                <p className="text-xs text-neutral-500">支持哔哩哔哩、YouTube等视频网站</p>
+                <p className="mb-2 text-muted-foreground">输入视频链接并点击"生成笔记"按钮</p>
+                <p className="text-xs text-muted-foreground">支持哔哩哔哩、YouTube等视频网站</p>
               </div>
             </div>
           )}

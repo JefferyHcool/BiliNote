@@ -49,19 +49,19 @@ const ProxyConfig = () => {
   }
 
   if (loading) {
-    return <div className="text-xs text-gray-400">加载代理配置…</div>
+    return <div className="text-xs text-muted-foreground">加载代理配置…</div>
   }
 
   // env 兜底：配置没开但 effective 有值，说明来自 HTTP_PROXY 环境变量
   const fromEnv = !enabled && !!effective
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
+    <div className="flex flex-col gap-2 rounded border border-border p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">全局代理</span>
         <Switch checked={enabled} onCheckedChange={setEnabled} />
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         作用于 AI 模型接口、转写接口（Groq 等）、YouTube 下载。
       </p>
       <Input

@@ -20,7 +20,7 @@ export default function AboutPage() {
     'https://common-1304618721.cos.ap-chengdu.myqcloud.com/20250504103625.png',
   ]
   return (
-    <ScrollArea className={'h-full overflow-y-auto bg-white'}>
+    <ScrollArea className={'h-full overflow-y-auto bg-card'}>
       <div className="container mx-auto px-4 py-12">
         {/* Hero Section */}
         <div className="mb-16 flex flex-col items-center justify-center text-center">

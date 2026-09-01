@@ -57,7 +57,7 @@ export default function Monitor() {
     )
 
     return (
-        <ScrollArea className="h-full overflow-y-auto bg-white">
+        <ScrollArea className="h-full overflow-y-auto bg-card">
             <div className="container mx-auto px-4 py-8">
                 {/* Header */}
                 <div className="mb-8 flex items-center justify-between">
@@ -108,7 +108,7 @@ export default function Monitor() {
                         </CardHeader>
                         <CardContent>
                             {loading && !status ? (
-                                <div className="flex items-center gap-2 text-gray-500">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     加载中...
                                 </div>
@@ -140,7 +140,7 @@ export default function Monitor() {
                         </CardHeader>
                         <CardContent>
                             {loading && !status ? (
-                                <div className="flex items-center gap-2 text-gray-500">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     加载中...
                                 </div>
@@ -182,7 +182,7 @@ export default function Monitor() {
                         </CardHeader>
                         <CardContent>
                             {loading && !status ? (
-                                <div className="flex items-center gap-2 text-gray-500">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     加载中...
                                 </div>
@@ -220,7 +220,7 @@ export default function Monitor() {
                         </CardHeader>
                         <CardContent>
                             {loading && !status ? (
-                                <div className="flex items-center gap-2 text-gray-500">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     加载中...
                                 </div>
@@ -244,7 +244,7 @@ export default function Monitor() {
                 </div>
 
                 {/* Footer Info */}
-                <div className="mt-8 text-center text-xs text-gray-400">
+                <div className="mt-8 text-center text-xs text-muted-foreground">
                     状态每 30 秒自动刷新
                 </div>
             </div>

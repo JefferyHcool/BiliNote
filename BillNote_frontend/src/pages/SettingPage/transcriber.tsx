@@ -197,13 +197,13 @@ export default function Transcriber() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   if (!config) {
-    return <div className="p-6 text-center text-neutral-500">无法加载配置</div>
+    return <div className="p-6 text-center text-muted-foreground">无法加载配置</div>
   }
 
   const currentModels = selectedType === 'mlx-whisper' ? mlxModelStatuses : modelStatuses
@@ -212,7 +212,7 @@ export default function Transcriber() {
     <div className="space-y-6 p-6">
       <div>
         <h2 className="text-2xl font-semibold">音频转写配置</h2>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           选择视频音频转写为文字所使用的引擎，保存后对新任务立即生效
         </p>
       </div>
@@ -265,7 +265,7 @@ export default function Transcriber() {
                   })}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-muted-foreground">
                 模型越大精度越高，但速度更慢、占用更多显存
               </p>
             </div>
@@ -276,7 +276,7 @@ export default function Transcriber() {
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 MLX Whisper 当前不可用。需要 macOS 平台并安装{' '}
-                <code className="rounded bg-neutral-100 px-1">pip install mlx_whisper</code>，
+                <code className="rounded bg-muted px-1">pip install mlx_whisper</code>，
                 安装后重启后端生效。
               </AlertDescription>
             </Alert>
@@ -300,7 +300,7 @@ export default function Transcriber() {
             <CardTitle className="flex items-center gap-2 text-lg">
               <Download className="h-5 w-5" />
               模型管理
-              <span className="text-sm font-normal text-neutral-400">
+              <span className="text-sm font-normal text-muted-foreground">
                 {selectedType === 'mlx-whisper' ? 'MLX Whisper' : 'Faster Whisper'}
               </span>
             </CardTitle>

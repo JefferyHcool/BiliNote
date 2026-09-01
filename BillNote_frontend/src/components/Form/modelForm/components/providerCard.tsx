@@ -42,7 +42,7 @@ const ProviderCard: FC<IProviderCardProps> = ({
       className={
         styles.card +
         ' flex h-14 cursor-pointer items-center justify-between rounded border border-[#f3f3f3] p-2' +
-        (isActive ? ' bg-[#F0F0F0] font-semibold text-blue-600' : '')
+        (isActive ? ' bg-muted font-semibold text-blue-600' : '')
       }
       // 整行可点跳转到对应供应商编辑页（之前 onClick 只挂在 icon+名字那一小块 div 上，
       // 名字和开关之间的空白区域点不动）

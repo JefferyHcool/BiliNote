@@ -222,23 +222,23 @@ const Onboarding = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-pink-50 p-6">
-      <div className="w-full max-w-xl rounded-xl border bg-white p-6 shadow-lg">
+      <div className="w-full max-w-xl rounded-xl border bg-card p-6 shadow-lg">
         <div className="flex items-center gap-3 mb-4">
           <img src={logo} alt="logo" className="h-10 w-10" />
           <div>
             <h1 className="text-xl font-bold">欢迎使用 BiliNote</h1>
-            <p className="text-xs text-gray-500">几步配置后就可以开始把视频转笔记。</p>
+            <p className="text-xs text-muted-foreground">几步配置后就可以开始把视频转笔记。</p>
           </div>
         </div>
 
         {/* Stepper */}
-        <div className="mb-5 flex items-center gap-2 text-xs text-gray-500">
+        <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
           {[1, 2, 3, 4].map(s => (
             <div key={s} className="flex items-center gap-2">
               <div
-                className={`flex h-6 w-6 items-center justify-center rounded-full border ${step >= s ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-gray-400'}`}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border ${step >= s ? 'border-blue-600 bg-blue-600 text-white' : 'border-border bg-card text-muted-foreground'}`}
               >{s}</div>
-              {s < 4 && <div className={`h-px w-8 ${step > s ? 'bg-blue-600' : 'bg-gray-300'}`} />}
+              {s < 4 && <div className={`h-px w-8 ${step > s ? 'bg-blue-600' : 'bg-muted'}`} />}
             </div>
           ))}
         </div>
@@ -246,8 +246,8 @@ const Onboarding = () => {
         {step === 1 && (
           <section className="flex flex-col gap-3">
             <h2 className="font-semibold">第 1 步 · 后端连通性</h2>
-            <p className="text-sm text-gray-600">桌面端会自动启动 Python 后端进程。检查连通中…</p>
-            {pinging && <div className="text-sm text-gray-500">检测中…</div>}
+            <p className="text-sm text-muted-foreground">桌面端会自动启动 Python 后端进程。检查连通中…</p>
+            {pinging && <div className="text-sm text-muted-foreground">检测中…</div>}
             {backendOk === true && <div className="rounded bg-green-50 p-2 text-sm text-green-700">✓ 后端已就绪</div>}
             {backendOk === false && (
               <div className="rounded bg-red-50 p-2 text-sm text-red-700">
@@ -258,7 +258,7 @@ const Onboarding = () => {
             <div className="flex gap-2 justify-end">
               {backendOk !== true && (
                 <button
-                  className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm rounded border border-border hover:bg-accent disabled:opacity-50"
                   disabled={pinging}
                   onClick={doPing}
                 >
@@ -275,26 +275,26 @@ const Onboarding = () => {
         {step === 2 && (
           <section className="flex flex-col gap-3">
             <h2 className="font-semibold">第 2 步 · 模型供应商</h2>
-            <p className="text-sm text-gray-600">填一个 OpenAI 兼容供应商：DeepSeek / Qwen / Claude / 自托管 / OpenAI 都行。</p>
+            <p className="text-sm text-muted-foreground">填一个 OpenAI 兼容供应商：DeepSeek / Qwen / Claude / 自托管 / OpenAI 都行。</p>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-gray-600">供应商名（自取）</span>
+              <span className="text-muted-foreground">供应商名（自取）</span>
               <input className="input border rounded px-2 py-1" value={providerName} onChange={e => setProviderName(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-gray-600">API 地址</span>
+              <span className="text-muted-foreground">API 地址</span>
               <input className="input border rounded px-2 py-1" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-gray-600">API Key</span>
+              <span className="text-muted-foreground">API Key</span>
               <input type="password" className="input border rounded px-2 py-1" value={apiKey} onChange={e => setApiKey(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-gray-600">模型名（如 gpt-4o-mini / deepseek-chat / qwen-turbo）</span>
+              <span className="text-muted-foreground">模型名（如 gpt-4o-mini / deepseek-chat / qwen-turbo）</span>
               <input className="input border rounded px-2 py-1" value={modelName} onChange={e => setModelName(e.target.value)} />
             </label>
             {error && <div className="text-xs text-red-600">{error}</div>}
             <div className="flex gap-2 justify-between">
-              <button className="text-sm text-gray-500 hover:text-gray-800" onClick={prev}>上一步</button>
+              <button className="text-sm text-muted-foreground hover:text-foreground" onClick={prev}>上一步</button>
               <button className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" disabled={savingProvider} onClick={saveProvider}>
                 {savingProvider ? '保存中…' : '保存并下一步'}
               </button>
@@ -305,7 +305,7 @@ const Onboarding = () => {
         {step === 3 && (
           <section className="flex flex-col gap-3">
             <h2 className="font-semibold">第 3 步 · 音频转写引擎</h2>
-            <p className="text-sm text-gray-600">把视频音频转成文字。<strong>推荐在线引擎</strong>，避免本地下载 ~600MB 的模型。</p>
+            <p className="text-sm text-muted-foreground">把视频音频转成文字。<strong>推荐在线引擎</strong>，避免本地下载 ~600MB 的模型。</p>
             <div className="grid gap-2">
               {[
                 { value: 'groq', title: 'Groq（在线，推荐）', desc: '注册 https://groq.com/ 拿免费 key；速度快、英文语料佳。无需本地模型。' },
@@ -313,18 +313,18 @@ const Onboarding = () => {
                 { value: 'kuaishou', title: '快手（在线，免登）', desc: '与必剪类似，备选。' },
                 { value: 'fast-whisper', title: 'Faster Whisper（本地）', desc: '完全离线但首次需下载 ~75MB（tiny）至 ~3GB（large-v3）的模型。CPU 慢。' },
               ].map(opt => (
-                <label key={opt.value} className={`flex gap-3 p-3 rounded border cursor-pointer ${transcriberType === opt.value ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <label key={opt.value} className={`flex gap-3 p-3 rounded border cursor-pointer ${transcriberType === opt.value ? 'border-blue-600 bg-blue-50' : 'border-border hover:border-muted-foreground'}`}>
                   <input type="radio" name="transcriber" value={opt.value} checked={transcriberType === opt.value} onChange={e => setTranscriberType(e.target.value)} />
                   <div>
                     <div className="text-sm font-medium">{opt.title}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
                   </div>
                 </label>
               ))}
             </div>
             {error && <div className="text-xs text-red-600">{error}</div>}
             <div className="flex gap-2 justify-between">
-              <button className="text-sm text-gray-500 hover:text-gray-800" onClick={prev}>上一步</button>
+              <button className="text-sm text-muted-foreground hover:text-foreground" onClick={prev}>上一步</button>
               <button className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" disabled={savingTranscriber} onClick={saveTranscriber}>
                 {savingTranscriber ? '保存中…' : '保存并下一步'}
               </button>
@@ -335,16 +335,16 @@ const Onboarding = () => {
         {step === 4 && (
           <section className="flex flex-col gap-3">
             <h2 className="font-semibold">第 4 步 · Cookie 同步（可选）</h2>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               想总结 <strong>B 站 / 抖音 / 快手</strong> 等需要登录态的平台时，需要把浏览器 cookie 复制到「下载配置」页。
               <br />
               YouTube 一般不需要 cookie。先跳过也没问题，到时再去配。
             </p>
-            <div className="rounded bg-gray-50 p-3 text-xs text-gray-600">
+            <div className="rounded bg-muted p-3 text-xs text-muted-foreground">
               提示：插件版（<a className="text-blue-600 underline" href="https://github.com/JefferyHcool/BiliNote/tree/develop/BillNote_extension" target="_blank" rel="noreferrer">BillNote_extension</a>）支持一键 cookie 同步；桌面版需手动复制。
             </div>
             <div className="flex gap-2 justify-between">
-              <button className="text-sm text-gray-500 hover:text-gray-800" onClick={prev}>上一步</button>
+              <button className="text-sm text-muted-foreground hover:text-foreground" onClick={prev}>上一步</button>
               <button className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700" onClick={finish}>
                 完成，进入 BiliNote
               </button>

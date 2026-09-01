@@ -87,7 +87,7 @@ export function MarkdownHeader({
   }
 
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-2 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-card/95 px-4 py-2 backdrop-blur-sm">
       {/* 左侧区域：版本 + 标签 + 创建时间 */}
       <div className="flex flex-wrap items-center gap-3">
         {isMultiVersion && (
