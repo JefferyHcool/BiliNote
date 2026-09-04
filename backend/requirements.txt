@@ -95,7 +95,7 @@ pytz==2025.2
 pywin32-ctypes==0.2.3
 PyYAML==6.0.2
 redis==5.2.1
-requests==2.32.4
+requests==2.33.0
 rich==14.0.0
 rich-toolkit==0.14.1
 shellingham==1.5.4
