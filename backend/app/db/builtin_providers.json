@@ -41,6 +41,15 @@
     "api_key": "",
     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"
   },
+  {
+    "id": "atlascloud",
+    "name": "Atlas Cloud",
+    "type": "built-in",
+    "logo": "custom",
+    "api_key": "",
+    "base_url": "https://api.atlascloud.ai/v1",
+    "models": ["deepseek-ai/deepseek-v4-pro", "deepseek-ai/DeepSeek-V3.1", "zai-org/glm-5", "moonshotai/kimi-k2.6", "qwen/qwen3.5-397b-a17b"]
+  },
     {
     "id": "groq",
     "name": "Groq",
