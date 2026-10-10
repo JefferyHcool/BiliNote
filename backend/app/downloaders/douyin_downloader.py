@@ -10,6 +10,7 @@ import requests
 from pydantic import BaseModel
 
 from app.downloaders.base import Downloader
+from app.downloaders.local_downloader import LocalDownloader
 from app.downloaders.douyin_helper.abogus import ABogus
 from app.enmus.note_enums import DownloadQuality
 from app.models.audio_model import AudioDownloadResult
@@ -224,19 +225,13 @@ class DouyinDownloader(Downloader):
                 output_dir = self.cache_data
             os.makedirs(output_dir, exist_ok=True)
 
-            output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
-
             video_data = self.fetch_video_info(video_url)
-            output_path = output_path % {
-                "id": video_data['aweme_detail']['aweme_id'],
-                "ext": "mp3",
-            }
-            url = video_data['aweme_detail']['music']['play_url']['uri']
-            # 下载音频
-            audio_data = requests.get(url)
-            with open(output_path, 'wb') as f:
-                f.write(audio_data.content)
-            print(url)
+            # music.play_url 是配乐资源，不一定包含视频口播；必须提取实际视频音轨。
+            video_path = self.download_video(video_url, output_dir=output_dir)
+            output_path = os.path.join(
+                output_dir, f"{video_data['aweme_detail']['aweme_id']}_video_audio.mp3"
+            )
+            LocalDownloader().convert_to_mp3(video_path, output_path)
             tags = []
             for tag in video_data['aweme_detail']['video_tag']:
                 if tag['tag_name']:
@@ -252,8 +247,9 @@ class DouyinDownloader(Downloader):
                 video_id=video_data['aweme_detail']['aweme_id'],
                 raw_info={
                     'tags': video_data['aweme_detail']['caption'] + ''.join(tags),
+                    'audio_source': 'video_track_v1',
                 },
-                video_path=None  # ❗音频下载不包含视频路径
+                video_path=video_path
             )
         except Exception as e:
             raise e

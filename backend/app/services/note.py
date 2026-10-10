@@ -1,4 +1,5 @@
 import json
+from app.services.douyin_audio_cache import retire_legacy_douyin_cache
 import logging
 import os
 from dataclasses import asdict
@@ -133,6 +134,10 @@ class NoteGenerator:
             audio_cache_file = NOTE_OUTPUT_DIR / f"{task_id}_audio.json"
             transcript_cache_file = NOTE_OUTPUT_DIR / f"{task_id}_transcript.json"
             markdown_cache_file = NOTE_OUTPUT_DIR / f"{task_id}_markdown.md"
+            if platform == "douyin" and retire_legacy_douyin_cache(
+                audio_cache_file, transcript_cache_file
+            ):
+                logger.info("已备份旧抖音配乐转写缓存，将从视频音轨重新转写")
             # 1. 获取字幕/转写：优先缓存 → 平台字幕 → 音频转写
             transcript = None
 
