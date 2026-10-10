@@ -2,6 +2,12 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- 抖音转写改为从实际视频提取音轨，避免误用独立配乐资源导致漏掉口播；旧任务重试时备份并停用旧音频元数据及转写缓存。
+
 ## [2.4.4] - 2026-06-23
 
 ### Security
