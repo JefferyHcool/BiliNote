@@ -17,6 +17,8 @@ class VideoReader:
                  grid_size=(3, 3),
                  frame_interval=2,
                  dedupe_enabled=True,
+                 smart_sampling=True,
+                 scene_threshold=0.3,
                  unit_width=960,
                  unit_height=540,
                  save_quality=90,
@@ -27,6 +29,8 @@ class VideoReader:
         self.grid_size = grid_size
         self.frame_interval = frame_interval
         self.dedupe_enabled = dedupe_enabled
+        self.smart_sampling = smart_sampling
+        self.scene_threshold = scene_threshold
         self.unit_width = unit_width
         self.unit_height = unit_height
         self.save_quality = save_quality
@@ -67,12 +71,62 @@ class VideoReader:
         except subprocess.CalledProcessError:
             return None
 
+    def _detect_scene_cuts(self) -> list[int]:
+        """用 ffmpeg 场景检测返回画面突变的整秒时间戳（升序去重）。
+
+        ffmpeg 不可用、超时或未检出任何切换时返回空列表，由调用方回退固定间隔采样。
+        """
+        cmd = [
+            "ffmpeg", "-hide_banner", "-nostats",
+            "-i", self.video_path,
+            "-vf", f"select='gt(scene,{self.scene_threshold})',metadata=print:file=-",
+            "-an", "-sn", "-dn", "-f", "null", "-",
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except Exception as exc:
+            logger.warning(f"场景检测失败，回退固定间隔抽帧：{exc}")
+            return []
+        stamps = set()
+        for line in (proc.stdout or "").splitlines():
+            if "pts_time:" not in line:
+                continue
+            try:
+                stamps.add(int(float(line.split("pts_time:")[1].split()[0])))
+            except (ValueError, IndexError):
+                continue
+        return sorted(stamps)
+
+    @staticmethod
+    def _plan_scene_timestamps(cuts: list[int], duration: int, max_frames: int, min_gap: int) -> list[int]:
+        """把场景切点整理成抽帧计划：始终包含首帧，相邻采样点间隔不小于 min_gap，最多 max_frames 个。"""
+        picked: list[int] = []
+        last: int | None = None
+        for ts in [0] + sorted(cuts):
+            if ts > duration:
+                break
+            if last is not None and ts - last < min_gap:
+                continue
+            picked.append(ts)
+            last = ts
+            if len(picked) >= max_frames:
+                break
+        return picked
+
     def extract_frames(self, max_frames=1000) -> list[str]:
 
         try:
             os.makedirs(self.frame_dir, exist_ok=True)
             duration = float(ffmpeg.probe(self.video_path)["format"]["duration"])
-            timestamps = [i for i in range(0, int(duration), self.frame_interval)][:max_frames]
+            timestamps = None
+            if self.smart_sampling:
+                cuts = self._detect_scene_cuts()
+                if cuts:
+                    min_gap = max(1, self.frame_interval // 2)
+                    timestamps = self._plan_scene_timestamps(cuts, int(duration), max_frames, min_gap)
+                    logger.info(f"场景检测到 {len(cuts)} 个切点，计划抽帧 {len(timestamps)} 张")
+            if not timestamps:
+                timestamps = [i for i in range(0, int(duration), self.frame_interval)][:max_frames]
 
             # 并行提取帧
             max_workers = min(os.cpu_count() or 4, 8, len(timestamps))
