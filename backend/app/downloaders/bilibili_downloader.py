@@ -15,6 +15,7 @@ from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.utils.path_helper import get_data_dir
 from app.utils.url_parser import extract_video_id
 from app.services.cookie_manager import CookieConfigManager
+from app.services.proxy_config_manager import ProxyConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,15 @@ logger = logging.getLogger(__name__)
 # gateway now requires; without them the API path returns HTTP 412. See
 # app/downloaders/bilibili_dm_patch.py for details.
 apply_bilibili_dm_img_patch()
+
+
+def _apply_proxy(ydl_opts: dict) -> dict:
+    """Pass the configured server proxy through to every yt-dlp Bilibili request."""
+    proxy = ProxyConfigManager().get_proxy_url()
+    if proxy:
+        ydl_opts['proxy'] = proxy
+        logger.info("yt-dlp 走代理: %s", proxy)
+    return ydl_opts
 
 
 class BilibiliDownloader(Downloader, ABC):
@@ -80,6 +90,8 @@ class BilibiliDownloader(Downloader, ABC):
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
 
+        _apply_proxy(ydl_opts)
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
             video_id = info.get("id")
@@ -133,6 +145,8 @@ class BilibiliDownloader(Downloader, ABC):
         }
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
+
+        _apply_proxy(ydl_opts)
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
@@ -199,6 +213,8 @@ class BilibiliDownloader(Downloader, ABC):
         if self._cookiefile:
             ydl_opts['cookiefile'] = self._cookiefile
             ydl_opts['http_headers'] = {'Referer': 'https://www.bilibili.com'}
+
+        _apply_proxy(ydl_opts)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

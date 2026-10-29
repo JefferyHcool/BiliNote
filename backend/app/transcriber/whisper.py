@@ -8,7 +8,7 @@ from app.transcriber.whisper_models import (
     is_local_target,
     hf_cache_dirname,
 )
-from app.utils.env_checker import is_cuda_available, is_torch_installed
+from app.utils.env_checker import get_cuda_device_with_memory_headroom, is_torch_installed
 from app.utils.logger import get_logger
 from app.utils.path_helper import get_model_dir
 
@@ -40,12 +40,24 @@ class WhisperTranscriber(Transcriber):
             compute_type: str = None,
             cpu_threads: int = 1,
     ):
+        self.device_index = None
         if device == 'cpu' or device is None:
             self.device = 'cpu'
         else:
-            self.device = "cuda" if self.is_cuda() else "cpu"
-            if device == 'cuda' and self.device == 'cpu':
-                print('没有 cuda 使用 cpu进行计算')
+            selected_device = get_cuda_device_with_memory_headroom()
+            if selected_device is None:
+                self.device = "cpu"
+                if is_torch_installed():
+                    print("没有显存空闲率高于 50% 的 CUDA GPU，将使用 CPU")
+                else:
+                    print("PyTorch 未安装，将使用 CPU")
+            else:
+                self.device = "cuda"
+                self.device_index = selected_device["index"]
+                print(
+                    f"选择 GPU {self.device_index} ({selected_device['name']})，"
+                    f"空闲显存 {selected_device['free_memory_ratio']:.1%}"
+                )
 
         self.compute_type = compute_type or ("float16" if self.device == "cuda" else "int8")
         self.model_size = model_size
@@ -64,11 +76,16 @@ class WhisperTranscriber(Transcriber):
         # 直通的 repo_id 或本地路径。faster-whisper 对本地目录走 os.path.isdir 分支，
         # 对 repo_id 走 download_model(cache_dir=download_root)，两者都吃 model_size_or_path。
         target = resolve_whisper_model(model_size)
+        model_options = {}
+        if self.device == "cuda":
+            model_options["device_index"] = self.device_index
+
         return WhisperModel(
             model_size_or_path=target,
             device=self.device,
             compute_type=self.compute_type,
             download_root=model_dir,
+            **model_options,
         )
 
     @staticmethod
@@ -95,30 +112,6 @@ class WhisperTranscriber(Transcriber):
             if path.exists():
                 logger.info(f"清理损坏 cache: {path}")
                 shutil.rmtree(path, ignore_errors=True)
-    @staticmethod
-    def is_torch_installed() -> bool:
-        try:
-            import torch
-            return True
-        except ImportError:
-            return False
-
-    @staticmethod
-    def is_cuda() -> bool:
-        try:
-            if is_cuda_available():
-                print(" CUDA 可用，使用 GPU")
-                return True
-            elif is_torch_installed():
-                print(" 只装了 torch，但没有 CUDA，用 CPU")
-                return False
-            else:
-                print(" 还没有安装 torch，请先安装")
-                return False
-
-        except ImportError:
-            return False
-
     @timeit
     def transcript(self, file_path: str) -> TranscriptResult:
         try:

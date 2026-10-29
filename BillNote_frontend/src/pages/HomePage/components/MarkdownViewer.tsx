@@ -318,7 +318,6 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [currentVerId, setCurrentVerId] = useState<string>('')
   const [selectedContent, setSelectedContent] = useState<string>('')
   const [modelName, setModelName] = useState<string>('')
-  const [style, setStyle] = useState<string>('')
   const [createTime, setCreateTime] = useState<string>('')
   // 确保baseURL没有尾部斜杠
   const baseURL = (String(import.meta.env.VITE_API_BASE_URL || '').replace('/api','') || '').replace(/\/$/, '')
@@ -327,6 +326,10 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const taskStatus = currentTask?.status || 'PENDING'
   const retryTask = useTaskStore.getState().retryTask
   const isMultiVersion = Array.isArray(currentTask?.markdown)
+  const selectedVersionStyle = currentTask && Array.isArray(currentTask.markdown)
+    ? currentTask.markdown.find(version => version.ver_id === currentVerId)?.style
+    : undefined
+  const noteStyle = selectedVersionStyle || currentTask?.formData.style || ''
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
@@ -341,8 +344,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
     if (!isMultiVersion) {
       setCurrentVerId('') // 清空旧版本 ID
-      setModelName(currentTask.formData.model_name)
-      setStyle(currentTask.formData.style)
+      setModelName(currentTask.formData.model_name || '')
       setCreateTime(currentTask.createdAt)
       setSelectedContent(currentTask?.markdown)
     } else {
@@ -354,18 +356,17 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         setCurrentVerId(latestVersion.ver_id)
       }
     }
-  }, [currentTask?.id, taskStatus])
+  }, [currentTask, isMultiVersion, taskStatus])
   useEffect(() => {
     if (!currentTask || !isMultiVersion) return
 
     const currentVer = currentTask.markdown.find(v => v.ver_id === currentVerId)
     if (currentVer) {
-      setModelName(currentVer.model_name)
-      setStyle(currentVer.style)
+      setModelName(currentVer.model_name || currentTask.formData.model_name || '')
       setCreateTime(currentVer.created_at || '')
       setSelectedContent(currentVer.content)
     }
-  }, [currentVerId, currentTask?.id])
+  }, [currentVerId, currentTask, isMultiVersion])
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(selectedContent)
@@ -464,7 +465,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
         currentVerId={currentVerId}
         setCurrentVerId={setCurrentVerId}
         modelName={modelName}
-        style={style}
+        style={noteStyle}
         noteStyles={noteStyles}
         onCopy={handleCopy}
         onDownload={handleDownload}

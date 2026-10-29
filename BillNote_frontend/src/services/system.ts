@@ -35,6 +35,9 @@ export interface DeployStatus {
     torch_installed?: boolean
     version: string | null
     gpu_name: string | null
+    gpu_index?: number | null
+    free_memory_ratio?: number | null
+    minimum_free_memory_ratio?: number
   }
   whisper: {
     model_size: string

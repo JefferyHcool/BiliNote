@@ -150,16 +150,28 @@ export default function Monitor() {
                                         <>
                                             <div className="flex justify-between">
                                                 <span className="text-muted-foreground">GPU:</span>
-                                                <span className="font-medium">{status.cuda.gpu_name}</span>
+                                                <span className="font-medium">
+                                                    {status.cuda.gpu_name} (GPU {status.cuda.gpu_index})
+                                                </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-muted-foreground">CUDA 版本:</span>
                                                 <span className="font-mono">{status.cuda.version}</span>
                                             </div>
+                                            {status.cuda.free_memory_ratio != null && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">空闲显存:</span>
+                                                    <span className="font-mono">
+                                                        {(status.cuda.free_memory_ratio * 100).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <div className="text-muted-foreground">
-                                            CUDA 不可用，将使用 CPU 模式
+                                            {status.cuda.torch_installed
+                                                ? `没有显存空闲率超过 ${(status.cuda.minimum_free_memory_ratio ?? 0.5) * 100}% 的 CUDA GPU，将使用 CPU 模式`
+                                                : '未安装 PyTorch，将使用 CPU 模式'}
                                         </div>
                                     )}
                                 </div>

@@ -460,23 +460,34 @@ async def deploy_status():
     引擎的轻量部署完全可以不装，那种情况这个 endpoint 不应该 500。
     """
     import os
+    from app.utils.env_checker import (
+        CUDA_MIN_FREE_MEMORY_RATIO,
+        get_cuda_device_with_memory_headroom,
+        is_torch_installed,
+    )
 
     # CUDA 状态
     try:
         import torch
-        cuda_available = torch.cuda.is_available()
+        selected_device = get_cuda_device_with_memory_headroom()
         cuda_info = {
-            "available": cuda_available,
+            "available": selected_device is not None,
             "torch_installed": True,
-            "version": torch.version.cuda if cuda_available else None,
-            "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
+            "version": torch.version.cuda if torch.cuda.is_available() else None,
+            "gpu_name": selected_device["name"] if selected_device else None,
+            "gpu_index": selected_device["index"] if selected_device else None,
+            "free_memory_ratio": selected_device["free_memory_ratio"] if selected_device else None,
+            "minimum_free_memory_ratio": CUDA_MIN_FREE_MEMORY_RATIO,
         }
     except Exception:
         cuda_info = {
             "available": False,
-            "torch_installed": False,
+            "torch_installed": is_torch_installed(),
             "version": None,
             "gpu_name": None,
+            "gpu_index": None,
+            "free_memory_ratio": None,
+            "minimum_free_memory_ratio": CUDA_MIN_FREE_MEMORY_RATIO,
         }
 
     # Whisper 模型 / 转写器配置 + 本地下载状态

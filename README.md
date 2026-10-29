@@ -276,7 +276,7 @@ mv .env.example .env
 ```bash
 cd backend
 pip install -r requirements.txt
-python main.py
+bash run.sh
 ```
 
 #### 3. 启动前端（Vite + React）
@@ -288,6 +288,14 @@ pnpm dev
 ```
 
 访问：`http://localhost:3015`
+
+#### Bilibili 私人收藏夹批量生成
+
+在主页点击「从 B 站收藏夹批量生成」。先到「设置 → 下载器配置 → Bilibili」保存自己的登录 Cookie，再粘贴收藏夹链接并加载全部视频。选择视频后开始批量生成；任务逐个执行，使用打开批次时主页当前选择的模型和笔记配置。暂停后可继续，页面刷新后也可从本机浏览器保存的批次状态恢复。
+
+Cookie 只保存在本地后端配置中，不要发送到聊天或公开日志。Bilibili 可能要求 Cookie 重新登录或验证。
+
+生成历史会显示批量任务所属收藏夹，并可按收藏夹筛选。勾选已完成的笔记后，可一键导出 ZIP；压缩包按收藏夹名称分目录，多版本笔记导出最新版本。
 
 ## ⚙️ 依赖说明
 

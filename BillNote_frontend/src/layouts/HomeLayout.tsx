@@ -116,7 +116,7 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
           onCollapse={() => setIsMiddleCollapsed(true)}
           onExpand={() => setIsMiddleCollapsed(false)}
         >
-          <aside className="flex h-full flex-col overflow-hidden border-r border-neutral-200 bg-white">
+          <aside className="flex h-full min-w-0 flex-col overflow-hidden border-r border-neutral-200 bg-white">
             <header className="flex h-10 shrink-0 items-center justify-between border-b border-neutral-100 px-3">
               <span className="text-sm font-medium text-gray-600">生成历史</span>
               <TooltipProvider>
@@ -135,8 +135,8 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                 </Tooltip>
               </TooltipProvider>
             </header>
-            <ScrollArea className="flex-1 overflow-auto">
-              <div>{History}</div>
+            <ScrollArea className="min-w-0 flex-1 overflow-auto">
+              <div className="min-w-0 w-full">{History}</div>
             </ScrollArea>
           </aside>
         </ResizablePanel>

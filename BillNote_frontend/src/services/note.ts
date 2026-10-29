@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 import toast from 'react-hot-toast'
 
-export const generateNote = async (data: {
+export interface GenerateNotePayload {
   video_url: string
   platform: string
   quality: string
@@ -12,20 +12,25 @@ export const generateNote = async (data: {
   style: string
   extras?: string
   video_understand?: boolean
+  video_understanding?: boolean
   video_interval?: number
   grid_size: Array<number>
-}) => {
+}
+
+export const generateNote = async (
+  data: GenerateNotePayload,
+  options: { silent?: boolean } = {},
+): Promise<{ task_id: string }> => {
   try {
     console.log('generateNote', data)
-    const response = await request.post('/generate_note', data)
+    const response = await request.post('/generate_note', data, {
+      suppressToast: options.silent,
+    }) as unknown as { task_id: string }
 
     if (!response) {
-      if (response.data.msg) {
-        toast.error(response.data.msg)
-      }
-      return null
+      throw new Error('后端没有返回任务信息')
     }
-    toast.success('笔记生成任务已提交！')
+    if (!options.silent) toast.success('笔记生成任务已提交！')
 
     console.log('res', response)
     // 成功提示

@@ -17,6 +17,9 @@ interface VersionNote {
 interface NoteHeaderProps {
   currentTask?: {
     markdown: VersionNote[] | string
+    formData?: {
+      style?: string
+    }
   }
   isMultiVersion: boolean
   currentVerId: string
@@ -65,7 +68,13 @@ export function MarkdownHeader({
     setCopied(true)
   }
 
-  const styleName = noteStyles.find(v => v.value === style)?.label || style
+  const versionStyle = Array.isArray(currentTask?.markdown)
+    ? currentTask.markdown.find(version => version.ver_id === currentVerId)?.style
+    : undefined
+  const styleValue = versionStyle || currentTask?.formData?.style || style
+  const styleName = noteStyles.find(v => v.value === styleValue || v.label === styleValue)?.label
+    || styleValue
+    || '风格未记录'
 
   const reversedMarkdown: VersionNote[] = Array.isArray(currentTask?.markdown)
     ? [...currentTask!.markdown].reverse()
@@ -118,7 +127,7 @@ export function MarkdownHeader({
           {modelName}
         </Badge>
         <Badge variant="secondary" className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">
-          {styleName}
+          笔记风格：{styleName}
         </Badge>
 
         {createAt && (

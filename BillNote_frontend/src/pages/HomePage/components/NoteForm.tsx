@@ -7,14 +7,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form.tsx'
-import { useEffect,useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
-import { Info, Loader2, Plus } from 'lucide-react'
+import { Info, ListVideo, Loader2, Plus } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
-import { generateNote } from '@/services/note.ts'
+import { generateNote, type GenerateNotePayload } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
 import { useTaskStore } from '@/store/taskStore'
 import { useModelStore } from '@/store/modelStore'
@@ -40,6 +40,7 @@ import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
 import { fetchModels } from '@/services/model.ts'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import FavoriteBatchDialog from '@/components/FavoriteBatchDialog'
 
 /* -------------------- 校验 Schema -------------------- */
 /** 用户粘贴的链接常缺协议头（如 bilibili.com/...），无任何 scheme 时自动补 https:// */
@@ -135,6 +136,9 @@ const NoteForm = () => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [favoriteBatchOpen, setFavoriteBatchOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
@@ -163,6 +167,28 @@ const NoteForm = () => {
   const goModelAdd = () => {
     navigate("/settings/model");
   };
+
+  const getFavoriteGenerationConfig = () => {
+    const values = form.getValues()
+    const selectedModel = modelList.find(model => model.model_name === values.model_name)
+    if (!selectedModel) {
+      toast.error('请先选择有效的模型')
+      return null
+    }
+    return {
+      quality: values.quality,
+      screenshot: values.screenshot ?? false,
+      link: values.link ?? false,
+      model_name: values.model_name,
+      provider_id: selectedModel.provider_id,
+      format: values.format ?? [],
+      style: values.style || 'minimal',
+      extras: values.extras || '',
+      video_understanding: values.video_understanding ?? false,
+      video_interval: values.video_interval ?? 6,
+      grid_size: values.grid_size ?? [2, 2],
+    }
+  }
   /* ---- 副作用 ---- */
   useEffect(() => {
     loadEnabledModels()
@@ -222,27 +248,39 @@ const NoteForm = () => {
 
   const onSubmit = async (values: NoteFormValues) => {
     console.log('Not even go here')
-    const payload: NoteFormValues = {
-      ...values,
-      video_url:
-        values.platform === 'local' ? values.video_url : withScheme(values.video_url || ''),
-      provider_id: modelList.find(m => m.model_name === values.model_name)!.provider_id,
-      task_id: currentTaskId || '',
-    }
-    if (currentTaskId) {
-      retryTask(currentTaskId, payload)
+    if (submittingRef.current) return
+
+    const selectedModel = modelList.find(model => model.model_name === values.model_name)
+    if (!selectedModel?.provider_id) {
+      toast.error('请先选择有效的模型提供者')
       return
     }
 
-    // message.success('已提交任务')
+    submittingRef.current = true
+    setIsSubmitting(true)
     try {
+      const payload: GenerateNotePayload = {
+        ...values,
+        video_url:
+          values.platform === 'local' ? values.video_url || '' : withScheme(values.video_url || ''),
+        provider_id: selectedModel.provider_id,
+        task_id: currentTaskId || '',
+        format: values.format ?? [],
+        grid_size: values.grid_size ?? [2, 2],
+      }
+      if (currentTaskId) {
+        await retryTask(currentTaskId, payload)
+        return
+      }
+
       const data = await generateNote(payload)
       addPendingTask(data.task_id, values.platform, payload)
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const failure = e as { data?: { reason?: string; downloading?: boolean } }
       // 就绪门禁：本地转写模型还没下载好。后端返回 reason='transcriber_model_not_ready'，
       // 引导用户去「设置 → 音频转写配置」下载，而不是留一个静默失败的任务。
-      if (e?.data?.reason === 'transcriber_model_not_ready') {
-        const downloading = e?.data?.downloading
+      if (failure?.data?.reason === 'transcriber_model_not_ready') {
+        const downloading = failure.data.downloading
         toast.error(
           downloading
             ? '转写模型正在下载中，请稍候再提交'
@@ -253,6 +291,9 @@ const NoteForm = () => {
       }
       // 其余错误：axios 拦截器已经弹过 toast，这里只兜底不让 promise 变成未处理 rejection
       console.error('提交任务失败：', e)
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
     }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
@@ -265,14 +306,14 @@ const NoteForm = () => {
     setCurrentTask(null)
   }
   const FormButton = () => {
-    const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
+    const label = generating ? '正在生成…' : isSubmitting ? '正在提交…' : editing ? '重新生成' : '生成笔记'
 
     return (
       <div className="flex gap-2">
         <Button
           type="submit"
           className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
-          disabled={generating}
+          disabled={generating || isSubmitting}
         >
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {label}
@@ -350,6 +391,18 @@ const NoteForm = () => {
               )}
             />
           </div>
+
+          {platform === 'bilibili' && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setFavoriteBatchOpen(true)}
+            >
+              <ListVideo className="h-4 w-4" />
+              从 B 站收藏夹批量生成
+            </Button>
+          )}
 
           <FormField
             control={form.control}
@@ -576,6 +629,11 @@ const NoteForm = () => {
             )}
           />
         </form>
+        <FavoriteBatchDialog
+          open={favoriteBatchOpen}
+          onOpenChange={setFavoriteBatchOpen}
+          getGenerationConfig={getFavoriteGenerationConfig}
+        />
       </Form>
     </div>
   )

@@ -1,6 +1,7 @@
 # app/routers/note.py
 import json
 import os
+import threading
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -79,6 +80,19 @@ class VideoRequest(BaseModel):
 
 NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
 UPLOAD_DIR = "uploads"
+
+_active_note_task_ids: set[str] = set()
+_active_note_task_ids_lock = threading.Lock()
+
+
+def register_note_task(task_id: str) -> None:
+    with _active_note_task_ids_lock:
+        _active_note_task_ids.add(task_id)
+
+
+def is_note_task_active(task_id: str) -> bool:
+    with _active_note_task_ids_lock:
+        return task_id in _active_note_task_ids
 
 
 def save_note_to_file(task_id: str, note):
@@ -164,6 +178,15 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
         logger.warning(f"向量索引失败（不影响笔记）: {e}")
 
 
+def run_note_task_tracked(task_id: str, *args, **kwargs):
+    register_note_task(task_id)
+    try:
+        return run_note_task(task_id, *args, **kwargs)
+    finally:
+        with _active_note_task_ids_lock:
+            _active_note_task_ids.discard(task_id)
+
+
 @router.post('/delete_task')
 def delete_task(data: RecordRequest):
     try:
@@ -235,7 +258,8 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
             except Exception as e:
                 logger.warning(f"写入预取字幕失败 (task_id={task_id}): {e}")
 
-        background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
+        register_note_task(task_id)
+        background_tasks.add_task(run_note_task_tracked, task_id, data.video_url, data.platform, data.quality, data.link,
                                   data.screenshot, data.model_name, data.provider_id, data.format, data.style,
                                   data.extras, data.video_understanding, data.video_interval, data.grid_size)
         return R.success({"task_id": task_id})

@@ -4,6 +4,7 @@ import { delete_task, generateNote } from '@/services/note.ts'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
+import type { GenerateNotePayload } from '@/services/note'
 
 
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
@@ -38,6 +39,19 @@ export interface Markdown {
   created_at: string
 }
 
+export interface FavoriteFolderInfo {
+  id: string
+  title: string
+  url: string
+}
+
+export interface FavoriteVideoInfo {
+  bvid: string
+  title: string
+  page_number?: number
+  page_count?: number
+}
+
 export interface Task {
   id: string
   markdown: string|Markdown [] //为了兼容之前的笔记
@@ -45,27 +59,42 @@ export interface Task {
   status: TaskStatus
   audioMeta: AudioMeta
   createdAt: string
+  favoriteFolder?: FavoriteFolderInfo
+  favoriteVideo?: FavoriteVideoInfo
   formData: {
     video_url: string
-    link: undefined | boolean
-    screenshot: undefined | boolean
+    link?: boolean
+    screenshot?: boolean
     platform: string
     quality: string
     model_name: string
-    provider_id: string
+    provider_id?: string
+    style?: string
+    extras?: string
+    format?: string[]
+    video_understanding?: boolean
+    video_interval?: number
+    grid_size?: number[]
   }
+  platform: string
 }
 
 interface TaskStore {
   tasks: Task[]
   currentTaskId: string | null
-  addPendingTask: (taskId: string, platform: string) => void
+  addPendingTask: (
+    taskId: string,
+    platform: string,
+    formData: Task['formData'],
+    favoriteFolder?: FavoriteFolderInfo,
+    favoriteVideo?: FavoriteVideoInfo,
+  ) => void
   updateTaskContent: (id: string, data: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   clearTasks: () => void
   setCurrentTask: (taskId: string | null) => void
   getCurrentTask: () => Task | null
-  retryTask: (id: string) => void
+  retryTask: (id: string, payload?: GenerateNotePayload) => void
 }
 
 export const useTaskStore = create<TaskStore>()(
@@ -74,7 +103,7 @@ export const useTaskStore = create<TaskStore>()(
       tasks: [],
       currentTaskId: null,
 
-      addPendingTask: (taskId: string, platform: string, formData: any) =>
+      addPendingTask: (taskId, platform, formData, favoriteFolder, favoriteVideo) =>
 
         set(state => ({
           tasks: [
@@ -84,6 +113,8 @@ export const useTaskStore = create<TaskStore>()(
               status: 'PENDING',
               markdown: '',
               platform: platform,
+              ...(favoriteFolder ? { favoriteFolder } : {}),
+              ...(favoriteVideo ? { favoriteVideo } : {}),
               transcript: {
                 full_text: '',
                 language: '',
