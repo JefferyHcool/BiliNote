@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# The backend is an import root: tests import modules as "app.*".
+# Keep this path stable even when pytest is invoked from backend/.
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
