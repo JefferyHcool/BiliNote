@@ -3,6 +3,10 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class TranscriberConfigManager:
     """管理转写器配置，存储在 JSON 文件中，支持前端动态修改。"""
@@ -84,24 +88,28 @@ class TranscriberConfigManager:
         if ttype not in ("fast-whisper", "mlx-whisper"):
             return result  # 在线引擎无需本地模型
 
-        # 延迟 import 避免与 routers.config 的循环依赖；只取纯函数，不触发路由副作用
+        # 延迟 import 避免与 routers.config 的循环依赖；只取纯函数，不触发路由副作用。
+        # 下载状态住在 app.transcriber.model_download_state：它早先是 routers.config 里
+        # 的模块级 `_downloading` 字典，迁走时这里没跟着改，import 直接抛 ImportError，
+        # 于是每次都走下面的"保守放行"分支——门禁静默失效、ready 恒为 True。
         try:
             from app.routers.config import (
                 _check_whisper_model_exists,
                 _check_mlx_whisper_model_exists,
-                _downloading,
             )
+            from app.transcriber.model_download_state import is_downloading
         except Exception as e:
-            # 拿不到检查函数时保守放行，不要把用户卡死
+            # 拿不到检查函数时保守放行，不要把用户卡死；但要留痕，否则这种失效无人察觉
             result["reason"] = f"无法检查模型状态: {e}"
+            logger.warning(f"模型就绪检查不可用，本次保守放行: {e}")
             return result
 
         if ttype == "fast-whisper":
             downloaded = _check_whisper_model_exists(size, "whisper")
-            downloading = _downloading.get(size) == "downloading"
+            downloading = is_downloading(size)
         else:  # mlx-whisper
             downloaded = _check_mlx_whisper_model_exists(size)
-            downloading = _downloading.get(f"mlx-{size}") == "downloading"
+            downloading = is_downloading(f"mlx-{size}")
 
         result["downloading"] = downloading
         if downloaded:
