@@ -79,15 +79,33 @@ def _install_stubs():
 
 
 def _load_video_reader_module():
-    _install_stubs()
-    root = pathlib.Path(__file__).resolve().parents[1]
-    module_path = root / "app" / "utils" / "video_reader.py"
-    spec = importlib.util.spec_from_file_location("video_reader", module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError("video_reader module spec not found")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """Load video_reader with its third-party and app-level deps stubbed out.
+
+    `_install_stubs` replaces PIL / PIL.Image / ffmpeg in sys.modules, so the
+    window has to be closed again: a fake PIL leaking past this file turns into
+    an AttributeError for any later test that expects the real Pillow, and the
+    path-less `app` / `app.utils` stubs break every later `import app.*`.
+    """
+    saved = dict(sys.modules)
+    try:
+        _install_stubs()
+        root = pathlib.Path(__file__).resolve().parents[1]
+        module_path = root / "app" / "utils" / "video_reader.py"
+        spec = importlib.util.spec_from_file_location("video_reader", module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError("video_reader module spec not found")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+        for name in list(sys.modules):
+            if name not in saved:
+                del sys.modules[name]
 
 
 video_reader_module = _load_video_reader_module()

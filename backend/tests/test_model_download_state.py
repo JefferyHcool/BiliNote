@@ -15,23 +15,35 @@ MODULE_PATH = ROOT / "app" / "transcriber" / "model_download_state.py"
 
 
 def _load_module():
-    if "app" not in sys.modules:
-        app_pkg = types.ModuleType("app")
-        app_pkg.__path__ = []
-        sys.modules["app"] = app_pkg
-    if "app.utils" not in sys.modules:
-        utils_pkg = types.ModuleType("app.utils")
-        utils_pkg.__path__ = []
-        sys.modules["app.utils"] = utils_pkg
-    if "app.utils.logger" not in sys.modules:
-        logger_mod = types.ModuleType("app.utils.logger")
-        logger_mod.get_logger = lambda name=None: logging.getLogger(name or "test")
-        sys.modules["app.utils.logger"] = logger_mod
-    spec = importlib.util.spec_from_file_location("model_download_state_under_test", MODULE_PATH)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    # 这些桩包只为 exec_module 期间的 `from app.utils.logger import get_logger` 服务。
+    # 它们的 __path__ 是空的，留在 sys.modules 里，后面才第一次 import 真实 app.* 的测试
+    # 就会拿到假包而报 ModuleNotFoundError（逆序跑 pytest 时 test_url_normalize /
+    # test_bcut_state_reset 正是这样挂的）。只回收本次真正塞进去的键。
+    inserted = []
+    try:
+        if "app" not in sys.modules:
+            app_pkg = types.ModuleType("app")
+            app_pkg.__path__ = []
+            sys.modules["app"] = app_pkg
+            inserted.append("app")
+        if "app.utils" not in sys.modules:
+            utils_pkg = types.ModuleType("app.utils")
+            utils_pkg.__path__ = []
+            sys.modules["app.utils"] = utils_pkg
+            inserted.append("app.utils")
+        if "app.utils.logger" not in sys.modules:
+            logger_mod = types.ModuleType("app.utils.logger")
+            logger_mod.get_logger = lambda name=None: logging.getLogger(name or "test")
+            sys.modules["app.utils.logger"] = logger_mod
+            inserted.append("app.utils.logger")
+        spec = importlib.util.spec_from_file_location("model_download_state_under_test", MODULE_PATH)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        for name in inserted:
+            sys.modules.pop(name, None)
 
 
 ds = _load_module()

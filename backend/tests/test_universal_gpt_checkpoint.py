@@ -83,15 +83,32 @@ def _install_stubs():
 
 
 def _load_universal_gpt_class():
-    _install_stubs()
-    root = pathlib.Path(__file__).resolve().parents[1]
-    module_path = root / "app" / "gpt" / "universal_gpt.py"
-    spec = importlib.util.spec_from_file_location("universal_gpt", module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError("universal_gpt module spec not found")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.UniversalGPT
+    # universal_gpt.py 的 app.* import 全在模块顶层，所以这些桩只需要在 exec_module
+    # 期间存在。用完整份还原 sys.modules：桩是 types.ModuleType 造的假包，泄漏到进程里
+    # 之后，同进程后续测试会 import 到半真半假的 app.models.*（test_ydl_retry_opts 就是
+    # 这样在单进程跑全套时挂掉的，单独跑却全绿）。
+    saved = dict(sys.modules)
+    try:
+        _install_stubs()
+        root = pathlib.Path(__file__).resolve().parents[1]
+        module_path = root / "app" / "gpt" / "universal_gpt.py"
+        spec = importlib.util.spec_from_file_location("universal_gpt", module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError("universal_gpt module spec not found")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.UniversalGPT
+    finally:
+        # 窗口内新增的键删掉；原本不存在的键（saved 里值为 None）也必须删掉——
+        # 把 None 写回 sys.modules 会让同进程后面所有 `import app.*` 直接失败。
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+        for name in list(sys.modules):
+            if name not in saved:
+                del sys.modules[name]
 
 
 UniversalGPT = _load_universal_gpt_class()

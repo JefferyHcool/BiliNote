@@ -30,26 +30,52 @@ DOWNLOADER_SOURCES = ["youtube_downloader.py", "bilibili_downloader.py"]
 
 
 def _load_base():
-    """Load app/downloaders/base.py with its app-level imports stubbed out."""
-    for name, attrs in {
-        "app": {},
-        "app.enmus": {},
-        "app.models": {},
-        "app.enmus.note_enums": {"DownloadQuality": str},
-        "app.models.notes_model": {"AudioDownloadResult": object},
-        "app.models.transcriber_model": {"TranscriptResult": object},
-    }.items():
-        module = types.ModuleType(name)
-        for key, value in attrs.items():
-            setattr(module, key, value)
-        sys.modules.setdefault(name, module)
+    """Load app/downloaders/base.py with its app-level imports stubbed out.
 
-    spec = importlib.util.spec_from_file_location("dl_base", DOWNLOADERS / "base.py")
-    if spec is None or spec.loader is None:
-        raise ImportError("base module spec not found")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    The stubs are force-installed and rolled back on exit. base.py's `app.*`
+    imports are all top-level, so they only need to exist while exec_module runs.
+
+    `setdefault` was the bug: it silently kept whatever another collected test
+    module had already put in sys.modules -- e.g. a partial transcriber_model stub
+    that defines TranscriptSegment but not TranscriptResult -- and the import then
+    died with "cannot import name 'TranscriptResult' ... (unknown location)". The
+    file passed on its own and failed in a single-process suite run, purely
+    because of collection order.
+    """
+    saved = dict(sys.modules)
+    try:
+        for name, attrs in {
+            "app": {},
+            "app.enmus": {},
+            "app.models": {},
+            "app.enmus.note_enums": {"DownloadQuality": str},
+            "app.models.notes_model": {"AudioDownloadResult": object},
+            "app.models.transcriber_model": {"TranscriptResult": object},
+        }.items():
+            module = types.ModuleType(name)
+            module.__path__ = []  # behave like a package, not a leaf module
+            for key, value in attrs.items():
+                setattr(module, key, value)
+            sys.modules[name] = module
+
+        spec = importlib.util.spec_from_file_location("dl_base", DOWNLOADERS / "base.py")
+        if spec is None or spec.loader is None:
+            raise ImportError("base module spec not found")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        # Keys added inside the window get dropped; keys that did not exist before
+        # (saved value is None) must be removed too -- writing None back into
+        # sys.modules breaks every later `import app.*` in the same process.
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+        for name in list(sys.modules):
+            if name not in saved:
+                del sys.modules[name]
 
 
 class RetryOptsValueTest(unittest.TestCase):

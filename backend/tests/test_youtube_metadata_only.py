@@ -50,36 +50,57 @@ class _AudioDownloadResult:
 
 
 def _load_youtube_downloader():
-    """Load the module with its app-level dependencies stubbed out."""
-    _stub("app")
-    _stub("app.downloaders")
-    _stub("app.models")
-    _stub("app.services")
-    _stub("app.utils")
-    _stub(
-        "app.downloaders.base",
-        Downloader=_Downloader,
-        DownloadQuality=str,
-        YDL_RETRY_OPTS={"retries": 3, "fragment_retries": 3, "socket_timeout": 30},
-    )
-    _stub("app.downloaders.youtube_subtitle", YouTubeSubtitleFetcher=object)
-    _stub("app.models.notes_model", AudioDownloadResult=_AudioDownloadResult)
-    _stub("app.models.transcriber_model", TranscriptResult=object)
-    _stub(
-        "app.services.proxy_config_manager",
-        ProxyConfigManager=type(
-            "ProxyConfigManager", (), {"get_proxy_url": lambda self: None}
-        ),
-    )
-    _stub("app.utils.path_helper", get_data_dir=lambda: "/tmp")
-    _stub("app.utils.url_parser", extract_video_id=lambda url, platform: "vid")
+    """Load the module with its app-level dependencies stubbed out.
 
-    spec = importlib.util.spec_from_file_location("youtube_downloader", MODULE_PATH)
-    if spec is None or spec.loader is None:
-        raise ImportError("youtube_downloader module spec not found")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    `_stub` intentionally overwrites whatever a previous test left in sys.modules
+    (see its comment). That equally means this function has to hand those names
+    back when it is done: path-less stubs for `app` / `app.utils` / `app.models`
+    leaking into the process break every later `import app.*` -- collecting this
+    file first (e.g. running the suite in reverse order) turned unrelated test
+    modules into ModuleNotFoundError at collection time.
+    """
+    saved = dict(sys.modules)
+    try:
+        _stub("app")
+        _stub("app.downloaders")
+        _stub("app.models")
+        _stub("app.services")
+        _stub("app.utils")
+        _stub(
+            "app.downloaders.base",
+            Downloader=_Downloader,
+            DownloadQuality=str,
+            YDL_RETRY_OPTS={"retries": 3, "fragment_retries": 3, "socket_timeout": 30},
+        )
+        _stub("app.downloaders.youtube_subtitle", YouTubeSubtitleFetcher=object)
+        _stub("app.models.notes_model", AudioDownloadResult=_AudioDownloadResult)
+        _stub("app.models.transcriber_model", TranscriptResult=object)
+        _stub(
+            "app.services.proxy_config_manager",
+            ProxyConfigManager=type(
+                "ProxyConfigManager", (), {"get_proxy_url": lambda self: None}
+            ),
+        )
+        _stub("app.utils.path_helper", get_data_dir=lambda: "/tmp")
+        _stub("app.utils.url_parser", extract_video_id=lambda url, platform: "vid")
+
+        spec = importlib.util.spec_from_file_location("youtube_downloader", MODULE_PATH)
+        if spec is None or spec.loader is None:
+            raise ImportError("youtube_downloader module spec not found")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        # Drop keys added here and put back the ones `_stub` replaced. Writing a
+        # saved value of None back into sys.modules would itself break imports.
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+        for name in list(sys.modules):
+            if name not in saved:
+                del sys.modules[name]
 
 
 class _FakeYoutubeDL:
