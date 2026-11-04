@@ -10,6 +10,23 @@ import os
 import subprocess
 
 from app.utils.video_helper import save_cover_to_static
+from ffmpeg_helper import resolve_ffmpeg_executable
+
+
+# ffmpeg 找不到时的提示：与 ffmpeg_helper.ensure_ffmpeg_or_raise 的指引保持一致，
+# 不要让 subprocess 的 [WinError 2] 原始报错直接透传给用户。
+FFMPEG_NOT_FOUND_MESSAGE = (
+    "未检测到 ffmpeg，无法处理本地视频：请先安装 ffmpeg 并将其加入系统 PATH，"
+    "或在 .env 中将 FFMPEG_BIN_PATH 设置为 ffmpeg 所在目录（或可执行文件路径）。"
+    "下载地址：https://ffmpeg.org/download.html"
+)
+
+
+def _resolve_ffmpeg_or_raise() -> str:
+    ffmpeg_exe = resolve_ffmpeg_executable()
+    if not ffmpeg_exe:
+        raise RuntimeError(FFMPEG_NOT_FOUND_MESSAGE)
+    return ffmpeg_exe
 
 
 class LocalDownloader(Downloader, ABC):
@@ -36,7 +53,7 @@ class LocalDownloader(Downloader, ABC):
 
         try:
             command = [
-                'ffmpeg',
+                _resolve_ffmpeg_or_raise(),
                 '-i', input_path,
                 '-ss', '00:00:01',  # 跳到视频第1秒，防止黑屏
                 '-vframes', '1',  # 只截取一帧
@@ -50,6 +67,8 @@ class LocalDownloader(Downloader, ABC):
                 raise RuntimeError(f"封面图片生成失败: {output_path}")
 
             return output_path
+        except FileNotFoundError as e:
+            raise RuntimeError(FFMPEG_NOT_FOUND_MESSAGE) from e
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"提取封面失败: {output_path}") from e
 
@@ -69,7 +88,7 @@ class LocalDownloader(Downloader, ABC):
         try:
         # 调用 ffmpeg 转换
             command = [
-                'ffmpeg',
+                _resolve_ffmpeg_or_raise(),
                 '-i', input_path,
                 '-vn',  # 不要视频流
                 '-acodec', 'libmp3lame',  # 使用mp3编码
@@ -83,6 +102,8 @@ class LocalDownloader(Downloader, ABC):
                 raise RuntimeError(f"mp3 文件生成失败: {output_path}")
 
             return output_path
+        except FileNotFoundError as e:
+            raise RuntimeError(FFMPEG_NOT_FOUND_MESSAGE) from e
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"mp3 文件生成失败: {output_path}") from e
     def download_video(self, video_url: str, output_dir: str = None) -> str:

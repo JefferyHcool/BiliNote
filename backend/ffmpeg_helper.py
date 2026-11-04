@@ -1,6 +1,9 @@
 import os
+import shutil
 import subprocess
 import sys
+from typing import Optional
+
 from dotenv import load_dotenv
 
 from app.utils.logger import get_logger
@@ -36,6 +39,30 @@ def _load_dotenv_from_multiple_paths():
 
 
 _load_dotenv_from_multiple_paths()
+def resolve_ffmpeg_executable() -> Optional[str]:
+    """
+    解析 ffmpeg 可执行文件的完整路径，找不到返回 None。
+
+    解析顺序：
+    1. FFMPEG_BIN_PATH：可以是 ffmpeg 所在目录，也可以是可执行文件本身的
+       绝对路径（.env.example 的注释写的是「可填绝对路径」，两种都支持）。
+    2. 系统 PATH（shutil.which，Windows 下会命中 ffmpeg.exe）。
+
+    只做路径解析、不执行 ffmpeg，调用方可以用返回的绝对路径拼命令，
+    避免子进程因 PATH 里没有 ffmpeg 而抛出 [WinError 2]。
+    """
+    ffmpeg_bin_path = os.getenv("FFMPEG_BIN_PATH")
+    if ffmpeg_bin_path:
+        if os.path.isfile(ffmpeg_bin_path):
+            return ffmpeg_bin_path
+        if os.path.isdir(ffmpeg_bin_path):
+            for name in ("ffmpeg.exe", "ffmpeg"):
+                candidate = os.path.join(ffmpeg_bin_path, name)
+                if os.path.isfile(candidate):
+                    return candidate
+    return shutil.which("ffmpeg")
+
+
 def check_ffmpeg_exists() -> bool:
     """
     检查 ffmpeg 是否可用。优先使用 FFMPEG_BIN_PATH 环境变量指定的路径。
@@ -56,7 +83,7 @@ def check_ffmpeg_exists() -> bool:
                 logger.info(f"在系统PATH中找到ffmpeg: {path_dir}")
                 break
     try:
-        subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run([resolve_ffmpeg_executable() or "ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         logger.info("ffmpeg 已安装")
         return True
     except (FileNotFoundError, OSError, subprocess.CalledProcessError):
